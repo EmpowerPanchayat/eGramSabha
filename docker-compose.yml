@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=${FRONTEND_API_URL:-http://localhost:5000/api}
+        - REACT_APP_BACKEND_URL=${FRONTEND_BACKEND_URL:-http://localhost:5000}
+    ports:
+      - "${FRONTEND_PORT:-3001}:80"
+    environment:
+      - REACT_APP_API_URL=${FRONTEND_API_URL:-http://localhost:5000/api}
+      - REACT_APP_BACKEND_URL=${FRONTEND_BACKEND_URL:-http://localhost:5000}
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "${BACKEND_PORT:-5000}:5000"
+    environment:
+      - PORT=5000
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/voter_registration}
+      - NODE_ENV=${NODE_ENV:-development}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3001}
+      - BACKEND_URL=${BACKEND_URL:-http://localhost:5000}
+    # depends_on:
+    #   - mongodb
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - backend_uploads:/app/uploads
+    restart: unless-stopped
+
+  # mongodb:
+  #   image: mongo:latest
+  #   ports:
+  #     - "${MONGODB_PORT:-27017}:27017"
+  #   volumes:
+  #     - mongodb_data:/data/db
+  #   restart: always
+
+volumes:
+  mongodb_data:
+  backend_uploads:
+    driver: local

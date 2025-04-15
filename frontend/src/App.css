@@ -1,0 +1,94 @@
+/* File: frontend/src/App.css */
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Oxygen,
+    Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: #f5f5f5;
+  height: 100%;
+}
+
+/* Maintain styles for video container used in face registration */
+.video-container {
+  position: relative;
+  width: 100%;
+  height: 400px;
+  overflow: hidden;
+}
+
+.video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* For face-api.js detection visualization */
+.face-detection-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* Animation for spinner - used by MUI CircularProgress */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Utility class for centering content vertically and horizontally */
+.center-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Custom file input styling that might be needed */
+.hidden-input {
+  display: none;
+}
+
+/* Basic responsive image handling */
+.responsive-image {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Custom styles for face detection boxes (might be used by face-api.js) */
+.detection-box {
+  border: 2px solid #1a237e;
+  position: absolute;
+}
+
+/* Any specific overrides for MUI components that can't be handled in theme.js */
+.MuiDataGrid-root .MuiDataGrid-cell:focus,
+.MuiDataGrid-root .MuiDataGrid-cell:focus-within {
+  outline: none !important;
+}
+
+/* Utility class for responsive padding adjustments */
+@media (max-width: 600px) {
+  .responsive-padding {
+    padding: 16px !important;
+  }
+}
+
+/* Handle camera feed aspect ratio */
+.camera-feed {
+  aspect-ratio: 4/3;
+  background-color: #f0f0f0;
+}
+
+/* Override for ensuring full-height layout */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
