@@ -5,6 +5,7 @@ const Official = require('../models/Official');
 const { generateToken, generateRefreshToken, verifyRefreshToken } = require('../config/jwt');
 const { isAuthenticated } = require('../middleware/auth');
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 
 // Register a new admin (special route for initial setup)
 router.post('/register-admin', async (req, res) => {
@@ -125,8 +126,15 @@ router.post('/login', async (req, res) => {
         await official.save();
 
         // Generate tokens
-        const token = official.generateAuthToken();
+        const token = await official.generateAuthToken();
         const refreshToken = official.generateRefreshToken();
+
+        // Get linked user data if exists
+        let linkedUser = null;
+        if (official.linkedCitizenId) {
+            linkedUser = await mongoose.model('User').findById(official.linkedCitizenId)
+                .select('_id name voterIdNumber panchayatId faceImagePath');
+        }
 
         res.json({
             success: true,
@@ -139,7 +147,15 @@ router.post('/login', async (req, res) => {
                     name: official.name,
                     role: official.role,
                     panchayatId: official.panchayatId,
-                    avatarUrl: official.avatarUrl
+                    avatarUrl: official.avatarUrl,
+                    linkedCitizenId: official.linkedCitizenId,
+                    linkedUser: linkedUser ? {
+                        id: linkedUser._id,
+                        name: linkedUser.name,
+                        voterIdNumber: linkedUser.voterIdNumber,
+                        panchayatId: linkedUser.panchayatId,
+                        faceImagePath: linkedUser.faceImagePath
+                    } : null
                 },
                 token,
                 refreshToken
@@ -189,13 +205,40 @@ router.post('/refresh-token', async (req, res) => {
         }
 
         // Generate new access token
-        const token = official.generateAuthToken();
+        const token = await official.generateAuthToken();
+        // Generate new refresh token too (added)
+        const newRefreshToken = official.generateRefreshToken();
+
+        // Get linked user data if exists
+        let linkedUser = null;
+        if (official.linkedCitizenId) {
+            linkedUser = await mongoose.model('User').findById(official.linkedCitizenId)
+                .select('_id name voterIdNumber panchayatId faceImagePath');
+        }
 
         res.json({
             success: true,
             message: 'Token refreshed successfully',
             data: {
-                token
+                token,
+                refreshToken: newRefreshToken, // Added this to include refresh token in response
+                user: {
+                    id: official._id,
+                    username: official.username,
+                    email: official.email,
+                    name: official.name,
+                    role: official.role,
+                    panchayatId: official.panchayatId,
+                    avatarUrl: official.avatarUrl,
+                    linkedCitizenId: official.linkedCitizenId,
+                    linkedUser: linkedUser ? {
+                        id: linkedUser._id,
+                        name: linkedUser.name,
+                        voterIdNumber: linkedUser.voterIdNumber,
+                        panchayatId: linkedUser.panchayatId,
+                        faceImagePath: linkedUser.faceImagePath
+                    } : null
+                }
             }
         });
     } catch (error) {
@@ -324,23 +367,22 @@ router.post('/change-password', isAuthenticated, async (req, res) => {
         if (!currentPassword || !newPassword) {
             return res.status(400).json({
                 success: false,
-                message: 'Both current password and new password are required'
+                message: 'Please provide both current and new password'
             });
         }
 
-        if (newPassword.length < 8) {
-            return res.status(400).json({
-                success: false,
-                message: 'New password must be at least 8 characters long'
-            });
-        }
-
-        // Find the official
+        // Find official by id
         const official = await Official.findById(req.official.id);
 
-        // Check current password
-        const isPasswordValid = await official.comparePassword(currentPassword);
+        if (!official) {
+            return res.status(404).json({
+                success: false,
+                message: 'Official not found'
+            });
+        }
 
+        // Verify current password
+        const isPasswordValid = await official.comparePassword(currentPassword);
         if (!isPasswordValid) {
             return res.status(401).json({
                 success: false,
@@ -357,7 +399,7 @@ router.post('/change-password', isAuthenticated, async (req, res) => {
             message: 'Password changed successfully'
         });
     } catch (error) {
-        console.error('Error changing password:', error);
+        console.error('Password change error:', error);
         res.status(500).json({
             success: false,
             message: 'Error changing password',

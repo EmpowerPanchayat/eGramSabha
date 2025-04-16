@@ -2,6 +2,7 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { login, refreshToken } from '../api/auth';
 import { getProfile } from '../api/profile';
+import { tokenManager } from './tokenManager';
 
 // Create the auth context
 const AuthContext = createContext();
@@ -18,43 +19,107 @@ export const AuthProvider = ({ children }) => {
     const [tokenRefreshTimer, setTokenRefreshTimer] = useState(null);
     const [inactivityTimer, setInactivityTimer] = useState(null);
 
+    // Handle token refresh
+    const handleRefreshToken = useCallback(async () => {
+        try {
+            const refreshTokenValue = tokenManager.getRefreshToken();
+            if (!refreshTokenValue) {
+                throw new Error('No refresh token available');
+            }
+
+            const response = await refreshToken(refreshTokenValue);
+            const { token } = response;
+
+            // We don't need to update refreshToken if it's not in the response
+            // tokenManager.setTokens will handle this case
+
+            return true;
+        } catch (error) {
+            console.error('Error refreshing token:', error);
+            clearAuthData();
+            return false;
+        }
+    }, []);
+
+    // Clear auth data
+    const clearAuthData = useCallback(() => {
+        tokenManager.clearTokens();
+        setUser(null);
+        setError(null);
+    }, []);
+
+    // Set user data safely
+    const setUserData = useCallback((userData) => {
+        if (!userData) {
+            setUser(null);
+            return;
+        }
+        console.log({ userData });
+        // For admin or regular officials
+        if (['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY'].includes(userData.role)) {
+            setUser({
+                id: userData._id || userData.id,
+                user: userData.linkedUser ? userData.linkedUser._id || userData.linkedUser.id : null,
+                username: userData.username || '',
+                name: userData.name || '',
+                email: userData.email || '',
+                role: userData.role || '',
+                panchayatId: userData.panchayatId || null,
+                avatarUrl: userData.avatarUrl || '',
+                isActive: userData.isActive || false,
+                linkedUser: userData.linkedUser ? {
+                    id: userData.linkedUser._id || userData.linkedUser.id,
+                    name: userData.linkedUser.name || '',
+                    voterIdNumber: userData.linkedUser.voterIdNumber || '',
+                    panchayatId: userData.linkedUser.panchayatId || null,
+                    faceImagePath: userData.linkedUser.faceImagePath || ''
+                } : null
+            });
+        } else {
+            setUser({
+                id: userData._id || userData.id,
+                user: userData._id || userData.id,
+                username: userData.username || '',
+                name: userData.name || '',
+                email: userData.email || '',
+                role: userData.role || '',
+                panchayatId: userData.panchayatId || null,
+                avatarUrl: userData.avatarUrl || '',
+                isActive: userData.isActive || false
+            });
+        }
+    }, []);
+
     // Check for existing token on component mount
     useEffect(() => {
         const checkAuthStatus = async () => {
-            const token = localStorage.getItem('token');
+            if (!tokenManager.hasTokens()) {
+                clearAuthData();
+                setLoading(false);
+                return;
+            }
 
-            if (token) {
-                try {
-                    // Try to get user data with existing token
-                    const response = await getProfile();
-                    const userData = response.data.user;
-
-                    setUser({
-                        id: userData._id,
-                        username: userData.username,
-                        name: userData.name,
-                        email: userData.email,
-                        role: userData.role,
-                        panchayatId: userData.panchayatId,
-                        avatarUrl: userData.avatarUrl,
-                        isActive: userData.isActive
-                    });
-
+            try {
+                // Try to get user data with existing token
+                const response = await getProfile();
+                if (response?.data?.user) {
+                    setUserData(response.data.user);
                     // Start session management
                     startTokenRefreshTimer();
                     startInactivityTimer();
-                } catch (err) {
-                    console.error('Error verifying authentication:', err);
-                    // Try to refresh the token if verification fails
-                    const refreshed = await handleRefreshToken();
-                    if (!refreshed) {
-                        // If refresh fails, clear auth data
-                        clearAuthData();
-                    }
+                } else {
+                    throw new Error('Invalid user data received');
                 }
+            } catch (err) {
+                console.error('Error verifying authentication:', err);
+                // Try to refresh the token if verification fails
+                const refreshed = await handleRefreshToken();
+                if (!refreshed) {
+                    clearAuthData();
+                }
+            } finally {
+                setLoading(false);
             }
-
-            setLoading(false);
         };
 
         checkAuthStatus();
@@ -84,10 +149,10 @@ export const AuthProvider = ({ children }) => {
                 clearInterval(inactivityTimer);
             }
         };
-    }, []);
+    }, [handleRefreshToken, clearAuthData, setUserData]);
 
     // Start token refresh timer
-    const startTokenRefreshTimer = () => {
+    const startTokenRefreshTimer = useCallback(() => {
         // Clear any existing timer
         if (tokenRefreshTimer) {
             clearInterval(tokenRefreshTimer);
@@ -99,156 +164,80 @@ export const AuthProvider = ({ children }) => {
         }, 15 * 60 * 1000);
 
         setTokenRefreshTimer(timer);
-    };
+    }, [handleRefreshToken]);
 
     // Start inactivity timer
-    const startInactivityTimer = () => {
+    const startInactivityTimer = useCallback(() => {
         // Clear any existing timer
         if (inactivityTimer) {
             clearInterval(inactivityTimer);
         }
 
-        // Set up a timer to check for inactivity every minute
+        // Set up a timer to check for inactivity
         const timer = setInterval(() => {
-            const currentTime = Date.now();
-            if (currentTime - lastActivity > INACTIVITY_TIMEOUT) {
-                // User has been inactive for too long, log them out
-                handleLogout();
+            const now = Date.now();
+            if (now - lastActivity > INACTIVITY_TIMEOUT) {
+                clearAuthData();
             }
-        }, 60 * 1000); // Check every minute
+        }, 60000); // Check every minute
 
         setInactivityTimer(timer);
-    };
+    }, [lastActivity, clearAuthData]);
 
     // Login function
-    const handleLogin = useCallback(async (username, password) => {
-        setLoading(true);
-        setError(null);
-
+    const handleLogin = async (username, password) => {
         try {
             const response = await login(username, password);
+            if (!response?.token || !response?.refreshToken || !response?.user) {
+                throw new Error('Invalid login response');
+            }
 
-            const { token, refreshToken } = response.data;
-            const userData = response.data.user;
+            const { token, refreshToken: newRefreshToken, user: userData } = response;
 
-            // Save tokens to local storage
-            localStorage.setItem('token', token);
-            localStorage.setItem('refreshToken', refreshToken);
+            // Store tokens using token manager
+            tokenManager.setTokens(token, newRefreshToken);
 
-            // Set user in state
-            setUser(userData);
+            // Set user data
+            setUserData(userData);
 
             // Start session management
             startTokenRefreshTimer();
             startInactivityTimer();
 
-            return userData;
-        } catch (err) {
-            console.error('Login error:', err);
-            setError(err.message || 'Login failed. Please check your credentials.');
-            throw err;
-        } finally {
-            setLoading(false);
+            return true;
+        } catch (error) {
+            setError(error.message || 'Login failed');
+            return false;
         }
-    }, []);
+    };
 
     // Logout function
-    const handleLogout = useCallback(() => {
+    const handleLogout = () => {
         clearAuthData();
-    }, []);
-
-    // Clear all auth data
-    const clearAuthData = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('refreshToken');
-        setUser(null);
-
-        // Clear timers
-        if (tokenRefreshTimer) {
-            clearInterval(tokenRefreshTimer);
-            setTokenRefreshTimer(null);
-        }
-
-        if (inactivityTimer) {
-            clearInterval(inactivityTimer);
-            setInactivityTimer(null);
-        }
     };
 
-    // Token refresh function
-    const handleRefreshToken = useCallback(async () => {
-        const currentRefreshToken = localStorage.getItem('refreshToken');
-
-        if (!currentRefreshToken) {
-            return false;
-        }
-
-        try {
-            const response = await refreshToken(currentRefreshToken);
-            const { token } = response.data;
-
-            // Update token in local storage
-            localStorage.setItem('token', token);
-
-            return true;
-        } catch (err) {
-            console.error('Error refreshing token:', err);
-            // Clear all auth data on refresh error
-            clearAuthData();
-            return false;
-        }
-    }, []);
-
-    // Check if user has specific role
-    const hasRole = useCallback((requiredRoles) => {
-        if (!user) return false;
-
-        // Convert single role to array
-        const roles = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles];
-
-        // If roles array is empty or undefined, allow access
-        if (!roles || roles.length === 0) return true;
-
-        // Admin has access to everything
-        if (user.role === 'ADMIN') return true;
-
-        // Check if user's role is in the required roles
-        return roles.includes(user.role);
-    }, [user]);
-
-    // Check if user belongs to specific panchayat
-    const belongsToPanchayat = useCallback((panchayatId) => {
-        if (!user) return false;
-
-        // Admin can access any panchayat
-        if (user.role === 'ADMIN') return true;
-
-        // Check if user belongs to the specified panchayat
-        return user.panchayatId === panchayatId;
-    }, [user]);
-
-    // Context value
-    const value = {
-        user,
-        loading,
-        error,
-        login: handleLogin,
-        logout: handleLogout,
-        refreshToken: handleRefreshToken,
-        hasRole,
-        belongsToPanchayat
-    };
-
-    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+    return (
+        <AuthContext.Provider value={{
+            user,
+            loading,
+            error,
+            login: handleLogin,
+            logout: handleLogout,
+            hasRole: (roles) => {
+                if (!user) return false;
+                return roles.includes(user.role);
+            }
+        }}>
+            {children}
+        </AuthContext.Provider>
+    );
 };
 
 // Custom hook to use auth context
 export const useAuth = () => {
     const context = useContext(AuthContext);
-
     if (!context) {
         throw new Error('useAuth must be used within an AuthProvider');
     }
-
     return context;
 };

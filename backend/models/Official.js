@@ -1,7 +1,8 @@
-// File: backend/models/Official.js
+// File: backend/models/Official.js (Enhanced with citizen linking)
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const officialSchema = new mongoose.Schema({
     username: {
@@ -55,6 +56,16 @@ const officialSchema = new mongoose.Schema({
     lastLogin: {
         type: Date
     },
+    linkedCitizenId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        // This links the official to an existing citizen user
+    },
+    wardId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Ward',
+        // Only relevant for WARD_MEMBER role
+    },
     passwordResetToken: String,
     passwordResetExpires: Date,
     createdAt: {
@@ -91,13 +102,28 @@ officialSchema.methods.comparePassword = async function (candidatePassword) {
 };
 
 // Method to generate JWT token
-officialSchema.methods.generateAuthToken = function () {
+officialSchema.methods.generateAuthToken = async function () {
+    let linkedUser = null;
+    
+    // If there's a linked citizen, fetch their data
+    if (this.linkedCitizenId) {
+        linkedUser = await mongoose.model('User').findById(this.linkedCitizenId)
+            .select('_id name voterIdNumber panchayatId');
+    }
+
     return jwt.sign(
         {
             id: this._id,
             username: this.username,
             role: this.role,
-            panchayatId: this.panchayatId
+            panchayatId: this.panchayatId,
+            linkedCitizenId: this.linkedCitizenId,
+            linkedUser: linkedUser ? {
+                id: linkedUser._id,
+                name: linkedUser.name,
+                voterIdNumber: linkedUser.voterIdNumber,
+                panchayatId: linkedUser.panchayatId
+            } : null
         },
         process.env.JWT_SECRET || 'your-secret-key',
         { expiresIn: '24h' }

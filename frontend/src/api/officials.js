@@ -1,4 +1,4 @@
-// File: frontend/src/api/officials.js
+// File: frontend/src/api/officials.js (Enhanced with linking functionality)
 import axios from 'axios';
 
 // Base URL from environment variables or default
@@ -87,6 +87,31 @@ export const updateOfficial = async (id, officialData) => {
 };
 
 /**
+ * Link an official with a citizen
+ * @param {string} officialId - Official ID
+ * @param {string} citizenId - Citizen ID
+ * @returns {Promise} - API response
+ */
+export const linkOfficialWithCitizen = async (officialId, citizenId) => {
+    try {
+        const response = await axios.post(`${API_URL}/officials/${officialId}/link-citizen`,
+            { citizenId },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            }
+        );
+
+        return response.data;
+    } catch (error) {
+        console.error('API Error in linkOfficialWithCitizen:', error);
+        throw error.response?.data || { message: 'Failed to link official with citizen' };
+    }
+};
+
+/**
  * Delete an official
  * @param {string} id - Official ID
  * @returns {Promise} - API response
@@ -143,5 +168,45 @@ export const toggleOfficialStatus = async (id) => {
     } catch (error) {
         console.error('API Error in toggleOfficialStatus:', error);
         throw error.response?.data || { message: 'Failed to update official status' };
+    }
+};
+
+/**
+ * Fetch issues for an official's panchayat
+ * @param {string} id - Official ID
+ * @returns {Promise} - API response
+ */
+export const fetchOfficialIssues = async (id) => {
+    try {
+        const response = await axios.get(`${API_URL}/officials/${id}/issues`, {
+            headers: {
+                Authorization: `Bearer ${localStorage.getItem('token')}`
+            }
+        });
+
+        return response.data;
+    } catch (error) {
+        console.error('API Error in fetchOfficialIssues:', error);
+        throw error.response?.data || { message: 'Failed to fetch issues' };
+    }
+};
+
+/**
+ * Fetch statistics for a panchayat
+ * @param {string} panchayatId - Panchayat ID
+ * @returns {Promise} - API response
+ */
+export const fetchPanchayatStats = async (panchayatId) => {
+    try {
+        const response = await axios.get(`${API_URL}/panchayats/${panchayatId}/stats`, {
+            headers: {
+                Authorization: `Bearer ${localStorage.getItem('token')}`
+            }
+        });
+
+        return response.data;
+    } catch (error) {
+        console.error('API Error in fetchPanchayatStats:', error);
+        throw error.response?.data || { message: 'Failed to fetch panchayat statistics' };
     }
 };

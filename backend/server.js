@@ -32,6 +32,7 @@ const issueRoutes = require('./routes/issueRoutes');
 const citizenRoutes = require('./routes/citizenRoutes');
 const authRoutes = require('./routes/authRoutes');
 const officialRoutes = require('./routes/officialRoutes');
+const gramSabhaRoutes = require('./routes/gramSabhaRoutes');
 
 // Import models
 const User = require('./models/User');
@@ -437,13 +438,14 @@ app.post('/api/register-face', async (req, res) => {
   }
 });
 
-// Use routes
+// Routes
 app.use('/api/panchayats', panchayatRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/issues', issueRoutes);
 app.use('/api/citizens', citizenRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/officials', officialRoutes);
+app.use('/api/gram-sabha', gramSabhaRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

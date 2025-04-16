@@ -1,11 +1,13 @@
-// File: backend/routes/officialRoutes.js
+// File: backend/routes/officialRoutes.js (Updated with citizen linking)
 const express = require('express');
 const router = express.Router();
 const Official = require('../models/Official');
+const User = require('../models/User');
 const Panchayat = require('../models/Panchayat');
 const { isAuthenticated } = require('../middleware/auth');
 const { hasRole, hasPermission, belongsToPanchayat } = require('../middleware/roleCheck');
 const crypto = require('crypto');
+const Issue = require('../models/Issue');
 
 // Get all officials (admin only)
 router.get('/', isAuthenticated, hasRole(['ADMIN']), async (req, res) => {
@@ -123,7 +125,8 @@ router.post('/', isAuthenticated, hasRole(['ADMIN']), async (req, res) => {
             name,
             role,
             panchayatId: role !== 'ADMIN' ? panchayatId : undefined,
-            phone
+            phone,
+            wardId: role === 'WARD_MEMBER' ? wardId : undefined
         });
 
         await newOfficial.save();
@@ -176,7 +179,7 @@ router.post('/', isAuthenticated, hasRole(['ADMIN']), async (req, res) => {
 router.get('/:id', isAuthenticated, async (req, res) => {
     try {
         const { id } = req.params;
-
+        console.log({ official: req.official })
         // Admin can view any official, others can only view their own profile
         if (req.official.role !== 'ADMIN' && req.official.id !== id) {
             return res.status(403).json({
@@ -420,6 +423,183 @@ router.patch('/:id/toggle-status', isAuthenticated, hasRole(['ADMIN']), async (r
         res.status(500).json({
             success: false,
             message: 'Error toggling official status',
+            error: error.message
+        });
+    }
+});
+
+// Link an official with a citizen
+router.post('/:id/link-citizen', isAuthenticated, hasRole(['ADMIN']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { citizenId } = req.body;
+
+        if (!citizenId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide citizenId'
+            });
+        }
+
+        // Check if citizen exists
+        const citizen = await User.findById(citizenId);
+        if (!citizen) {
+            return res.status(404).json({
+                success: false,
+                message: 'Citizen not found'
+            });
+        }
+
+        // Check if official exists
+        const official = await Official.findById(id);
+        if (!official) {
+            return res.status(404).json({
+                success: false,
+                message: 'Official not found'
+            });
+        }
+
+        // Check if citizen belongs to the same panchayat as the official
+        if (official.panchayatId && citizen.panchayatId && 
+            official.panchayatId.toString() !== citizen.panchayatId.toString()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Official and citizen must belong to the same panchayat'
+            });
+        }
+
+        // Check if citizen is already linked to another official
+        const existingLink = await Official.findOne({ linkedCitizenId: citizenId });
+        if (existingLink && existingLink._id.toString() !== id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Citizen is already linked to another official'
+            });
+        }
+
+        // Update official with linked citizen
+        official.linkedCitizenId = citizenId;
+        await official.save();
+
+        res.json({
+            success: true,
+            message: 'Official linked with citizen successfully',
+            data: {
+                officialId: official._id,
+                citizenId: citizen._id,
+                citizenName: citizen.name,
+                voterIdNumber: citizen.voterIdNumber
+            }
+        });
+    } catch (error) {
+        console.error('Error linking official with citizen:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error linking official with citizen',
+            error: error.message
+        });
+    }
+});
+
+// Get issues for official's panchayat
+router.get('/:id/issues', isAuthenticated, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Get official
+        const official = await Official.findById(id);
+        if (!official) {
+            return res.status(404).json({
+                success: false,
+                message: 'Official not found'
+            });
+        }
+
+        // Only admin or the official themselves can view issues
+        if (req.official.role !== 'ADMIN' && req.official.id !== id) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied'
+            });
+        }
+
+        // Get issues for the official's panchayat
+        const issues = await Issue.find({ panchayatId: official.panchayatId })
+            .populate('citizenId', 'name email phone')
+            .populate('wardId', 'name')
+            .sort({ createdAt: -1 });
+
+        res.json({
+            success: true,
+            count: issues.length,
+            data: issues
+        });
+    } catch (error) {
+        console.error('Error fetching issues:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching issues',
+            error: error.message
+        });
+    }
+});
+
+// Get an official's profile
+router.get('/profile/:id', isAuthenticated, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Admin can view any official, others can only view their own profile
+        if (req.official.role !== 'ADMIN' && req.official.id.toString() !== id) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied: You can only view your own profile'
+            });
+        }
+
+        const official = await Official.findById(id)
+            .select('-password -passwordResetToken -passwordResetExpires');
+
+        if (!official) {
+            return res.status(404).json({
+                success: false,
+                message: 'Official not found'
+            });
+        }
+
+        // Get panchayat details if the official belongs to a panchayat
+        let panchayat = null;
+        if (official.panchayatId) {
+            panchayat = await Panchayat.findById(official.panchayatId);
+        }
+
+        res.json({
+            success: true,
+            data: {
+                _id: official._id,
+                name: official.name,
+                username: official.username,
+                email: official.email,
+                role: official.role,
+                phone: official.phone,
+                wardId: official.wardId,
+                isActive: official.isActive,
+                faceImagePath: official.faceImagePath,
+                panchayat: panchayat ? {
+                    _id: panchayat._id,
+                    name: panchayat.name,
+                    district: panchayat.district,
+                    state: panchayat.state,
+                    presidentId: panchayat.presidentId,
+                    secretaryId: panchayat.secretaryId
+                } : null
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching official profile:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching official profile',
             error: error.message
         });
     }

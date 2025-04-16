@@ -23,18 +23,36 @@ const AdminLoginView = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-    // Redirect to dashboard if already logged in
+    // Redirect to appropriate dashboard if already logged in
     useEffect(() => {
         if (user) {
-            const from = location.state?.from?.pathname || '/admin';
-            navigate(from, { replace: true });
+            const from = location.state?.from?.pathname;
+            if (from) {
+                navigate(from, { replace: true });
+            } else {
+                // Redirect based on role
+                if (user.role === 'ADMIN') {
+                    navigate('/admin', { replace: true });
+                } else {
+                    navigate('/official/dashboard', { replace: true });
+                }
+            }
         }
     }, [user, navigate, location]);
 
     // Handle successful login
     const handleLoginSuccess = (userData) => {
-        const from = location.state?.from?.pathname || '/admin';
-        navigate(from, { replace: true });
+        const from = location.state?.from?.pathname;
+        if (from) {
+            navigate(from, { replace: true });
+        } else {
+            // Redirect based on role
+            if (userData.role === 'ADMIN') {
+                navigate('/admin/dashboard', { replace: true });
+            } else {
+                navigate('/official/dashboard', { replace: true });
+            }
+        }
     };
 
     // Navigate to citizen portal

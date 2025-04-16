@@ -18,7 +18,15 @@ import {
   Container,
   Skeleton,
   useMediaQuery,
-  useTheme
+  useTheme,
+  TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Snackbar,
+  MenuItem,
+  FormHelperText
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
@@ -32,17 +40,35 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
+import EditIcon from '@mui/icons-material/Edit';
 
-import { getFaceImageUrl, getFaceImage } from '../api';
+import { getFaceImageUrl, getFaceImage, updateUserProfile } from '../api';
 
 const RegistrationView = ({ user, navigateTo, children }) => {
   const [faceImageUrl, setFaceImageUrl] = useState(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageModal, setImageModal] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editedUser, setEditedUser] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success', error: null });
+  const [errors, setErrors] = useState({});
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  const genderOptions = [
+    { value: 'Male', label: 'Male' },
+    { value: 'Female', label: 'Female' },
+    { value: 'Other', label: 'Other' }
+  ];
+
+  useEffect(() => {
+    if (user) {
+      setEditedUser({ ...user });
+      setErrors({});
+    }
+  }, [user]);
 
   useEffect(() => {
     // Try to fetch face image if user is registered
@@ -95,6 +121,115 @@ const RegistrationView = ({ user, navigateTo, children }) => {
   const handleImageError = () => {
     console.error('Image failed to load:', faceImageUrl);
     setImageError(true);
+  };
+
+  const handleEditClick = () => {
+    setEditMode(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditMode(false);
+    setEditedUser({ ...user });
+  };
+
+  const validateField = (field, value) => {
+    switch (field) {
+      case 'name':
+        return value && value.trim().length < 2 ? 'Name must be at least 2 characters long' : '';
+      case 'voterIdNumber':
+        return !value || value.trim().length === 0 ? 'Voter ID is required' : '';
+      case 'mobileNumber':
+        return value && !/^\d{10}$/.test(value) ? 'Mobile number must be 10 digits' : '';
+      case 'gender':
+        return value && value.trim().length === 0 ? 'Gender is required' : '';
+      default:
+        return '';
+    }
+  };
+
+  const handleFieldChange = (field, value) => {
+    setEditedUser(prev => ({
+      ...prev,
+      [field]: value
+    }));
+
+    // Clear error when field is changed
+    setErrors(prev => ({
+      ...prev,
+      [field]: ''
+    }));
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    let isValid = true;
+
+    // Required fields based on backend model
+    const requiredFields = ['voterIdNumber'];
+    requiredFields.forEach(field => {
+      const error = validateField(field, editedUser[field]);
+      if (error) {
+        newErrors[field] = error;
+        isValid = false;
+      }
+    });
+
+    // Optional fields
+    const optionalFields = ['name', 'gender', 'mobileNumber', 'fatherName', 'motherName', 'husbandName', 'address'];
+    optionalFields.forEach(field => {
+      if (editedUser[field]) {
+        const error = validateField(field, editedUser[field]);
+        if (error) {
+          newErrors[field] = error;
+          isValid = false;
+        }
+      }
+    });
+
+    setErrors(newErrors);
+    return isValid;
+  };
+
+  const handleSaveEdit = async () => {
+    if (!validateForm()) {
+      setSnackbar({
+        open: true,
+        message: 'Please fix the errors in the form',
+        severity: 'error',
+        error: null
+      });
+      return;
+    }
+
+    try {
+      const response = await updateUserProfile(user.voterIdNumber, editedUser, user.panchayatId);
+      setEditMode(false);
+      setSnackbar({
+        open: true,
+        message: 'Profile updated successfully',
+        severity: 'success',
+        error: null
+      });
+      if (typeof children === 'function') {
+        children({ ...response.user });
+      }
+    } catch (error) {
+      if (error.message.includes('Voter ID already exists')) {
+        setSnackbar({
+          open: true,
+          message: error.message,
+          severity: 'error',
+          error: error.message
+        });
+      } else {
+        setSnackbar({
+          open: true,
+          message: error.message || 'Failed to update profile',
+          severity: 'error',
+          error: null
+        });
+      }
+    }
   };
 
   return (
@@ -223,24 +358,58 @@ const RegistrationView = ({ user, navigateTo, children }) => {
             <Grid item xs={12} md={6}>
               <CardContent sx={{ p: { xs: 2, md: 4 } }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h4" component="h2" fontWeight="medium">
-                    {user.name || 'Unnamed Member'}
-                  </Typography>
-                  <Chip
-                    icon={user.isRegistered ? <HowToRegIcon /> : <PendingIcon />}
-                    label={user.isRegistered ? 'Registered' : 'Pending'}
-                    color={user.isRegistered ? 'success' : 'warning'}
-                    size="medium"
-                  />
+                  {editMode ? (
+                    <TextField
+                      fullWidth
+                      label="Name"
+                      value={editedUser.name || ''}
+                      onChange={(e) => handleFieldChange('name', e.target.value)}
+                      variant="outlined"
+                      size="small"
+                      error={!!errors.name}
+                      helperText={errors.name}
+                      required
+                    />
+                  ) : (
+                    <Typography variant="h4" component="h2" fontWeight="medium">
+                      {user.name || 'Unnamed Member'}
+                    </Typography>
+                  )}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip
+                      icon={user.isRegistered ? <HowToRegIcon /> : <PendingIcon />}
+                      label={user.isRegistered ? 'Registered' : 'Pending Registration'}
+                      color={user.isRegistered ? 'success' : 'warning'}
+                      size="medium"
+                    />
+                    <IconButton onClick={handleEditClick} size="small">
+                      <EditIcon />
+                    </IconButton>
+                  </Box>
                 </Box>
 
-                <Chip
-                  icon={<BadgeIcon />}
-                  label={`Voter ID: ${user.voterIdNumber}`}
-                  color="primary"
-                  variant="outlined"
-                  sx={{ mb: 3 }}
-                />
+                {editMode ? (
+                  <TextField
+                    fullWidth
+                    label="Voter ID"
+                    value={editedUser.voterIdNumber || ''}
+                    onChange={(e) => handleFieldChange('voterIdNumber', e.target.value)}
+                    variant="outlined"
+                    size="small"
+                    sx={{ mb: 3 }}
+                    error={!!errors.voterIdNumber || !!snackbar.error}
+                    helperText={errors.voterIdNumber || snackbar.error}
+                    required
+                  />
+                ) : (
+                  <Chip
+                    icon={<BadgeIcon />}
+                    label={`Voter ID: ${user.voterIdNumber}`}
+                    color="primary"
+                    variant="outlined"
+                    sx={{ mb: 3 }}
+                  />
+                )}
 
                 <Grid container spacing={3}>
                   <Grid item xs={12} md={6}>
@@ -249,40 +418,90 @@ const RegistrationView = ({ user, navigateTo, children }) => {
                     </Typography>
 
                     <List dense>
-                      {user.gender && (
-                        <ListItem disableGutters>
-                          <WcIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-                          <ListItemText
-                            primary="Gender"
-                            secondary={user.gender}
-                            primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
-                            secondaryTypographyProps={{ variant: 'body1', fontWeight: 'medium' }}
+                      {editMode ? (
+                        <>
+                          <TextField
+                            select
+                            fullWidth
+                            label="Gender"
+                            value={editedUser.gender || ''}
+                            onChange={(e) => handleFieldChange('gender', e.target.value)}
+                            variant="outlined"
+                            size="small"
+                            sx={{ mb: 2 }}
+                            error={!!errors.gender}
+                            helperText={errors.gender}
+                            required
+                          >
+                            {genderOptions.map((option) => (
+                              <MenuItem key={option.value} value={option.value}>
+                                {option.label}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+                          <TextField
+                            fullWidth
+                            label="Mobile Number"
+                            value={editedUser.mobileNumber || ''}
+                            onChange={(e) => handleFieldChange('mobileNumber', e.target.value)}
+                            variant="outlined"
+                            size="small"
+                            sx={{ mb: 2 }}
+                            error={!!errors.mobileNumber}
+                            helperText={errors.mobileNumber}
+                            required
+                            inputProps={{ maxLength: 10 }}
                           />
-                        </ListItem>
-                      )}
+                          {user.registrationDate && (
+                            <ListItem disableGutters>
+                              <CalendarTodayIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+                              <ListItemText
+                                primary="Registration Date"
+                                secondary={new Date(user.registrationDate).toLocaleDateString()}
+                                primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
+                                secondaryTypographyProps={{ variant: 'body1', fontWeight: 'medium' }}
+                              />
+                            </ListItem>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {user.gender && (
+                            <ListItem disableGutters>
+                              <WcIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+                              <ListItemText
+                                primary="Gender"
+                                secondary={user.gender}
+                                primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
+                                secondaryTypographyProps={{ variant: 'body1', fontWeight: 'medium' }}
+                              />
+                            </ListItem>
+                          )}
 
-                      {user.mobileNumber && (
-                        <ListItem disableGutters>
-                          <PhoneIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-                          <ListItemText
-                            primary="Mobile Number"
-                            secondary={user.mobileNumber}
-                            primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
-                            secondaryTypographyProps={{ variant: 'body1', fontWeight: 'medium' }}
-                          />
-                        </ListItem>
-                      )}
+                          {user.mobileNumber && (
+                            <ListItem disableGutters>
+                              <PhoneIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+                              <ListItemText
+                                primary="Mobile Number"
+                                secondary={user.mobileNumber}
+                                primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
+                                secondaryTypographyProps={{ variant: 'body1', fontWeight: 'medium' }}
+                              />
+                            </ListItem>
+                          )}
 
-                      {user.registrationDate && (
-                        <ListItem disableGutters>
-                          <CalendarTodayIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-                          <ListItemText
-                            primary="Registration Date"
-                            secondary={new Date(user.registrationDate).toLocaleDateString()}
-                            primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
-                            secondaryTypographyProps={{ variant: 'body1', fontWeight: 'medium' }}
-                          />
-                        </ListItem>
+                          {user.registrationDate && (
+                            <ListItem disableGutters>
+                              <CalendarTodayIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+                              <ListItemText
+                                primary="Registration Date"
+                                secondary={new Date(user.registrationDate).toLocaleDateString()}
+                                primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
+                                secondaryTypographyProps={{ variant: 'body1', fontWeight: 'medium' }}
+                              />
+                            </ListItem>
+                          )}
+                        </>
                       )}
                     </List>
                   </Grid>
@@ -293,54 +512,121 @@ const RegistrationView = ({ user, navigateTo, children }) => {
                     </Typography>
 
                     <List dense>
-                      {user.fatherName && (
-                        <ListItem disableGutters>
-                          <FamilyRestroomIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-                          <ListItemText
-                            primary="Father's Name"
-                            secondary={user.fatherName}
-                            primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
-                            secondaryTypographyProps={{ variant: 'body1', fontWeight: 'medium' }}
+                      {editMode ? (
+                        <>
+                          <TextField
+                            fullWidth
+                            label="Father's Name"
+                            value={editedUser.fatherName || ''}
+                            onChange={(e) => handleFieldChange('fatherName', e.target.value)}
+                            variant="outlined"
+                            size="small"
+                            sx={{ mb: 2 }}
+                            error={!!errors.fatherName}
+                            helperText={errors.fatherName}
                           />
-                        </ListItem>
-                      )}
+                          <TextField
+                            fullWidth
+                            label="Mother's Name"
+                            value={editedUser.motherName || ''}
+                            onChange={(e) => handleFieldChange('motherName', e.target.value)}
+                            variant="outlined"
+                            size="small"
+                            sx={{ mb: 2 }}
+                            error={!!errors.motherName}
+                            helperText={errors.motherName}
+                          />
+                          <TextField
+                            fullWidth
+                            label="Husband's Name"
+                            value={editedUser.husbandName || ''}
+                            onChange={(e) => handleFieldChange('husbandName', e.target.value)}
+                            variant="outlined"
+                            size="small"
+                            sx={{ mb: 2 }}
+                            error={!!errors.husbandName}
+                            helperText={errors.husbandName}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          {user.fatherName && (
+                            <ListItem disableGutters>
+                              <FamilyRestroomIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+                              <ListItemText
+                                primary="Father's Name"
+                                secondary={user.fatherName}
+                                primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
+                                secondaryTypographyProps={{ variant: 'body1', fontWeight: 'medium' }}
+                              />
+                            </ListItem>
+                          )}
 
-                      {user.motherName && (
-                        <ListItem disableGutters>
-                          <FamilyRestroomIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-                          <ListItemText
-                            primary="Mother's Name"
-                            secondary={user.motherName}
-                            primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
-                            secondaryTypographyProps={{ variant: 'body1', fontWeight: 'medium' }}
-                          />
-                        </ListItem>
-                      )}
+                          {user.motherName && (
+                            <ListItem disableGutters>
+                              <FamilyRestroomIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+                              <ListItemText
+                                primary="Mother's Name"
+                                secondary={user.motherName}
+                                primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
+                                secondaryTypographyProps={{ variant: 'body1', fontWeight: 'medium' }}
+                              />
+                            </ListItem>
+                          )}
 
-                      {user.husbandName && (
-                        <ListItem disableGutters>
-                          <FamilyRestroomIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-                          <ListItemText
-                            primary="Husband's Name"
-                            secondary={user.husbandName}
-                            primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
-                            secondaryTypographyProps={{ variant: 'body1', fontWeight: 'medium' }}
-                          />
-                        </ListItem>
+                          {user.husbandName && (
+                            <ListItem disableGutters>
+                              <FamilyRestroomIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+                              <ListItemText
+                                primary="Husband's Name"
+                                secondary={user.husbandName}
+                                primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
+                                secondaryTypographyProps={{ variant: 'body1', fontWeight: 'medium' }}
+                              />
+                            </ListItem>
+                          )}
+                        </>
                       )}
                     </List>
                   </Grid>
                 </Grid>
 
-                {user.address && (
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="h6" gutterBottom>
-                      Address
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
-                      <HomeIcon fontSize="small" sx={{ mr: 1, mt: 0.5, color: 'text.secondary' }} />
-                      <Typography variant="body1">{user.address}</Typography>
+                {editMode ? (
+                  <TextField
+                    fullWidth
+                    label="Address"
+                    value={editedUser.address || ''}
+                    onChange={(e) => handleFieldChange('address', e.target.value)}
+                    variant="outlined"
+                    size="small"
+                    multiline
+                    rows={3}
+                    sx={{ mt: 2 }}
+                    error={!!errors.address}
+                    helperText={errors.address}
+                  />
+                ) : (
+                  user.address && (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="h6" gutterBottom>
+                        Address
+                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                        <HomeIcon fontSize="small" sx={{ mr: 1, mt: 0.5, color: 'text.secondary' }} />
+                        <Typography variant="body1">{user.address}</Typography>
+                      </Box>
                     </Box>
+                  )
+                )}
+
+                {editMode && (
+                  <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+                    <Button variant="outlined" onClick={handleCancelEdit}>
+                      Cancel
+                    </Button>
+                    <Button variant="contained" onClick={handleSaveEdit}>
+                      Save Changes
+                    </Button>
                   </Box>
                 )}
               </CardContent>
@@ -405,6 +691,21 @@ const RegistrationView = ({ user, navigateTo, children }) => {
           </Box>
         </Box>
       )}
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

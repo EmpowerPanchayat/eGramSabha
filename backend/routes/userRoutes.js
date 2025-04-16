@@ -211,4 +211,86 @@ router.get('/:voterId/face', async (req, res) => {
   }
 });
 
+// Update user profile
+router.put('/:voterId', async (req, res) => {
+  try {
+    const { voterId } = req.params;
+    const { panchayatId } = req.query;
+    const updateData = req.body;
+
+    const filter = { voterIdNumber: voterId };
+    if (panchayatId) {
+      filter.panchayatId = panchayatId;
+    }
+
+    // If voter ID is being changed, check for uniqueness
+    if (updateData.voterIdNumber && updateData.voterIdNumber !== voterId) {
+      const existingUser = await User.findOne({
+        voterIdNumber: updateData.voterIdNumber,
+        panchayatId: panchayatId || filter.panchayatId
+      });
+
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'Voter ID already exists in this panchayat'
+        });
+      }
+    }
+
+    // Find and update the user
+    const user = await User.findOneAndUpdate(
+      filter,
+      { $set: updateData },
+      { new: true }
+    ).select('-faceDescriptor');
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Member not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user
+    });
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    res.status(500).json({ success: false, message: 'Error updating profile' });
+  }
+});
+
+// Get users by panchayat ID
+router.get('/panchayat/:panchayatId', async (req, res) => {
+    try {
+        const { panchayatId } = req.params;
+
+        // Verify if panchayat exists
+        const panchayat = await Panchayat.findById(panchayatId);
+        if (!panchayat) {
+            return res.status(404).json({
+                success: false,
+                message: 'Panchayat not found'
+            });
+        }
+
+        const users = await User.find({ panchayatId })
+            .select('_id name voterIdNumber')
+            .sort({ name: 1 });
+
+        res.json({
+            success: true,
+            count: users.length,
+            users
+        });
+    } catch (error) {
+        console.error('Error fetching panchayat users:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching panchayat users',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;

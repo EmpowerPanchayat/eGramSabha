@@ -180,9 +180,54 @@ const hasWardAccess = (wardParamName = 'wardId') => {
     };
 };
 
+const isPanchayatPresident = async (req, res, next) => {
+    try {
+        if (!req.official) {
+            return res.status(401).json({
+                success: false,
+                message: 'Authentication required'
+            });
+        }
+
+        console.log({ official: req.official });
+        console.log({ panchayatId: req.official.panchayatId });
+        console.log({ officialId: req.official.id });
+
+        const panchayat = await Panchayat.findById(req.official.panchayatId);
+        if (!panchayat) {
+            return res.status(404).json({
+                success: false,
+                message: 'Panchayat not found'
+            });
+        }
+
+        // Check if the user is listed as PRESIDENT in the officials array
+        const isPresident = panchayat.officials.some(
+            official => official.officialId.toString() === req.official.id.toString() && 
+                       official.role === 'PRESIDENT'
+        );
+
+        if (!isPresident) {
+            return res.status(403).json({
+                success: false,
+                message: 'Only Panchayat President can perform this action'
+            });
+        }
+
+        next();
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error checking Panchayat President status',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     hasRole,
     hasPermission,
     belongsToPanchayat,
-    hasWardAccess
+    hasWardAccess,
+    isPanchayatPresident
 };

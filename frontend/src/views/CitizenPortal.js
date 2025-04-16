@@ -83,6 +83,7 @@ const CitizenPortalContent = () => {
 
     // Handle user login
     const handleLogin = (userData) => {
+        console.log({ userData });
         setUser(userData);
         // Store user data in local storage for session persistence
         localStorage.setItem('citizenUser', JSON.stringify(userData));

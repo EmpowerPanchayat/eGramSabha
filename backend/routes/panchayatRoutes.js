@@ -287,4 +287,34 @@ router.get('/:id/stats', async (req, res) => {
   }
 });
 
+// Get overall statistics
+router.get('/stats', async (req, res) => {
+  try {
+    const { panchayatId } = req.query;
+
+    let query = {};
+    if (panchayatId) {
+      query.panchayatId = panchayatId;
+    }
+
+    const totalUsers = await User.countDocuments(query);
+    const registeredUsers = await User.countDocuments({ ...query, isRegistered: true });
+    const pendingUsers = totalUsers - registeredUsers;
+    const wardCount = await Ward.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: {
+        totalUsers,
+        registeredUsers,
+        pendingUsers,
+        wardCount
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching overall stats:', error);
+    res.status(500).json({ success: false, message: 'Error fetching overall stats' });
+  }
+});
+
 module.exports = router;

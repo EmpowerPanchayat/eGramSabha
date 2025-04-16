@@ -15,7 +15,9 @@ import SearchIcon from '@mui/icons-material/Search';
 import PeopleIcon from '@mui/icons-material/People';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import Header from '../components/Header';
+import { useAuth } from '../utils/authContext';
 
 // Import views
 import { HomeView, SearchView, RegistrationView, UsersView, ImportView } from '.';
@@ -28,6 +30,7 @@ import { fetchStats, searchUser, fetchUsers, getFaceImage, importCsv } from '../
 import FaceRegistration from '../components/FaceRegistration';
 import LoadingOverlay from '../components/LoadingOverlay';
 import PanchayatSelector from '../components/PanchayatSelector';
+import OfficialManagementView from './OfficialManagementView';
 
 // TabPanel component for view switching
 function TabPanel(props) {
@@ -51,6 +54,7 @@ function TabPanel(props) {
 }
 
 const AdminPortal = () => {
+    const { user, loading: authLoading } = useAuth();
     const [activeView, setActiveView] = useState(0); // 0 = home, 1 = search, 2 = users, 3 = import, 4 = panchayats
     const [users, setUsers] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -62,6 +66,13 @@ const AdminPortal = () => {
     const [selectedPanchayat, setSelectedPanchayat] = useState(null);
     const fileInputRef = React.useRef();
     const navigate = useNavigate();
+
+    // Check if user is authenticated and has admin role
+    useEffect(() => {
+        if (!authLoading && (!user || user.role !== 'ADMIN')) {
+            navigate('/admin/login');
+        }
+    }, [user, authLoading, navigate]);
 
     // Load face-api models
     useEffect(() => {
@@ -99,14 +110,11 @@ const AdminPortal = () => {
                 setStats(statsData);
             } catch (error) {
                 console.error('Error fetching stats:', error);
+                setMessage({ type: 'error', text: 'Failed to fetch statistics.' });
             }
         };
 
         getStats();
-        // Set up interval to refresh stats
-        const interval = setInterval(getStats, 60000); // Refresh every minute
-
-        return () => clearInterval(interval);
     }, [selectedPanchayat]);
 
     // Handle CSV import - updated to include panchayatId
@@ -320,8 +328,21 @@ const AdminPortal = () => {
         { label: 'Search', icon: <SearchIcon /> },
         { label: 'Members', icon: <PeopleIcon /> },
         { label: 'Import', icon: <UploadFileIcon /> },
-        { label: 'Panchayats', icon: <AccountBalanceIcon /> }
+        { label: 'Panchayats', icon: <AccountBalanceIcon /> },
+        { label: 'Officials', icon: <AdminPanelSettingsIcon /> }
     ];
+
+    if (authLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    if (!user || user.role !== 'ADMIN') {
+        return null; // Will be redirected by the useEffect
+    }
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -403,6 +424,13 @@ const AdminPortal = () => {
                     <PanchayatsView
                         navigateTo={navigateTo}
                         setSelectedPanchayat={handlePanchayatChange}
+                    />
+                </TabPanel>
+
+                {/* Officials View */}
+                <TabPanel value={activeView} index={5}>
+                    <OfficialManagementView
+                        selectedPanchayat={selectedPanchayat}
                     />
                 </TabPanel>
             </Container>

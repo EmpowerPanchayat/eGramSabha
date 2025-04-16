@@ -223,7 +223,11 @@ export const deleteWard = async (panchayatId, wardId) => {
   }
 };
 
-// Update existing functions to include panchayatId parameter
+/**
+ * Fetches statistics for a panchayat or overall stats
+ * @param {string} panchayatId - Optional panchayat ID
+ * @returns {Promise<Object>} Statistics data
+ */
 export const fetchStats = async (panchayatId = null) => {
   try {
     const url = panchayatId
@@ -236,7 +240,7 @@ export const fetchStats = async (panchayatId = null) => {
     }
     return await response.json();
   } catch (error) {
-    console.error('Error fetching stats:', error);
+    console.error('Error fetching statistics:', error);
     throw error;
   }
 };
@@ -595,6 +599,41 @@ export const fetchSubmissions = async (panchayatId) => {
     return await response.json();
   } catch (error) {
     console.error('Error fetching submissions:', error);
+    throw error;
+  }
+};
+
+/**
+ * Updates a user's profile
+ * @param {string} voterId - The voter ID
+ * @param {Object} updateData - The data to update
+ * @param {string} panchayatId - The panchayat ID (optional)
+ * @returns {Promise<Object>} Updated user data
+ */
+export const updateUserProfile = async (voterId, updateData, panchayatId = null) => {
+  try {
+    let url = `${API_URL}/users/${encodeURIComponent(voterId)}`;
+    if (panchayatId) {
+      url += `?panchayatId=${encodeURIComponent(panchayatId)}`;
+    }
+
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updateData)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to update profile');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error updating user profile:', error);
     throw error;
   }
 };

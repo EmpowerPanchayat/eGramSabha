@@ -67,7 +67,19 @@ axiosInstance.interceptors.response.use(
                 // Retry the original request
                 return axiosInstance(originalRequest);
             } catch (refreshError) {
-                // If refresh token fails, clear auth data and redirect to login
+                // Only clear tokens if refresh token is invalid or expired
+                if (refreshError.response?.status === 401) {
+                    return handleAuthError();
+                }
+                // For other errors, just reject the request
+                return Promise.reject(refreshError);
+            }
+        }
+
+        // For other 401 errors, don't clear tokens immediately
+        if (error.response?.status === 401) {
+            // Check if it's a token-related error
+            if (error.response?.data?.message?.includes('token')) {
                 return handleAuthError();
             }
         }
@@ -83,8 +95,6 @@ const handleAuthError = () => {
     localStorage.removeItem('refreshToken');
     
     // Redirect to login page
-    // Note: This is a simple approach - in a more complex app,
-    // you might want to use a global event system or context API
     window.location.href = '/admin/login';
     
     return Promise.reject(new Error('Authentication failed. Please login again.'));

@@ -53,6 +53,7 @@ import { useLanguage } from '../utils/LanguageContext';
 import { format } from 'date-fns';
 import AttachmentViewer from '../components/AttachmentViewer';
 import AudioPlayer from '../components/AudioPlayer';
+import { useAuth } from '../utils/authContext';
 
 const IssueListView = ({ user, onBack, onViewIssue }) => {
     const { strings } = useLanguage();
@@ -85,9 +86,16 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
 
             if (tabValue === 0) {
                 // My Issues
-                url = `${API_URL}/issues/user/${user._id}`;
+                // For officials, use linkedCitizenId if available, otherwise use their own id
+                console.log({ user });
+                const userId = user.user || user.id;
+                url = `${API_URL}/issues/user/${userId}`;
             } else {
                 // All Issues from same panchayat
+                if (!user.panchayatId) {
+                    setError('Panchayat ID not available');
+                    return;
+                }
                 url = `${API_URL}/issues/panchayat/${user.panchayatId}`;
             }
 

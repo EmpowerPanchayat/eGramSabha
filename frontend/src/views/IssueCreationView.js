@@ -1,5 +1,5 @@
 // File: frontend/src/views/IssueCreationView.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -35,6 +35,8 @@ import { useLanguage } from '../utils/LanguageContext';
 const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
     const { strings } = useLanguage();
     const theme = useTheme();
+    const [users, setUsers] = useState([]);
+    const [loadingUsers, setLoadingUsers] = useState(false);
 
     const [issueData, setIssueData] = useState({
         text: '',
@@ -57,6 +59,28 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
         message: '',
         severity: 'success'
     });
+
+    // Fetch users when component mounts
+    useEffect(() => {
+        const fetchUsers = async () => {
+            if (user.role && ['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY'].includes(user.role)) {
+                setLoadingUsers(true);
+                try {
+                    const response = await fetch(`${API_URL}/users/panchayat/${user.panchayatId}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setUsers(data.users || []);
+                    }
+                } catch (error) {
+                    console.error('Error fetching users:', error);
+                } finally {
+                    setLoadingUsers(false);
+                }
+            }
+        };
+
+        fetchUsers();
+    }, [user.role, user.panchayatId]);
 
     const categoryOptions = [
         { value: 'CULTURE_AND_NATURE', label: strings.categoryCultureAndNature },
@@ -189,7 +213,7 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                 body: JSON.stringify({
                     ...formattedData,
                     panchayatId: user.panchayatId,
-                    creatorId: user._id,
+                    creatorId: user.linkedUser?.id || user._id,
                     status: 'REPORTED'
                 })
             });
@@ -270,6 +294,13 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
             });
             setAudioBlob(null);
             setAttachments([]);
+
+            // Navigate back to dashboard after a short delay
+            setTimeout(() => {
+                if (onBack) {
+                    onBack();
+                }
+            }, 2000);
 
         } catch (error) {
             console.error('Error creating issue:', error);
@@ -379,6 +410,38 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                                             ))}
                                         </Select>
                                         {errors.subcategory && <FormHelperText>{errors.subcategory}</FormHelperText>}
+                                    </FormControl>
+                                </Box>
+                            )}
+
+                            {/* Created For Field */}
+                            {user.role && ['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY'].includes(user.role) && (
+                                <Box>
+                                    <Typography variant="subtitle1" gutterBottom fontWeight="500">
+                                        {strings.createdFor}
+                                    </Typography>
+                                    <FormControl fullWidth>
+                                        <Select
+                                            name="createdFor"
+                                            value={issueData.createdFor}
+                                            onChange={handleInputChange}
+                                        >
+                                            <MenuItem value="Self">Self</MenuItem>
+                                            {loadingUsers ? (
+                                                <MenuItem disabled>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                                                        <CircularProgress size={20} sx={{ mr: 1 }} />
+                                                        <Typography>Loading users...</Typography>
+                                                    </Box>
+                                                </MenuItem>
+                                            ) : (
+                                                users.map((user) => (
+                                                    <MenuItem key={user._id} value={user._id}>
+                                                        {user.name} (Voter ID: {user.voterIdNumber})
+                                                    </MenuItem>
+                                                ))
+                                            )}
+                                        </Select>
                                     </FormControl>
                                 </Box>
                             )}
