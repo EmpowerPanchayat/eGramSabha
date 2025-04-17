@@ -82,7 +82,7 @@ router.get('/:id', auth.isAuthenticated, async (req, res) => {
 // Update a Gram Sabha meeting
 router.patch('/:id', auth.isAuthenticated, isPanchayatPresident, async (req, res) => {
   const updates = Object.keys(req.body);
-  const allowedUpdates = ['title', 'dateTime', 'date', 'time', 'location', 'scheduledDurationMinutes', 
+  const allowedUpdates = ['title', 'agenda', 'dateTime', 'date', 'time', 'location', 'scheduledDurationMinutes', 
     'meetingLink', 'status', 'minutes', 'meetingNotes', 'recordingLink', 'panchayatId',
     'actualDurationMinutes', 'transcript', 'conclusion', 'issues', 'guests'];
   

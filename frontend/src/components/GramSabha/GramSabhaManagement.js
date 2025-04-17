@@ -56,7 +56,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
         time: '',
         location: '',
         agenda: '',
-        description: '',
+        // description: '',
         scheduledDurationMinutes: 60 // Default duration of 1 hour
     });
     const [previewTitle, setPreviewTitle] = useState('');
@@ -91,13 +91,12 @@ const GramSabhaManagement = ({ panchayatId }) => {
                 hour12: true
             });
 
-            if (formData.title) {
-                setPreviewTitle(formData.title);
-            } else {
-                setPreviewTitle(`Gram Sabha - ${formattedDate} - ${formattedTime}`);
+            const calculatedTitle = formData.title || `Gram Sabha - ${formattedDate} - ${formattedTime}`;
+            if (calculatedTitle !== previewTitle) {
+                setPreviewTitle(calculatedTitle);
             }
         }
-    }, [formData.date, formData.time, formData.title]);
+    }, [formData.date, formData.time, formData.title, previewTitle]);
 
     const loadGramSabhas = async () => {
         // Add this check
@@ -155,10 +154,13 @@ const GramSabhaManagement = ({ panchayatId }) => {
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
+        setFormData(prev => {
+            const newFormData = {
+                ...prev,
+                [name]: value
+            };
+            return newFormData;
+        });
     };
 
     const handleSubmit = async (e) => {
@@ -278,32 +280,42 @@ const GramSabhaManagement = ({ panchayatId }) => {
                     <Table>
                         <TableHead>
                             <TableRow>
-                                <TableCell>Title</TableCell>
-                                <TableCell>Date & Time</TableCell>
-                                <TableCell>Location</TableCell>
-                                <TableCell>Duration</TableCell>
-                                <TableCell>Status</TableCell>
-                                <TableCell>Actions</TableCell>
+                                <TableCell>{strings.tableTitle}</TableCell>
+                                <TableCell>{strings.tableDateTime}</TableCell>
+                                <TableCell>{strings.tableLocation}</TableCell>
+                                <TableCell>{strings.tableDuration}</TableCell>
+                                <TableCell>{strings.tableStatus}</TableCell>
+                                <TableCell>{strings.tableActions}</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {gramSabhas.map((gramSabha) => (
-                                <TableRow key={gramSabha._id}>
-                                    <TableCell>{gramSabha.title}</TableCell>
-                                    <TableCell>{new Date(gramSabha.dateTime).toLocaleString()}</TableCell>
-                                    <TableCell>{gramSabha.location}</TableCell>
-                                    <TableCell>{gramSabha.scheduledDurationMinutes} minutes</TableCell>
-                                    <TableCell>{gramSabha.status}</TableCell>
-                                    <TableCell>
-                                        <IconButton onClick={() => handleOpenDialog(gramSabha)} disabled={loading}>
-                                            <EditIcon />
-                                        </IconButton>
-                                        <IconButton onClick={() => handleDelete(gramSabha._id)} disabled={loading}>
-                                            <DeleteIcon />
-                                        </IconButton>
+                            {gramSabhas.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={6} align="center">
+                                        {strings.noDataToDisplay}
                                     </TableCell>
                                 </TableRow>
-                            ))}
+                            ) : (
+                                gramSabhas.map((gramSabha) => (
+                                    <TableRow key={gramSabha._id}>
+                                        <TableCell>{gramSabha.title}</TableCell>
+                                        <TableCell>{new Date(gramSabha.dateTime).toLocaleString()}</TableCell>
+                                        <TableCell>{gramSabha.location}</TableCell>
+                                        <TableCell>{gramSabha.scheduledDurationMinutes} minutes</TableCell>
+                                        <TableCell>{gramSabha.status}</TableCell>
+                                        <TableCell>
+                                            <IconButton onClick={() => handleOpenDialog(gramSabha)} disabled={loading}>
+                                                <EditIcon />
+                                            </IconButton>
+                                            {/* Commenting out delete action as requested
+                                            <IconButton onClick={() => handleDelete(gramSabha._id)} disabled={loading}>
+                                                <DeleteIcon />
+                                            </IconButton>
+                                            */}
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            )}
                         </TableBody>
                     </Table>
                 </TableContainer>
@@ -392,7 +404,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
                                 helperText={strings.agendaHelperText}
                             />
 
-                            <TextField
+                            {/* <TextField
                                 fullWidth
                                 label={strings.description}
                                 name="description"
@@ -401,7 +413,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
                                 multiline
                                 rows={4}
                                 helperText={strings.descriptionHelperText}
-                            />
+                            /> */}
                         </Stack>
                     </Box>
                 </DialogContent>

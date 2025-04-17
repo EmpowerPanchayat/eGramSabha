@@ -32,7 +32,7 @@ const OfficialForm = ({ official = null, selectedPanchayat, onSubmit, onCancel }
         phone: '',
         role: 'GUEST',
         panchayatId: selectedPanchayat?._id || '',
-        linkedCitizenId: ''
+        linkedCitizenId: official?.linkedCitizenId || ''
     });
 
     const [loading, setLoading] = useState(false);
@@ -123,7 +123,8 @@ const OfficialForm = ({ official = null, selectedPanchayat, onSubmit, onCancel }
         }
         if (!formData.role) return 'Role is required';
         if (!formData.panchayatId) return 'Panchayat is required';
-        if (!formData.linkedCitizenId) return 'Please link a citizen from the panchayat';
+        // Only require linkedCitizenId when editing an existing official
+        if (official && !formData.linkedCitizenId) return 'Please link a citizen from the panchayat';
         return null;
     };
 
@@ -141,9 +142,16 @@ const OfficialForm = ({ official = null, selectedPanchayat, onSubmit, onCancel }
         setError('');
 
         try {
+            // For new officials, include linkedCitizenId if it exists
+            const submissionData = {
+                ...formData,
+                // Only include linkedCitizenId if it's not empty
+                ...(formData.linkedCitizenId ? { linkedCitizenId: formData.linkedCitizenId } : {})
+            };
+
             const response = official
-                ? await updateOfficial(official._id, formData)
-                : await createOfficial(formData);
+                ? await updateOfficial(official._id, submissionData)
+                : await createOfficial(submissionData);
 
             if (response.success) {
                 onSubmit(response.data);

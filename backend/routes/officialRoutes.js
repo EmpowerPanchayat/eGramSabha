@@ -49,7 +49,8 @@ router.post('/', isAuthenticated, hasRole(['ADMIN']), async (req, res) => {
             role,
             panchayatId,
             phone,
-            wardId
+            wardId,
+            linkedCitizenId
         } = req.body;
 
         // Validate input
@@ -113,8 +114,36 @@ router.post('/', isAuthenticated, hasRole(['ADMIN']), async (req, res) => {
             });
         }
 
+        // If linkedCitizenId is provided, validate it
+        if (linkedCitizenId) {
+            const citizen = await User.findById(linkedCitizenId);
+            if (!citizen) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Linked citizen not found'
+                });
+            }
+
+            // Check if citizen belongs to the same panchayat
+            if (panchayatId && citizen.panchayatId && 
+                panchayatId.toString() !== citizen.panchayatId.toString()) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Citizen must belong to the same panchayat as the official'
+                });
+            }
+
+            // Check if citizen is already linked to another official
+            const existingLink = await Official.findOne({ linkedCitizenId });
+            if (existingLink) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Citizen is already linked to another official'
+                });
+            }
+        }
+
         // Generate a random password
-        // const generatedPassword = crypto.randomBytes(8).toString('hex');
         const generatedPassword = username;
 
         // Create the new official
@@ -126,7 +155,8 @@ router.post('/', isAuthenticated, hasRole(['ADMIN']), async (req, res) => {
             role,
             panchayatId: role !== 'ADMIN' ? panchayatId : undefined,
             phone,
-            wardId: role === 'WARD_MEMBER' ? wardId : undefined
+            wardId: role === 'WARD_MEMBER' ? wardId : undefined,
+            linkedCitizenId: linkedCitizenId || undefined
         });
 
         await newOfficial.save();
@@ -147,9 +177,6 @@ router.post('/', isAuthenticated, hasRole(['ADMIN']), async (req, res) => {
             );
         }
 
-        // In a real application, you would send the password to the user by email
-        // For now, just return it in the response
-
         res.status(201).json({
             success: true,
             message: 'Official created successfully',
@@ -160,9 +187,10 @@ router.post('/', isAuthenticated, hasRole(['ADMIN']), async (req, res) => {
                     email: newOfficial.email,
                     name: newOfficial.name,
                     role: newOfficial.role,
-                    panchayatId: newOfficial.panchayatId
+                    panchayatId: newOfficial.panchayatId,
+                    linkedCitizenId: newOfficial.linkedCitizenId
                 },
-                initialPassword: generatedPassword // In production, you would send this by email instead
+                initialPassword: generatedPassword
             }
         });
     } catch (error) {

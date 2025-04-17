@@ -223,6 +223,14 @@ const translations = {
         download: 'Download',
         meetingNotFound: 'Meeting not found',
         meetingLink: 'Meeting Link',
+        // Table Headers
+        tableTitle: 'Title',
+        tableDateTime: 'Date & Time',
+        tableLocation: 'Location',
+        tableDuration: 'Duration',
+        tableStatus: 'Status',
+        tableActions: 'Actions',
+        noDataToDisplay: 'No data to display',
 
         // Official Dashboard
         officialPortal: 'Official Portal',
@@ -473,6 +481,14 @@ const translations = {
         download: 'डाउनलोड',
         meetingNotFound: 'बैठक नहीं मिली',
         meetingLink: 'बैठक लिंक',
+        // Table Headers
+        tableTitle: 'शीर्षक',
+        tableDateTime: 'तिथि और समय',
+        tableLocation: 'स्थान',
+        tableDuration: 'अवधि',
+        tableStatus: 'स्थिति',
+        tableActions: 'कार्रवाई',
+        noDataToDisplay: 'दिखाने के लिए कोई डेटा नहीं है',
 
         // Official Dashboard
         officialPortal: 'अधिकारी पोर्टल',
@@ -488,7 +504,7 @@ const translations = {
         attachDocuments: 'समर्थन दस्तावेज़ संलग्न करें',
         setPriority: 'प्राथमिकता स्तर और श्रेणियां निर्धारित करें',
         changePassword: 'पासवर्ड बदलें',
-        passwordChangeError: 'पासवर्ड बदलने में विफल',
+        passwordChangeError: 'पासवर्ड बदलने में त्रुटि',
         pendingIssues: 'लंबित मुद्दे',
         inProgressIssues: 'प्रगति में मुद्दे',
         resolvedIssues: 'हल किए गए मुद्दे',
@@ -569,7 +585,14 @@ const translations = {
         male: 'पुरुष',
         female: 'महिला',
         other: 'अन्य',
-        download: 'डाउनलोड'
+        download: 'डाउनलोड',
+        tableTitle: 'शीर्षक',
+        tableDateTime: 'तिथि और समय',
+        tableLocation: 'स्थान',
+        tableDuration: 'अवधि',
+        tableStatus: 'स्थिति',
+        tableActions: 'कार्रवाई',
+        noDataToDisplay: 'दिखाने के लिए कोई डेटा नहीं है'
     }
 };
 

@@ -88,7 +88,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                 // My Issues
                 // For officials, use linkedCitizenId if available, otherwise use their own id
                 console.log({ user });
-                const userId = user.user || user.id;
+                const userId = user.user || user.id || user._id;
                 url = `${API_URL}/issues/user/${userId}`;
             } else {
                 // All Issues from same panchayat
