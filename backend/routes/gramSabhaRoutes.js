@@ -18,6 +18,19 @@ const upload = multer({
     }
 });
 
+// Helper function for face comparison
+function calculateFaceDistance(descriptor1, descriptor2) {
+  if (!descriptor1 || !descriptor2 || descriptor1.length !== descriptor2.length) {
+    return Infinity;
+  }
+
+  let sum = 0;
+  for (let i = 0; i < descriptor1.length; i++) {
+    sum += Math.pow(descriptor1[i] - descriptor2[i], 2);
+  }
+  return Math.sqrt(sum);
+}
+
 // Create a new Gram Sabha meeting with attachments
 router.post('/', auth.isAuthenticated, isPanchayatPresident, upload.array('attachments'), async (req, res) => {
     try {
@@ -367,5 +380,205 @@ router.get('/:id/rsvp-stats', async (req, res) => {
         res.status(500).json({ success: false, message: 'Failed to fetch RSVP statistics' });
     }
 });
+
+/**
+ * @route   POST /api/gram-sabha/:id/mark-attendance
+ * @desc    Mark attendance for a meeting using face recognition
+ * @access  Private (Officials only)
+ */
+router.post('/:id/mark-attendance', auth.isAuthenticated, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { faceDescriptor, voterIdLastFour, panchayatId, verificationMethod } = req.body;
+
+    // Validation
+    if (!faceDescriptor || !Array.isArray(faceDescriptor) || faceDescriptor.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid face descriptor is required for verification'
+      });
+    }
+
+    if (!voterIdLastFour || voterIdLastFour.length !== 4) {
+      return res.status(400).json({
+        success: false,
+        message: 'Last 4 digits of voter ID are required'
+      });
+    }
+
+    // Verify gram sabha exists and belongs to panchayat
+    const gramSabha = await GramSabha.findOne({ _id: id, panchayatId });
+    if (!gramSabha) {
+      return res.status(404).json({
+        success: false,
+        message: 'Gram Sabha meeting not found'
+      });
+    }
+
+    // Search for users with matching voter ID last 4 digits and registered faces
+    const registeredUsers = await User.find({
+      panchayatId,
+      isRegistered: true,
+      faceDescriptor: { $exists: true, $ne: null },
+      voterIdNumber: { $regex: voterIdLastFour + '$', $options: 'i' } // Match ending with last 4 digits
+    });
+
+    if (registeredUsers.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No registered users found with matching voter ID'
+      });
+    }
+
+    // Find the best match among filtered users using the face-login algorithm
+    let bestMatch = null;
+    let minDistance = 0.5; // Threshold for face similarity
+
+    for (const user of registeredUsers) {
+      const distance = calculateFaceDistance(user.faceDescriptor, faceDescriptor);
+      console.log(`Face distance with ${user.voterIdNumber}: ${distance}`);
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        bestMatch = user;
+      }
+    }
+
+    if (!bestMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Face not recognized. Please try again or contact administrator.'
+      });
+    }
+
+    // Check if the user is already marked as present
+    const existingAttendance = gramSabha.attendances.find(
+      attendance => attendance.userId.toString() === bestMatch._id.toString()
+    );
+
+    if (existingAttendance) {
+      return res.status(400).json({
+        success: false,
+        message: 'Attendance already marked for this user'
+      });
+    }
+
+    // Add attendance record
+    const newAttendance = {
+      userId: bestMatch._id,
+      checkInTime: new Date(),
+      verificationMethod,
+      status: 'PRESENT'
+    };
+
+    gramSabha.attendances.push(newAttendance);
+    await gramSabha.save();
+
+    // Get panchayat to check quorum criteria and total registered users
+    const panchayat = await Panchayat.findById(gramSabha.panchayatId);
+
+    // If the meeting status is SCHEDULED and quorum is met, update status to IN_PROGRESS
+    if (gramSabha.status === 'SCHEDULED') {
+      // Get total voters in the panchayat
+      const totalVoters = await User.countDocuments({
+        panchayatId
+      });
+      console.log({totalVoters, panchayatCriteria: panchayat.sabhaCriteria, quorumRequired: totalVoters * (panchayat.sabhaCriteria/100 || 0.1)});
+      // Calculate quorum as 10% of total voters
+      const quorumRequired = Math.ceil(totalVoters * (panchayat.sabhaCriteria/100 || 0.1));
+
+      // Calculate if quorum is met
+      const attendanceCount = gramSabha.attendances.length;
+
+      if (attendanceCount >= quorumRequired) {
+        gramSabha.status = 'IN_PROGRESS';
+        await gramSabha.save();
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Attendance marked successfully',
+      data: {
+        user: {
+          _id: bestMatch._id,
+          name: bestMatch.name,
+          voterIdNumber: bestMatch.voterIdNumber
+        },
+        attendance: newAttendance
+      }
+    });
+  } catch (error) {
+    console.error('Error marking attendance:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while marking attendance: ' + error.message
+    });
+  }
+});
+
+/**
+ * @route   GET /api/gram-sabha/:id/attendance-stats
+ * @desc    Get attendance statistics for a meeting
+ * @access  Private
+ */
+router.get('/:id/attendance-stats', auth.isAuthenticated, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get gram sabha meeting
+    const gramSabha = await GramSabha.findById(id);
+    if (!gramSabha) {
+      return res.status(404).json({
+        success: false,
+        message: 'Gram Sabha meeting not found'
+      });
+    }
+
+    // Get panchayat to check quorum criteria and total registered users
+    const panchayat = await Panchayat.findById(gramSabha.panchayatId);
+    if (!panchayat) {
+      return res.status(404).json({
+        success: false,
+        message: 'Panchayat not found'
+      });
+    }
+
+    // Get total registered users in the panchayat
+    const totalRegistered = await User.countDocuments({
+      panchayatId: gramSabha.panchayatId,
+      isRegistered: true
+    });
+
+    // Get total voters in the panchayat (all users whether registered or not)
+    const totalVoters = await User.countDocuments({
+      panchayatId: gramSabha.panchayatId
+    });
+
+    // Count present users
+    const presentCount = gramSabha.attendances.length;
+
+    console.log({ totalVoters, panchayatCriteria: panchayat.sabhaCriteria, quorumRequired: totalVoters * (panchayat.sabhaCriteria / 100 || 0.1) });
+    // Calculate quorum as 10% of total voters
+    const quorumRequired = Math.ceil(totalVoters * (panchayat.sabhaCriteria / 100 || 0.1));
+
+
+    return res.status(200).json({
+      success: true,
+      totalRegistered,
+      totalVoters,
+      present: presentCount,
+      quorumRequired,
+      quorumMet: presentCount >= quorumRequired
+    });
+  } catch (error) {
+    console.error('Error getting attendance stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching attendance statistics: ' + error.message
+    });
+  }
+});
+
 
 module.exports = router; 

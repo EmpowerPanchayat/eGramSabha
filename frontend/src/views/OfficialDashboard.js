@@ -1,4 +1,3 @@
-// File: frontend/src/views/OfficialDashboard.js
 import React, { useState, useEffect } from 'react';
 import {
     Box,
@@ -61,6 +60,7 @@ import { changePassword } from '../api/profile';
 import { useAuth } from '../utils/authContext';
 import { useNavigate } from 'react-router-dom';
 import GramSabhaManagement from '../components/GramSabha/GramSabhaManagement';
+import TodaysMeetingsBanner from '../components/GramSabha/TodaysMeetingsBanner';
 
 const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha }) => {
     const { strings } = useLanguage();
@@ -261,9 +261,17 @@ const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha }) =
                     <CircularProgress size={60} />
                 </Box>
             ) : (
-                <Grid container spacing={3}>
+                <Grid container spacing={3} sx={{ width: '100%', maxWidth: '100%', margin: 0 }}>
+                    {/* Display Today's Meetings Banner */}
+                    <Grid item xs={12} sx={{ width: '100%', padding: 0 }}>
+                        <TodaysMeetingsBanner
+                            panchayatId={panchayatInfo?._id}
+                            user={user}
+                        />
+                    </Grid>
+
                     {/* Main Content - Action Cards */}
-                    <Grid item xs={12}>
+                    <Grid item xs={12} sx={{ width: '100%' }}>
                         {/* Action Cards - Horizontal layout with equal widths */}
                         <Grid container spacing={3} sx={{ mb: 3 }}>
                             <Grid item xs={12} md={4}>
