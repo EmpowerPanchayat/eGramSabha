@@ -39,6 +39,8 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import FlagIcon from '@mui/icons-material/Flag';
 import { useLanguage } from '../utils/LanguageContext';
 import { getFaceImageUrl } from '../api/index';
+import UpcomingMeetingsBanner from '../components/GramSabha/UpcomingMeetingsBanner';
+import PastMeetingsList from '../components/GramSabha/PastMeetingsList';
 
 const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
     const { strings } = useLanguage();
@@ -46,7 +48,6 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const [panchayatInfo, setPanchayatInfo] = useState(null);
     const [userState, setUserState] = useState(user);
-    const [userStats, setUserStats] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [profileCollapsed, setProfileCollapsed] = useState(false);
@@ -54,13 +55,17 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
 
     useEffect(() => {
         const fetchUserDetails = async () => {
+            console.log({user})
             if (!user || !user._id) return;
             setLoading(true);
             try {
+                console.log('CitizenDashboard - Fetching user details for:', user._id);
                 const response = await fetch(`${API_URL}/citizens/profile/${user._id}`);
                 if (!response.ok) throw new Error('Failed to fetch user profile');
                 const data = await response.json();
+                console.log('CitizenDashboard - Received user data:', data);
                 setPanchayatInfo(data.user.panchayat);
+                console.log('CitizenDashboard - Set panchayatInfo:', data.user.panchayat);
 
                 // Set face image URL properly if it exists
                 if (data.user.faceImagePath) {
@@ -74,17 +79,8 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
 
                     setUserState(prev => ({ ...prev, faceImageUrl: imageUrl }));
                 }
-
-                const statsResponse = await fetch(`${API_URL}/issues/user/${user._id}`);
-                if (statsResponse.ok) {
-                    const statsData = await statsResponse.json();
-                    setUserStats({
-                        totalIssues: statsData.count,
-                        issues: statsData.issues || []
-                    });
-                }
             } catch (error) {
-                console.error('Error fetching user details:', error);
+                console.error('CitizenDashboard - Error fetching user details:', error);
                 setError(error.message || 'Error fetching user details');
             } finally {
                 setLoading(false);
@@ -93,19 +89,6 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
 
         fetchUserDetails();
     }, [user, API_URL]);
-
-    const getStatusCounts = () => {
-        if (!userStats || !userStats.issues) return { reported: 0, resolved: 0 };
-        const reported = userStats.issues.filter(issue =>
-            ['REPORTED', 'AGENDA_CREATED'].includes(issue.status)
-        ).length;
-        const resolved = userStats.issues.filter(issue =>
-            issue.status === 'RESOLVED'
-        ).length;
-        return { reported, resolved };
-    };
-
-    const statusCounts = getStatusCounts();
 
     return (
         <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
@@ -308,119 +291,9 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
                     {/* Main Content */}
                     <Grid item xs={12} md={8} lg={9}>
                         <Stack spacing={3}>
-                            {/* Stats Cards */}
-                            <Paper
-                                elevation={2}
-                                sx={{
-                                    p: { xs: 2, md: 3 },
-                                    borderRadius: 3,
-                                    boxShadow: theme.shadows[3]
-                                }}
-                            >
-                                <Typography variant="h6" gutterBottom sx={{ mb: 3, fontWeight: 'bold' }}>
-                                    {strings.myIssues}
-                                </Typography>
-
-                                <Grid container spacing={3}>
-                                    <Grid item xs={12} sm={4}>
-                                        <Card
-                                            sx={{
-                                                bgcolor: 'primary.main',
-                                                color: 'white',
-                                                borderRadius: 2,
-                                                position: 'relative',
-                                                overflow: 'hidden'
-                                            }}
-                                        >
-                                            <Box
-                                                sx={{
-                                                    position: 'absolute',
-                                                    top: -20,
-                                                    right: -20,
-                                                    borderRadius: '50%',
-                                                    width: 100,
-                                                    height: 100,
-                                                    bgcolor: 'rgba(255,255,255,0.1)'
-                                                }}
-                                            />
-                                            <CardContent sx={{ position: 'relative', zIndex: 1 }}>
-                                                <Typography variant="h3" component="div" sx={{ mb: 0, fontWeight: 'bold' }}>
-                                                    {userStats?.totalIssues || 0}
-                                                </Typography>
-                                                <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                                                    {strings.totalIssues}
-                                                </Typography>
-                                            </CardContent>
-                                        </Card>
-                                    </Grid>
-
-                                    <Grid item xs={12} sm={4}>
-                                        <Card
-                                            sx={{
-                                                bgcolor: 'warning.main',
-                                                color: 'white',
-                                                borderRadius: 2,
-                                                position: 'relative',
-                                                overflow: 'hidden'
-                                            }}
-                                        >
-                                            <Box
-                                                sx={{
-                                                    position: 'absolute',
-                                                    top: -20,
-                                                    right: -20,
-                                                    borderRadius: '50%',
-                                                    width: 100,
-                                                    height: 100,
-                                                    bgcolor: 'rgba(255,255,255,0.1)'
-                                                }}
-                                            />
-                                            <CardContent sx={{ position: 'relative', zIndex: 1 }}>
-                                                <Typography variant="h3" component="div" sx={{ mb: 0, fontWeight: 'bold' }}>
-                                                    {statusCounts.reported}
-                                                </Typography>
-                                                <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                                                    {strings.pending}
-                                                </Typography>
-                                            </CardContent>
-                                        </Card>
-                                    </Grid>
-
-                                    <Grid item xs={12} sm={4}>
-                                        <Card
-                                            sx={{
-                                                bgcolor: 'success.main',
-                                                color: 'white',
-                                                borderRadius: 2,
-                                                position: 'relative',
-                                                overflow: 'hidden'
-                                            }}
-                                        >
-                                            <Box
-                                                sx={{
-                                                    position: 'absolute',
-                                                    top: -20,
-                                                    right: -20,
-                                                    borderRadius: '50%',
-                                                    width: 100,
-                                                    height: 100,
-                                                    bgcolor: 'rgba(255,255,255,0.1)'
-                                                }}
-                                            />
-                                            <CardContent sx={{ position: 'relative', zIndex: 1 }}>
-                                                <Typography variant="h3" component="div" sx={{ mb: 0, fontWeight: 'bold' }}>
-                                                    {statusCounts.resolved}
-                                                </Typography>
-                                                <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                                                    {strings.resolved}
-                                                </Typography>
-                                            </CardContent>
-                                        </Card>
-                                    </Grid>
-                                </Grid>
-                            </Paper>
-
-                            {/* Action Cards */}
+                            {/* Upcoming Meetings Banner */}
+                            <UpcomingMeetingsBanner panchayatId={panchayatInfo?._id} user={user} />
+                            
                             <Grid container spacing={3}>
                                 <Grid item xs={12} md={6}>
                                     <Card
@@ -565,6 +438,9 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
                                     </Card>
                                 </Grid>
                             </Grid>
+                            
+                            {/* Past Meetings List */}
+                            <PastMeetingsList panchayatId={panchayatInfo?._id} user={user} />
                         </Stack>
                     </Grid>
                 </Grid>

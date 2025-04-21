@@ -96,12 +96,16 @@ export const fetchGramSabhaMeeting = async (id) => {
 
 /**
  * Create a new Gram Sabha meeting
- * @param {Object} meetingData - Gram Sabha meeting data
+ * @param {FormData} formData - Form data including files
  * @returns {Promise} - API response
  */
-export const createGramSabhaMeeting = async (meetingData) => {
+export const createGramSabhaMeeting = async (formData) => {
     try {
-        const response = await api.post('/gram-sabha', meetingData);
+        const response = await api.post('/gram-sabha', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data'
+            }
+        });
         return response.data;
     } catch (error) {
         console.error('API Error in createGramSabhaMeeting:', error);
@@ -112,12 +116,16 @@ export const createGramSabhaMeeting = async (meetingData) => {
 /**
  * Update an existing Gram Sabha meeting
  * @param {string} id - Gram Sabha meeting ID
- * @param {Object} meetingData - Updated meeting data
+ * @param {FormData} formData - Updated form data including files
  * @returns {Promise} - API response
  */
-export const updateGramSabhaMeeting = async (id, meetingData) => {
+export const updateGramSabhaMeeting = async (id, formData) => {
     try {
-        const response = await api.patch(`/gram-sabha/${id}`, meetingData);
+        const response = await api.patch(`/gram-sabha/${id}`, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data'
+            }
+        });
         return response.data;
     } catch (error) {
         console.error('API Error in updateGramSabhaMeeting:', error);
@@ -159,15 +167,98 @@ export const addAttendance = async (id, attendanceData) => {
 /**
  * Add attachment to a Gram Sabha meeting
  * @param {string} id - Gram Sabha meeting ID
- * @param {Object} attachmentData - Attachment data
+ * @param {FormData} formData - Attachment form data
  * @returns {Promise} - API response
  */
-export const addAttachment = async (id, attachmentData) => {
+export const addAttachment = async (id, formData) => {
     try {
-        const response = await api.post(`/gram-sabha/${id}/attachments`, attachmentData);
+        const response = await api.post(`/gram-sabha/${id}/attachments`, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data'
+            }
+        });
         return response.data;
     } catch (error) {
         console.error('API Error in addAttachment:', error);
         throw error.response?.data || { message: 'Failed to add attachment' };
+    }
+};
+
+/**
+ * Fetch upcoming Gram Sabha meetings for a panchayat
+ * @param {string} panchayatId - Panchayat ID
+ * @returns {Promise} - API response
+ */
+export const fetchUpcomingMeetings = async (panchayatId) => {
+    try {
+        const response = await api.get(`/gram-sabha/panchayat/${panchayatId}/upcoming`);
+        return response.data;
+    } catch (error) {
+        console.error('API Error in fetchUpcomingMeetings:', error);
+        throw error.response?.data || { message: 'Failed to fetch upcoming meetings' };
+    }
+};
+
+/**
+ * Fetch past Gram Sabha meetings for a panchayat
+ * @param {string} panchayatId - Panchayat ID
+ * @returns {Promise} - API response
+ */
+export const fetchPastMeetings = async (panchayatId) => {
+    try {
+        const response = await api.get(`/gram-sabha/panchayat/${panchayatId}/past`);
+        return response.data;
+    } catch (error) {
+        console.error('API Error in fetchPastMeetings:', error);
+        throw error.response?.data || { message: 'Failed to fetch past meetings' };
+    }
+};
+
+/**
+ * Submit RSVP for a meeting
+ * @param {string} meetingId - Gram Sabha meeting ID
+ * @param {Object} rsvpData - RSVP data including status and optional comments
+ * @param {string} userId - User ID
+ * @returns {Promise} - API response
+ */
+export const submitRSVP = async (meetingId, rsvpData, userId) => {
+    try {
+        console.log({meetingId, rsvpData, userId});
+        const response = await api.post(`/gram-sabha/${meetingId}/rsvp/${userId}`, rsvpData);
+        return response.data;
+    } catch (error) {
+        console.error('API Error in submitRSVP:', error);
+        throw error.response?.data || { message: 'Failed to submit RSVP' };
+    }
+};
+
+/**
+ * Get RSVP status for a meeting
+ * @param {string} meetingId - Gram Sabha meeting ID
+ * @param {string} userId - User ID
+ * @returns {Promise} - API response
+ */
+export const getRSVPStatus = async (meetingId, userId) => {
+    try {
+        const response = await api.get(`/gram-sabha/${meetingId}/rsvp/${userId}`);
+        return response.data;
+    } catch (error) {
+        console.error('API Error in getRSVPStatus:', error);
+        throw error.response?.data || { message: 'Failed to get RSVP status' };
+    }
+};
+
+/**
+ * Get RSVP statistics for a meeting
+ * @param {string} meetingId - Gram Sabha meeting ID
+ * @returns {Promise} - API response
+ */
+export const getRSVPStats = async (meetingId) => {
+    try {
+        const response = await api.get(`/gram-sabha/${meetingId}/rsvp-stats`);
+        return response.data;
+    } catch (error) {
+        console.error('API Error in getRSVPStats:', error);
+        throw error.response?.data || { message: 'Failed to get RSVP statistics' };
     }
 }; 

@@ -155,6 +155,7 @@ router.get('/profile/:userId', async (req, res) => {
                 faceImagePath: user.faceImagePath,
                 isRegistered: user.isRegistered,
                 panchayat: panchayat ? {
+                    _id: panchayat._id,
                     name: panchayat.name,
                     district: panchayat.district,
                     state: panchayat.state

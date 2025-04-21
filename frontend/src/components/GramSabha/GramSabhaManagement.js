@@ -26,9 +26,14 @@ import {
     Paper,
     Alert,
     CircularProgress,
-    Divider
+        Divider,
+        InputAdornment,
+        List,
+        ListItem,
+        ListItemIcon,
+        ListItemText
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+    import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, AttachFile as AttachFileIcon } from '@mui/icons-material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -36,10 +41,12 @@ import {
     fetchGramSabhaMeetings,
     createGramSabhaMeeting,
     updateGramSabhaMeeting,
-    deleteGramSabhaMeeting
+    deleteGramSabhaMeeting,
+    addAttachment
 } from '../../api/gram-sabha';
 import { useAuth } from '../../utils/authContext';
 import { useLanguage } from '../../utils/LanguageContext';
+import GramSabhaDetails from './GramSabhaDetails';
 
 const GramSabhaManagement = ({ panchayatId }) => {
     const { strings } = useLanguage();
@@ -56,11 +63,12 @@ const GramSabhaManagement = ({ panchayatId }) => {
         time: '',
         location: '',
         agenda: '',
-        // description: '',
-        scheduledDurationMinutes: 60 // Default duration of 1 hour
+            scheduledDurationMinutes: 60,
+            attachments: []
     });
     const [previewTitle, setPreviewTitle] = useState('');
     const { user, logout } = useAuth();
+    const [selectedMeetingId, setSelectedMeetingId] = useState(null);
 
     useEffect(() => {
         if (!user) {
@@ -129,7 +137,8 @@ const GramSabhaManagement = ({ panchayatId }) => {
                 location: gramSabha.location,
                 agenda: gramSabha.agenda,
                 description: gramSabha.description,
-                scheduledDurationMinutes: gramSabha.scheduledDurationMinutes
+                    scheduledDurationMinutes: gramSabha.scheduledDurationMinutes,
+                    attachments: gramSabha.attachments || []
             });
         } else {
             setSelectedGramSabha(null);
@@ -140,7 +149,8 @@ const GramSabhaManagement = ({ panchayatId }) => {
                 location: '',
                 agenda: '',
                 description: '',
-                scheduledDurationMinutes: 60 // Default duration of 1 hour
+                    scheduledDurationMinutes: 60,
+                    attachments: []
             });
         }
         setOpenDialog(true);
@@ -163,6 +173,21 @@ const GramSabhaManagement = ({ panchayatId }) => {
         });
     };
 
+        const handleFileChange = (e) => {
+            const files = Array.from(e.target.files);
+            setFormData(prev => ({
+                ...prev,
+                attachments: [...prev.attachments, ...files]
+            }));
+        };
+
+        const removeAttachment = (index) => {
+            setFormData(prev => ({
+                ...prev,
+                attachments: prev.attachments.filter((_, i) => i !== index)
+            }));
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!user) {
@@ -180,19 +205,27 @@ const GramSabhaManagement = ({ panchayatId }) => {
                 throw new Error('Invalid date or time format');
             }
 
-            const data = {
-                ...formData,
-                panchayatId,
-                title: formData.title || undefined,
-                dateTime: dateTime.toISOString(),
-                scheduledDurationMinutes: parseInt(formData.scheduledDurationMinutes, 10),
-                scheduledById: user._id // This will be the official's ID
-            };
+            // Create FormData object for multipart/form-data
+            const formDataToSend = new FormData();
+            formDataToSend.append('panchayatId', panchayatId);
+            formDataToSend.append('title', formData.title || '');
+            formDataToSend.append('dateTime', dateTime.toISOString());
+            formDataToSend.append('date', formData.date);
+            formDataToSend.append('time', formData.time);
+            formDataToSend.append('location', formData.location);
+            formDataToSend.append('agenda', formData.agenda);
+            formDataToSend.append('scheduledDurationMinutes', formData.scheduledDurationMinutes);
 
+            // Append each attachment file
+            formData.attachments.forEach(file => {
+                formDataToSend.append('attachments', file);
+            });
+
+            let response;
             if (selectedGramSabha) {
-                await updateGramSabhaMeeting(selectedGramSabha._id, data);
+                response = await updateGramSabhaMeeting(selectedGramSabha._id, formDataToSend);
             } else {
-                await createGramSabhaMeeting(data);
+                response = await createGramSabhaMeeting(formDataToSend);
             }
 
             handleCloseDialog();
@@ -304,14 +337,20 @@ const GramSabhaManagement = ({ panchayatId }) => {
                                         <TableCell>{gramSabha.scheduledDurationMinutes} minutes</TableCell>
                                         <TableCell>{gramSabha.status}</TableCell>
                                         <TableCell>
-                                            <IconButton onClick={() => handleOpenDialog(gramSabha)} disabled={loading}>
+                                            <IconButton 
+                                                onClick={() => setSelectedMeetingId(gramSabha._id)} 
+                                                disabled={loading}
+                                                title={strings.viewDetails}
+                                            >
+                                                <ViewIcon />
+                                            </IconButton>
+                                            <IconButton 
+                                                onClick={() => handleOpenDialog(gramSabha)} 
+                                                disabled={loading}
+                                                title={strings.edit}
+                                            >
                                                 <EditIcon />
                                             </IconButton>
-                                            {/* Commenting out delete action as requested
-                                            <IconButton onClick={() => handleDelete(gramSabha._id)} disabled={loading}>
-                                                <DeleteIcon />
-                                            </IconButton>
-                                            */}
                                         </TableCell>
                                     </TableRow>
                                 ))
@@ -320,6 +359,26 @@ const GramSabhaManagement = ({ panchayatId }) => {
                     </Table>
                 </TableContainer>
             )}
+
+            {/* View Details Dialog */}
+            <Dialog 
+                open={!!selectedMeetingId} 
+                onClose={() => setSelectedMeetingId(null)} 
+                maxWidth="lg" 
+                fullWidth
+            >
+                <DialogTitle>{strings.gramSabhaDetails}</DialogTitle>
+                <DialogContent>
+                    {selectedMeetingId && (
+                        <GramSabhaDetails meetingId={selectedMeetingId} user={user} />
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setSelectedMeetingId(null)}>
+                        {strings.close}
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
                 <DialogTitle>
@@ -343,10 +402,10 @@ const GramSabhaManagement = ({ panchayatId }) => {
                             
                             <Divider />
                             
-                            <Stack spacing={2}>
-                                <Typography variant="subtitle1" fontWeight="medium">
-                                    {strings.date} & {strings.time}
+                                <Typography variant="h6" gutterBottom>
+                                    {strings.dateAndTime}
                                 </Typography>
+                                
                                 <Stack direction="row" spacing={2}>
                                     <TextField
                                         fullWidth
@@ -368,7 +427,6 @@ const GramSabhaManagement = ({ panchayatId }) => {
                                         InputLabelProps={{ shrink: true }}
                                         required
                                     />
-                                </Stack>
                             </Stack>
 
                             <TextField
@@ -404,16 +462,89 @@ const GramSabhaManagement = ({ panchayatId }) => {
                                 helperText={strings.agendaHelperText}
                             />
 
-                            {/* <TextField
+                            <Box>
+                                <Typography variant="subtitle1" gutterBottom>
+                                    {strings.attachments}
+                                </Typography>
+                                <FormControl fullWidth variant="outlined" sx={{ mb: 2 }}>
+                                    <InputLabel htmlFor="file-upload-input" shrink>
+                                        {strings.uploadFile || 'Upload Files'}
+                                    </InputLabel>
+                                    <Button
+                                        variant="outlined"
+                                        component="label"
+                                        startIcon={<AttachFileIcon />}
                                 fullWidth
-                                label={strings.description}
-                                name="description"
-                                value={formData.description}
-                                onChange={handleInputChange}
-                                multiline
-                                rows={4}
-                                helperText={strings.descriptionHelperText}
-                            /> */}
+                                        sx={{
+                                            height: '56px',
+                                            justifyContent: 'flex-start',
+                                            textTransform: 'none',
+                                            border: '1px solid rgba(0, 0, 0, 0.23)',
+                                            borderRadius: 1,
+                                            pl: 2,
+                                            '&:hover': {
+                                                backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                                            }
+                                        }}
+                                    >
+                                        {formData.attachments.length > 0
+                                            ? `${formData.attachments.length} ${formData.attachments.length === 1
+                                                ? (strings.fileSelected || 'file selected')
+                                                : (strings.filesSelected || 'files selected')}`
+                                            : (strings.clickToUpload || 'Click to upload')}
+                                        <input
+                                            type="file"
+                                            multiple
+                                            onChange={handleFileChange}
+                                            style={{ display: 'none' }}
+                                            id="file-upload-input"
+                                        />
+                                    </Button>
+                                </FormControl>
+
+                                {formData.attachments.length > 0 && (
+                                    <Paper variant="outlined" sx={{ p: 1 }}>
+                                        <List dense disablePadding>
+                                            {formData.attachments.map((file, index) => (
+                                                <ListItem
+                                                    key={index}
+                                                    sx={{
+                                                        borderBottom: index < formData.attachments.length - 1 ? '1px solid rgba(0, 0, 0, 0.12)' : 'none',
+                                                        py: 0.5
+                                                    }}
+                                                    secondaryAction={
+                                                        <IconButton
+                                                            edge="end"
+                                                            onClick={() => removeAttachment(index)}
+                                                            disabled={loading}
+                                                            size="small"
+                                                        >
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    }
+                                                >
+                                                    <ListItemIcon sx={{ minWidth: 36 }}>
+                                                        <AttachFileIcon fontSize="small" />
+                                                    </ListItemIcon>
+                                                    <ListItemText
+                                                        primary={
+                                                            <Typography variant="body2" noWrap title={file.name}>
+                                                                {file.name}
+                                                            </Typography>
+                                                        }
+                                                        secondary={
+                                                            <Typography variant="caption" noWrap component="div" color="text.secondary">
+                                                                {`${(file.size / 1024).toFixed(1)} KB • ${file.type || 'Unknown type'}`}
+                                                            </Typography>
+                                                        }
+                                                        sx={{ m: 0 }}
+                                                    />
+                                                </ListItem>
+                                            ))}
+                                        </List>
+                                    </Paper>
+                                )}
+                            </Box>
                         </Stack>
                     </Box>
                 </DialogContent>

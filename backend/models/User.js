@@ -9,22 +9,22 @@ const userSchema = new mongoose.Schema({
   motherName: String,
   address: String,
   mobileNumber: String,
-  voterIdNumber: { 
-    type: String, 
-    required: true 
+  voterIdNumber: {
+    type: String,
+    required: true
   },
   faceDescriptor: Array,
   faceImagePath: String,
-  isRegistered: { 
-    type: Boolean, 
-    default: false 
+  isRegistered: {
+    type: Boolean,
+    default: false
   },
   registrationDate: Date,
   // Reference to panchayat
-  panchayatId: { 
-    type: mongoose.Schema.Types.ObjectId, 
+  panchayatId: {
+    type: mongoose.Schema.Types.ObjectId,
     ref: 'Panchayat',
-    required: true 
+    required: true
   }
 });
 
