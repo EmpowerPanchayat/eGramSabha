@@ -460,7 +460,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                 }}
             >
                 <Typography variant="body1" color="text.secondary">
-                    {strings.noMeetingsToday || "No meetings scheduled for today"}
+                    {strings.noMeetingsToday}
                 </Typography>
             </Paper>
         );
@@ -495,7 +495,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                             fontWeight: 'bold'
                         }
                     }}
-                    title={strings.todaysMeeting || "Today's Meeting"}
+                    title={strings.todaysMeeting}
                     disableTypography
                 />
 
@@ -546,7 +546,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                             startIcon={<HowToRegIcon />}
                             sx={{ px: 3 }}
                         >
-                            {strings.markAttendance || "Mark Attendance"}
+                            {strings.markAttendance}
                         </Button>
 
                         <Button
@@ -557,7 +557,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                             disabled={!quorumMet}
                             sx={{ px: 3 }}
                         >
-                            {strings.startRecording || "Start Recording"}
+                            {strings.startRecording}
                         </Button>
                     </Box>
                 </CardContent>
@@ -572,10 +572,12 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                 }}
                 maxWidth="md"
                 fullWidth
+                disableBackdropClick
+                disableEscapeKeyDown
             >
                 <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="h6">
-                        {strings.markAttendance || "Mark Attendance"}
+                        {strings.markAttendance}
                     </Typography>
                     <IconButton
                         onClick={() => {
@@ -592,33 +594,10 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                     {attendanceStats && (
                         <Box sx={{ mb: 4, mt: 2 }}>
                             <Typography variant="h6" gutterBottom>
-                                {strings.attendanceStats || "Attendance Statistics"}
+                                {strings.attendanceStats}
                             </Typography>
 
                             <Grid container spacing={2}>
-                                <Grid item xs={12} sm={6} md={3}>
-                                    <Card sx={{
-                                        height: '100%',
-                                        boxShadow: 2,
-                                        position: 'relative',
-                                        overflow: 'hidden',
-                                        borderLeft: '4px solid',
-                                        borderColor: 'primary.main'
-                                    }}>
-                                        <CardContent>
-                                            <Typography variant="h4" align="center" color="primary.main" fontWeight="bold">
-                                                {attendanceStats.total}
-                                            </Typography>
-                                            <Typography variant="body2" align="center" color="text.secondary">
-                                                {strings.totalRegistered || "Total Registered"}
-                                            </Typography>
-                                            <Box position="absolute" bottom={5} right={5} sx={{ opacity: 0.1 }}>
-                                                <PeopleIcon sx={{ fontSize: 40 }} />
-                                            </Box>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-
                                 <Grid item xs={12} sm={6} md={3}>
                                     <Card sx={{
                                         height: '100%',
@@ -633,7 +612,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                                                 {attendanceStats.totalVoters || 0}
                                             </Typography>
                                             <Typography variant="body2" align="center" color="text.secondary">
-                                                {strings.totalVoters || "Total Voters"}
+                                                {strings.totalVoters}
                                             </Typography>
                                             <Box position="absolute" bottom={5} right={5} sx={{ opacity: 0.1 }}>
                                                 <PeopleIcon sx={{ fontSize: 40 }} />
@@ -641,6 +620,31 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                                         </CardContent>
                                     </Card>
                                 </Grid>
+                            
+                                <Grid item xs={12} sm={6} md={3}>
+                                    <Card sx={{
+                                        height: '100%',
+                                        boxShadow: 2,
+                                        position: 'relative',
+                                        overflow: 'hidden',
+                                        borderLeft: '4px solid',
+                                        borderColor: 'primary.main'
+                                    }}>
+                                        <CardContent>
+                                            <Typography variant="h4" align="center" color="primary.main" fontWeight="bold">
+                                                {attendanceStats.total}
+                                            </Typography>
+                                            <Typography variant="body2" align="center" color="text.secondary">
+                                                {strings.totalRegistered}
+                                            </Typography>
+                                            <Box position="absolute" bottom={5} right={5} sx={{ opacity: 0.1 }}>
+                                                <PeopleIcon sx={{ fontSize: 40 }} />
+                                            </Box>
+                                        </CardContent>
+                                    </Card>
+                                </Grid>
+
+                                
 
                                 <Grid item xs={12} sm={6} md={3}>
                                     <Card sx={{
@@ -656,7 +660,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                                                 {attendanceStats.present}
                                             </Typography>
                                             <Typography variant="body2" align="center" color="text.secondary">
-                                                {strings.present || "Present"}
+                                                {strings.present}
                                             </Typography>
                                             <Box position="absolute" bottom={5} right={5} sx={{ opacity: 0.1 }}>
                                                 <CheckCircleIcon sx={{ fontSize: 40 }} />
@@ -679,7 +683,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                                                 {attendanceStats.quorum}
                                             </Typography>
                                             <Typography variant="body2" align="center" color="text.secondary">
-                                                {strings.quorumRequired || "Quorum Required (10%)"}
+                                                {strings.quorumRequired}
                                             </Typography>
                                         </CardContent>
                                     </Card>
@@ -688,7 +692,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
 
                             <Box sx={{ mt: 2 }}>
                                 <Typography variant="body2" gutterBottom>
-                                    {strings.attendanceProgress || "Attendance Progress"}:
+                                    {strings.attendanceProgress}:
                                 </Typography>
                                 <LinearProgress
                                     variant="determinate"
@@ -698,12 +702,12 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                                 />
                                 <Box display="flex" justifyContent="space-between" alignItems="center">
                                     <Typography variant="caption" color="text.secondary">
-                                        {attendanceStats.present} / {attendanceStats.quorum} {strings.attendeesNeeded || "attendees needed"}
+                                        {attendanceStats.present} / {attendanceStats.quorum} {strings.attendeesNeeded}
                                     </Typography>
                                     <Chip
                                         label={attendanceStats.quorumMet
-                                            ? (strings.quorumMet || "Quorum Met")
-                                            : (strings.quorumNotMet || "Quorum Not Met")}
+                                            ? strings.quorumMet
+                                            : strings.quorumNotMet}
                                         color={attendanceStats.quorumMet ? "success" : "warning"}
                                         size="small"
                                     />
@@ -717,7 +721,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                     {/* Attendance Form */}
                     <Box sx={{ mt: 2 }}>
                         <Typography variant="h6" gutterBottom>
-                            {strings.verifyAttendee || "Verify Attendee"}
+                            {strings.verifyAttendee}
                         </Typography>
 
                         {attendanceMessage.text && (
@@ -731,7 +735,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                         )}
 
                         <TextField
-                            label={strings.voterIdLastFour || "Last 4 digits of Voter ID"}
+                            label={strings.voterIdLastFour}
                             value={voterIdLastFour}
                             onChange={(e) => {
                                 // Only allow digits and max 4 characters
@@ -742,13 +746,13 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                             margin="normal"
                             disabled={attendanceLoading}
                             inputProps={{ inputMode: 'numeric', pattern: '[0-9]*' }}
-                            helperText={strings.enterLastFourDigits || "Enter the last 4 digits of the voter ID card"}
+                            helperText={strings.enterLastFourDigits}
                         />
 
                         {/* Face Verification */}
                         <Box sx={{ mt: 3, mb: 2 }}>
                             <Typography variant="subtitle1" gutterBottom>
-                                {strings.faceVerification || "Face Verification"}
+                                {strings.faceVerification}
                             </Typography>
 
                             <Paper
@@ -778,7 +782,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                                     }}>
                                         <CameraAltIcon sx={{ fontSize: 60, mb: 2, color: 'text.disabled' }} />
                                         <Typography variant="body1" gutterBottom>
-                                            {strings.cameraInstructions || "Camera will be used to verify the attendee's identity"}
+                                            {strings.cameraInstructions}
                                         </Typography>
                                         <Button
                                             variant="contained"
@@ -790,10 +794,10 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                                             {loadingModels ? (
                                                 <>
                                                     <CircularProgress size={20} sx={{ mr: 1 }} />
-                                                    {strings.loadingModels || "Loading models..."}
+                                                    {strings.loadingModels}
                                                 </>
                                             ) : (
-                                                strings.startCamera || "Start Camera"
+                                                strings.startCamera
                                             )}
                                         </Button>
                                     </Box>
@@ -825,8 +829,8 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
 
                                         <Chip
                                             label={faceDetected
-                                                ? (strings.faceDetected || "Face Detected")
-                                                : (strings.noFaceDetected || "No Face Detected")}
+                                                ? strings.faceDetected
+                                                : strings.noFaceDetected}
                                             color={faceDetected ? "success" : "default"}
                                             icon={<CameraAltIcon />}
                                             sx={{
@@ -857,7 +861,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                                     }}>
                                         <CircularProgress color="inherit" size={60} sx={{ mb: 2 }} />
                                         <Typography variant="body2">
-                                            {strings.verifyingFace || "Verifying face..."}
+                                            {strings.verifyingFace}
                                         </Typography>
                                     </Box>
                                 )}
@@ -873,7 +877,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                                         onClick={stopCamera}
                                         disabled={attendanceLoading}
                                     >
-                                        {strings.stopCamera || "Stop Camera"}
+                                        {strings.stopCamera}
                                     </Button>
 
                                     <Button
@@ -883,21 +887,10 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                                         disabled={attendanceLoading || !faceDetected || voterIdLastFour.length !== 4}
                                         startIcon={<HowToRegIcon />}
                                     >
-                                        {strings.verifyAttendance || "Verify Attendance"}
+                                        {strings.verifyAttendance}
                                     </Button>
                                 </>
-                            ) : (
-                                <Button
-                                    variant="contained"
-                                    color="primary"
-                                    onClick={startCamera}
-                                    disabled={attendanceLoading || loadingModels}
-                                    startIcon={<CameraAltIcon />}
-                                    sx={{ ml: 'auto' }}
-                                >
-                                    {strings.startCamera || "Start Camera"}
-                                </Button>
-                            )}
+                            ) : <></>}
                         </Box>
                     </Box>
                 </DialogContent>
@@ -909,7 +902,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                             stopCamera();
                         }}
                     >
-                        {strings.close || "Close"}
+                        {strings.close}
                     </Button>
                 </DialogActions>
             </Dialog>
@@ -925,7 +918,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                 }}
             >
                 <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white' }}>
-                    {strings.meetingDetails || "Meeting Details"}
+                    {strings.meetingDetails}
                 </DialogTitle>
                 <DialogContent sx={{ pt: 3 }}>
                     {selectedMeeting && (
@@ -937,7 +930,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                         onClick={() => setSelectedMeeting(null)}
                         variant="contained"
                     >
-                        {strings.close || "Close"}
+                        {strings.close}
                     </Button>
                 </DialogActions>
             </Dialog>
