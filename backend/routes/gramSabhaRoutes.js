@@ -580,5 +580,27 @@ router.get('/:id/attendance-stats', auth.isAuthenticated, async (req, res) => {
   }
 });
 
+// Get today's meetings for a panchayat
+router.get('/panchayat/:panchayatId/today', async (req, res) => {
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const gramSabhas = await GramSabha.find({
+            panchayatId: req.params.panchayatId,
+            dateTime: { $gte: today, $lt: tomorrow }
+        })
+        .select('-attachments') // Exclude attachments
+        .populate('scheduledById', 'name')
+        .sort({ dateTime: 1 });
+
+        res.json(gramSabhas);
+    } catch (error) {
+        console.error('Error fetching today\'s meetings:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch today\'s meetings' });
+    }
+});
 
 module.exports = router; 

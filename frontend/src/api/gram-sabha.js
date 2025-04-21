@@ -261,4 +261,19 @@ export const getRSVPStats = async (meetingId) => {
         console.error('API Error in getRSVPStats:', error);
         throw error.response?.data || { message: 'Failed to get RSVP statistics' };
     }
+};
+
+/**
+ * Fetch today's Gram Sabha meetings for a panchayat
+ * @param {string} panchayatId - Panchayat ID
+ * @returns {Promise} - API response
+ */
+export const fetchTodaysMeetings = async (panchayatId) => {
+    try {
+        const response = await api.get(`/gram-sabha/panchayat/${panchayatId}/today`);
+        return response.data;
+    } catch (error) {
+        console.error('API Error in fetchTodaysMeetings:', error);
+        throw error.response?.data || { message: 'Failed to fetch today\'s meetings' };
+    }
 }; 

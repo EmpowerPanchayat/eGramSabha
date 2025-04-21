@@ -210,16 +210,19 @@ const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha }) =
                     bgcolor: 'primary.main',
                     color: 'white',
                     py: 2,
-                    px: 3,
+                    px: isMobile ? 2 : 3,
                     mb: 3,
                     borderRadius: 1,
                     boxShadow: theme.shadows[3],
                     display: 'flex',
+                    flexDirection: isMobile ? 'column' : 'row',
                     justifyContent: 'space-between',
-                    alignItems: 'center',
+                    alignItems: 'flex-start',
+                    gap: isMobile ? 2 : 0,
                     width: '100%'
                 }}
             >
+                {/* Left Section */}
                 <Box>
                     <Typography variant="h5" component="h1">
                         {strings.welcomeCitizen}, {user?.name || ''}
@@ -228,26 +231,52 @@ const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha }) =
                         {user?.role} - {panchayatInfo?.name || ''}
                     </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+
+                {/* Right Section */}
+                <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 1,
+                        '& .MuiButton-root': {
+                            minWidth: 'unset',
+                            padding: isMobile ? '6px' : '8px'
+                        }
+                    }}
+                >
                     <Badge badgeContent={statusCounts.pending} color="error">
-                        <NotificationsIcon />
+                        <NotificationsIcon fontSize={isMobile ? "small" : "medium"} />
                     </Badge>
                     <IconButton
                         color="inherit"
                         onClick={() => setPasswordDialogOpen(true)}
                         title={strings.changePassword}
+                        size={isMobile ? "small" : "medium"}
                     >
-                        <LockIcon />
+                        <LockIcon fontSize={isMobile ? "small" : "medium"} />
                     </IconButton>
                     <IconButton
                         color="inherit"
                         onClick={handleLogout}
                         title={strings.logout}
+                        size={isMobile ? "small" : "medium"}
                     >
-                        <LogoutIcon />
+                        <LogoutIcon fontSize={isMobile ? "small" : "medium"} />
                     </IconButton>
-                    <LanguageSwitcher />
-                </Box>
+                    <LanguageSwitcher
+                        sx={{
+                            '& .MuiSelect-select': {
+                                padding: isMobile ? '6px 32px 6px 12px' : '8px 40px 8px 14px',
+                                fontSize: isMobile ? '0.875rem' : '1rem'
+                            },
+                            '& .MuiSvgIcon-root': {
+                                right: isMobile ? 4 : 8
+                            }
+                        }}
+                    />
+                </Stack>
             </Paper>
 
             {error && (

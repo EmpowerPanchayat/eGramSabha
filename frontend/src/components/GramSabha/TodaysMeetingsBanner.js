@@ -32,7 +32,7 @@ import {
     CameraAlt as CameraAltIcon,
     HowToReg as HowToRegIcon
 } from '@mui/icons-material';
-import { fetchGramSabhaMeetings, addAttendance } from '../../api/gram-sabha';
+import { fetchGramSabhaMeetings, addAttendance, fetchTodaysMeetings } from '../../api/gram-sabha';
 import { useLanguage } from '../../utils/LanguageContext';
 import GramSabhaDetails from './GramSabhaDetails';
 import * as faceapi from 'face-api.js';
@@ -120,25 +120,13 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
             setLoading(true);
             setError('');
 
-            // Fetch all meetings and filter to show only today's meetings
-            const data = await fetchGramSabhaMeetings(panchayatId);
-
-            // Filter meetings for today
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-
-            const filteredMeetings = data.filter(meeting => {
-                const meetingDate = new Date(meeting.dateTime);
-                return meetingDate >= today && meetingDate < tomorrow;
-            });
-
-            setTodaysMeetings(filteredMeetings);
+            // Fetch today's meetings directly
+            const data = await fetchTodaysMeetings(panchayatId);
+            setTodaysMeetings(data);
 
             // Load attendance stats for the first meeting
-            if (filteredMeetings.length > 0) {
-                loadAttendanceStats(filteredMeetings[0]._id);
+            if (data.length > 0) {
+                loadAttendanceStats(data[0]._id);
             }
         } catch (error) {
             console.error('Error loading meetings:', error);
