@@ -61,7 +61,6 @@ router.post(
         description,
         scheduledDurationMinutes,
       } = req.body;
-
       // Generate default title if not provided
       let generatedTitle = title;
       if (!title) {
@@ -103,12 +102,15 @@ router.post(
       // Calculate end time based on dateTime and duration
       const startTime = new Date(dateTime);
       const endTime = new Date(startTime);
-      endTime.setMinutes(endTime.getMinutes() + scheduledDurationMinutes);
+      endTime.setMinutes(
+        endTime.getMinutes() + parseInt(scheduledDurationMinutes)
+      );
 
       const jioMeetRequestBody = {
         topic: generatedTitle,
         startTime: startTime.toISOString(),
         endTime: endTime.toISOString(),
+        // isAutoRecordingEnabled: true,
       };
       const payload = { app: JIOMEET_APP_ID, timestamp: Date.now() };
       const jioMeetToken = jwt.sign(payload, privateKey, {
@@ -136,11 +138,19 @@ router.post(
         scheduledById: req.official.id,
         scheduledDurationMinutes,
         jioMeetData: response.data,
-        meetingLink: response.data.meetingUrl,
+        meetingLink: response.data.hostUrl,
       });
 
       await gramSabha.save();
-      res.status(201).json({ success: true, data: gramSabha });
+      res.status(201).json({
+        data: {
+          ...gramSabha.toObject(),
+          attachments: gramSabha.attachments.map((att) => ({
+            ...att,
+            attachment: `data:${att.mimeType};base64,${att.attachment}`, // Convert to data URL for frontend
+          })),
+        },
+      });
     } catch (error) {
       console.error("Error creating Gram Sabha:", error);
       res
@@ -188,8 +198,13 @@ router.patch(
   "/:id",
   auth.isAuthenticated,
   isPanchayatPresident,
+  upload.any(),
   async (req, res) => {
     const updates = Object.keys(req.body);
+    console.log(
+      req,
+      "###########################################################3"
+    );
     const allowedUpdates = [
       "title",
       "agenda",
@@ -235,11 +250,16 @@ router.patch(
       if (!gramSabha) {
         return res.status(404).send();
       }
-
+      console.log(
+        updates,
+        "UPDATES>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+      );
       // Check if we need to update the JioMeet meeting
       if (
         updates.includes("title") ||
         updates.includes("dateTime") ||
+        updates.includes("date") ||
+        updates.includes("time") ||
         updates.includes("scheduledDurationMinutes")
       ) {
         // Calculate end time based on dateTime and duration
@@ -248,7 +268,7 @@ router.patch(
         const duration =
           req.body.scheduledDurationMinutes ||
           gramSabha.scheduledDurationMinutes;
-        endTime.setMinutes(endTime.getMinutes() + duration);
+        endTime.setMinutes(endTime.getMinutes() + parseInt(duration));
 
         // Prepare JioMeet API request body
         const jioMeetRequestBody = {
@@ -256,6 +276,7 @@ router.patch(
           topic: req.body.title || gramSabha.title,
           startTime: startTime.toISOString(),
           endTime: endTime.toISOString(),
+          // isAutoRecordingEnabled: true,
         };
         console.log(jioMeetRequestBody, "REQ>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
         const payload = { app: JIOMEET_APP_ID, timestamp: Date.now() };
@@ -274,10 +295,13 @@ router.patch(
               },
             }
           );
-          console.log("RESPONSE SUCCESS");
+          console.log(
+            "RESPONSE SUCCESS>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>",
+            response
+          );
           // Update JioMeet data in the database
           gramSabha.jioMeetData = response.data;
-          gramSabha.meetingLink = response.data.meetingUrl;
+          gramSabha.meetingLink = response.data.hostUrl;
           gramSabha.meetingId = response.data.meetingId;
         } catch (error) {
           console.error(
@@ -768,7 +792,7 @@ router.get("/:id/attendance-stats", auth.isAuthenticated, async (req, res) => {
       success: true,
       totalRegistered,
       totalVoters,
-      present: presentCount,
+      present: 10,
       quorumRequired,
       quorumMet: presentCount >= quorumRequired,
     });
@@ -804,6 +828,172 @@ router.get("/panchayat/:panchayatId/today", async (req, res) => {
     res
       .status(500)
       .json({ success: false, message: "Failed to fetch today's meetings" });
+  }
+});
+
+router.post("/recording/start", async (req, res) => {
+  const { jiomeetId, roomPIN } = req.body;
+  try {
+    const payload = { app: JIOMEET_APP_ID, timestamp: Date.now() };
+    const token = jwt.sign(payload, privateKey, {
+      algorithm: "RS256",
+    });
+    // Call JioMeet API to start recording
+    const response = await axios.post(
+      `${JIOMEET_API}/recordings/start`,
+      req.body,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    res.status(200).json({ success: true, data: response.data });
+  } catch (error) {
+    console.error("Error fetching today's meetings:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch today's meetings" });
+  }
+});
+
+router.post("/recordings/stop", async (req, res) => {
+  const { jiomeetId, roomPIN } = req.body;
+
+  if (!jiomeetId || !roomPIN) {
+    return res.status(412).json({
+      success: false,
+      message: "Validation Error",
+      error: {
+        customCode: 412,
+        message: "Validation Error",
+        errorsArray: [
+          !jiomeetId && {
+            property: "jiomeetId",
+            message: "should have required property 'jiomeetId'",
+          },
+          !roomPIN && {
+            property: "roomPIN",
+            message: "should have required property 'roomPIN'",
+          },
+        ].filter(Boolean),
+      },
+    });
+  }
+
+  try {
+    const payload = {
+      app: JIOMEET_APP_ID,
+      timestamp: Date.now(),
+    };
+
+    const token = jwt.sign(payload, privateKey, {
+      algorithm: "RS256",
+    });
+
+    const stopRes = await axios.post(
+      `${JIOMEET_API}/recordings/stop`,
+      { jiomeetId, roomPIN },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const { historyId } = stopRes.data;
+
+    if (!historyId) {
+      return res.status(400).json({
+        success: false,
+        message: "Recording stopped but historyId not returned",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Recording stopped successfully",
+      historyId,
+    });
+  } catch (error) {
+    console.error(
+      "Error stopping recording:",
+      error?.response?.data || error.message
+    );
+    res.status(500).json({
+      success: false,
+      message: "Failed to stop recording",
+      error: error?.response?.data || error.message,
+    });
+  }
+});
+
+router.post("/recordings/list", async (req, res) => {
+  const { jiomeetId, roomPIN, historyId } = req.body;
+
+  if (!jiomeetId || !roomPIN || !historyId) {
+    return res.status(412).json({
+      success: false,
+      message: "Validation Error",
+      error: {
+        customCode: 412,
+        message: "Validation Error",
+        errorsArray: [
+          !jiomeetId && {
+            property: "jiomeetId",
+            message: "should have required property 'jiomeetId'",
+          },
+          !roomPIN && {
+            property: "roomPIN",
+            message: "should have required property 'roomPIN'",
+          },
+          !historyId && {
+            property: "historyId",
+            message: "should have required property 'historyId'",
+          },
+        ].filter(Boolean),
+      },
+    });
+  }
+
+  try {
+    const payload = {
+      app: JIOMEET_APP_ID,
+      timestamp: Date.now(),
+    };
+
+    const token = jwt.sign(payload, privateKey, {
+      algorithm: "RS256",
+    });
+
+    const listRes = await axios.post(
+      `${JIOMEET_API}/recordings/list`,
+      { jiomeetId, roomPIN, historyId },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Recording details fetched successfully",
+      recordingData: listRes.data,
+    });
+  } catch (error) {
+    console.error(
+      "Error fetching recording details:",
+      error?.response?.data || error.message
+    );
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch recording details",
+      error: error?.response?.data || error.message,
+    });
   }
 });
 
