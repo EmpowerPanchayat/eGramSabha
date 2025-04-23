@@ -63,8 +63,8 @@ const GramSabhaManagement = ({ panchayatId }) => {
         time: '',
         location: '',
         agenda: '',
-            scheduledDurationHours: 60,
-            attachments: []
+        scheduledDurationHours: 2,
+        attachments: []
     });
     const [previewTitle, setPreviewTitle] = useState('');
     const { user, logout } = useAuth();
@@ -149,8 +149,8 @@ const GramSabhaManagement = ({ panchayatId }) => {
                 location: '',
                 agenda: '',
                 description: '',
-                    scheduledDurationHours: 60,
-                    attachments: []
+                scheduledDurationHours: 2,
+                attachments: []
             });
         }
         setOpenDialog(true);
@@ -387,7 +387,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
                                         <TableCell>{gramSabha.title}</TableCell>
                                         <TableCell>{new Date(gramSabha.dateTime).toLocaleString()}</TableCell>
                                         <TableCell>{gramSabha.location}</TableCell>
-                                        <TableCell>{gramSabha.scheduledDurationHours} minutes</TableCell>
+                                        <TableCell>{gramSabha.scheduledDurationHours} {strings.hours}</TableCell>
                                         <TableCell>{gramSabha.status}</TableCell>
                                         <TableCell>
                                             <IconButton 

@@ -281,19 +281,37 @@ router.patch(
 
         // Prepare JioMeet API request body
         const jioMeetRequestBody = {
-          meetingId: gramSabha.jioMeetData.meetingId,
+          // meetingId: gramSabha.jioMeetData?.meetingId,
           topic: req.body.title || gramSabha.title,
           startTime: startTime.toISOString(),
           endTime: endTime.toISOString(),
           // isAutoRecordingEnabled: true,
         };
+
+        // if (!gramSabha.jioMeetData?.meetingId) {
+        //   delete jioMeetRequestBody.meetingId;
+        // }
+
         const payload = { app: JIOMEET_APP_ID, timestamp: Date.now() };
         const jioMeetToken = jwt.sign(payload, privateKey, {
           algorithm: "RS256",
         });
         // Update the meeting in JioMeet
         try {
-          const response = await axios.put(
+          // let response = {};
+          // if(gramSabha.jioMeetData?.meetingId) 
+          //   response = await axios.put(
+          //     `${JIOMEET_API}/schedule/meeting`,
+          //     jioMeetRequestBody,
+          //     {
+          //       headers: {
+          //         "Content-Type": "application/json",
+          //         Authorization: `Bearer ${jioMeetToken}`,
+          //       },
+          //     }
+          //   ); 
+          // else 
+          response = await axios.post(
             `${JIOMEET_API}/schedule/meeting`,
             jioMeetRequestBody,
             {
