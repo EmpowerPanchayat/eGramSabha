@@ -119,19 +119,19 @@ const UpcomingMeetingsBanner = ({ panchayatId, user }) => {
                 return {
                     color: 'success',
                     icon: <CheckCircleIcon />,
-                    text: strings.rsvpConfirmed
+                    text: strings.attending
                 };
             case 'DECLINED':
                 return {
                     color: 'error',
                     icon: <CancelIcon />,
-                    text: strings.rsvpDeclined
+                    text: strings.notAttending
                 };
             case 'MAYBE':
                 return {
                     color: 'warning',
                     icon: <HelpIcon />,
-                    text: strings.rsvpMaybe
+                    text: strings.mayAttend
                 };
             default:
                 return {
@@ -262,9 +262,15 @@ const UpcomingMeetingsBanner = ({ panchayatId, user }) => {
                             color={rsvpProps.color}
                             onClick={(e) => handleMenuOpen(e, meeting._id)}
                             disabled={rsvpLoading[meeting._id]}
-                            startIcon={rsvpProps.icon}
-                            sx={{ px: 3 }}
+                            sx={{ 
+                                px: 3,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                                minWidth: '150px'
+                            }}
                         >
+                            {rsvpProps.icon}
                             {rsvpProps.text}
                         </Button>
                     </Box>
@@ -282,21 +288,21 @@ const UpcomingMeetingsBanner = ({ panchayatId, user }) => {
                     disabled={rsvpStatus[selectedMeetingId] === 'CONFIRMED'}
                 >
                     <CheckCircleIcon sx={{ mr: 1, color: 'success.main' }} />
-                    {strings.confirm}
+                    {strings.attending}
                 </MenuItem>
                 <MenuItem
                     onClick={() => handleRSVP(selectedMeetingId, 'DECLINED')}
                     disabled={rsvpStatus[selectedMeetingId] === 'DECLINED'}
                 >
                     <CancelIcon sx={{ mr: 1, color: 'error.main' }} />
-                    {strings.decline}
+                    {strings.notAttending}
                 </MenuItem>
                 <MenuItem
                     onClick={() => handleRSVP(selectedMeetingId, 'MAYBE')}
                     disabled={rsvpStatus[selectedMeetingId] === 'MAYBE'}
                 >
                     <HelpIcon sx={{ mr: 1, color: 'warning.main' }} />
-                    {strings.maybe}
+                    {strings.mayAttend}
                 </MenuItem>
             </Menu>
 

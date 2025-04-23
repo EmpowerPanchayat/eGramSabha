@@ -182,33 +182,6 @@ const GramSabhaDetails = ({ meetingId, user }) => {
     }
   };
 
-  const generatePDF = () => {
-    if (!meeting) return;
-
-    const doc = new jsPDF();
-
-    // Add title
-    doc.setFontSize(20);
-    doc.text('Gram Sabha Meeting Details', 14, 15);
-
-    // Add meeting details
-    doc.setFontSize(12);
-    doc.text(`Title: ${meeting.title}`, 14, 25);
-    doc.text(`Date & Time: ${new Date(meeting.dateTime).toLocaleString()}`, 14, 35);
-    doc.text(`Location: ${meeting.location}`, 14, 45);
-    doc.text(`Duration: ${meeting.scheduledDurationMinutes} minutes`, 14, 55);
-    doc.text(`Status: ${meeting.status}`, 14, 65);
-
-    if (meeting.agenda) {
-      doc.text('Agenda:', 14, 75);
-      const splitAgenda = doc.splitTextToSize(meeting.agenda, 180);
-      doc.text(splitAgenda, 14, 85);
-    }
-
-    // Save the PDF
-    doc.save(`gram-sabha-${meeting.title}-${new Date().toISOString().split('T')[0]}.pdf`);
-  };
-
   const handleMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
   };
@@ -223,19 +196,19 @@ const GramSabhaDetails = ({ meetingId, user }) => {
         return {
           color: 'success',
           icon: <CheckCircleIcon />,
-          text: strings.confirmed
+          text: strings.attending
         };
       case 'DECLINED':
         return {
           color: 'error',
           icon: <CancelIcon />,
-          text: strings.declined
+          text: strings.notAttending
         };
       case 'MAYBE':
         return {
           color: 'warning',
           icon: <HelpIcon />,
-          text: strings.maybe
+          text: strings.mayAttend
         };
       default:
         return {
@@ -284,11 +257,11 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                     variant="contained"
                     color={getRSVPButtonProps().color}
                     onClick={handleMenuOpen}
-                    disabled={rsvpLoading}
-                    startIcon={getRSVPButtonProps().icon}
+                    disabled={rsvpLoading || loading}
+                    startIcon={rsvpLoading ? <CircularProgress size={20} color="inherit" /> : getRSVPButtonProps().icon}
                     size="medium"
                   >
-                    {getRSVPButtonProps().text}
+                    {rsvpLoading ? strings.loading : getRSVPButtonProps().text}
                   </Button>
                   <Menu
                     anchorEl={anchorEl}
@@ -300,26 +273,27 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                       disabled={rsvpStatus === 'CONFIRMED'}
                     >
                       <CheckCircleIcon sx={{ mr: 1, color: 'success.main' }} />
-                      {strings.confirm}
+                      {strings.attending}
                     </MenuItem>
                     <MenuItem
                       onClick={() => handleRSVP('DECLINED')}
                       disabled={rsvpStatus === 'DECLINED'}
                     >
                       <CancelIcon sx={{ mr: 1, color: 'error.main' }} />
-                      {strings.decline}
+                      {strings.notAttending}
                     </MenuItem>
                     <MenuItem
                       onClick={() => handleRSVP('MAYBE')}
                       disabled={rsvpStatus === 'MAYBE'}
                     >
                       <HelpIcon sx={{ mr: 1, color: 'warning.main' }} />
-                      {strings.maybe}
+                      {strings.mayAttend}
                     </MenuItem>
                   </Menu>
                 </>
               )}
 
+              {/* Commented out PDF download button
               <Tooltip title={strings.downloadPDF}>
                 <Button
                   variant="outlined"
@@ -331,6 +305,7 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                   {strings.download}
                 </Button>
               </Tooltip>
+              */}
 
               {isPresident && (
                 <Tooltip title={strings.attachFile}>
@@ -387,7 +362,7 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                     {strings.duration}:
                   </Typography>
                   <Typography variant="body1">
-                    {meeting.scheduledDurationMinutes} {strings.minutes}
+                    {meeting.scheduledDurationHours} {strings.hours}
                   </Typography>
                 </Box>
 
@@ -418,101 +393,105 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                 {strings.rsvpStats}
               </Typography>
 
-              <Grid container spacing={2}>
-                <Grid item xs={6} sm={3}>
+              <Grid container spacing={2} justifyContent="center">
+                <Grid item xs={6} sm={3} sx={{ maxWidth: '250px' }}>
                   <Card sx={{
                     height: '100%',
-                    boxShadow: 2,
+                    boxShadow: 1,
                     position: 'relative',
                     overflow: 'hidden',
-                    borderLeft: '4px solid',
-                    borderColor: 'success.main'
+                    borderTop: '4px solid',
+                    borderColor: 'success.main',
+                    bgcolor: 'background.paper'
                   }}>
-                    <CardContent>
-                      <Typography variant="h4" align="center" color="success.main" fontWeight="bold">
+                    <CardContent sx={{ p: 2 }}>
+                      <Box display="flex" alignItems="center" gap={1} mb={1}>
+                        <CheckCircleIcon color="success" />
+                        <Typography variant="subtitle2" color="text.secondary">
+                          {strings.attending}
+                        </Typography>
+                      </Box>
+                      <Typography variant="h4" color="success.main" fontWeight="bold">
                         {rsvpStats.CONFIRMED}
                       </Typography>
-                      <Typography variant="body2" align="center" color="text.secondary">
-                        {strings.confirmed}
-                      </Typography>
-                      <Box position="absolute" bottom={5} right={5} sx={{ opacity: 0.1 }}>
-                        <CheckCircleIcon sx={{ fontSize: 40 }} />
-                      </Box>
                     </CardContent>
                   </Card>
                 </Grid>
 
-                <Grid item xs={6} sm={3}>
+                <Grid item xs={6} sm={3} sx={{ maxWidth: '250px' }}>
                   <Card sx={{
                     height: '100%',
-                    boxShadow: 2,
+                    boxShadow: 1,
                     position: 'relative',
                     overflow: 'hidden',
-                    borderLeft: '4px solid',
-                    borderColor: 'error.main'
+                    borderTop: '4px solid',
+                    borderColor: 'error.main',
+                    bgcolor: 'background.paper'
                   }}>
-                    <CardContent>
-                      <Typography variant="h4" align="center" color="error.main" fontWeight="bold">
+                    <CardContent sx={{ p: 2 }}>
+                      <Box display="flex" alignItems="center" gap={1} mb={1}>
+                        <CancelIcon color="error" />
+                        <Typography variant="subtitle2" color="text.secondary">
+                          {strings.notAttending}
+                        </Typography>
+                      </Box>
+                      <Typography variant="h4" color="error.main" fontWeight="bold">
                         {rsvpStats.DECLINED}
                       </Typography>
-                      <Typography variant="body2" align="center" color="text.secondary">
-                        {strings.declined}
-                      </Typography>
-                      <Box position="absolute" bottom={5} right={5} sx={{ opacity: 0.1 }}>
-                        <CancelIcon sx={{ fontSize: 40 }} />
-                      </Box>
                     </CardContent>
                   </Card>
                 </Grid>
 
-                <Grid item xs={6} sm={3}>
+                <Grid item xs={6} sm={3} sx={{ maxWidth: '250px' }}>
                   <Card sx={{
                     height: '100%',
-                    boxShadow: 2,
+                    boxShadow: 1,
                     position: 'relative',
                     overflow: 'hidden',
-                    borderLeft: '4px solid',
-                    borderColor: 'warning.main'
+                    borderTop: '4px solid',
+                    borderColor: 'warning.main',
+                    bgcolor: 'background.paper'
                   }}>
-                    <CardContent>
-                      <Typography variant="h4" align="center" color="warning.main" fontWeight="bold">
+                    <CardContent sx={{ p: 2 }}>
+                      <Box display="flex" alignItems="center" gap={1} mb={1}>
+                        <HelpIcon color="warning" />
+                        <Typography variant="subtitle2" color="text.secondary">
+                          {strings.mayAttend}
+                        </Typography>
+                      </Box>
+                      <Typography variant="h4" color="warning.main" fontWeight="bold">
                         {rsvpStats.MAYBE}
                       </Typography>
-                      <Typography variant="body2" align="center" color="text.secondary">
-                        {strings.maybe}
-                      </Typography>
-                      <Box position="absolute" bottom={5} right={5} sx={{ opacity: 0.1 }}>
-                        <HelpIcon sx={{ fontSize: 40 }} />
-                      </Box>
                     </CardContent>
                   </Card>
                 </Grid>
 
-                <Grid item xs={6} sm={3}>
+                <Grid item xs={6} sm={3} sx={{ maxWidth: '250px' }}>
                   <Card sx={{
                     height: '100%',
-                    boxShadow: 2,
+                    boxShadow: 1,
                     position: 'relative',
                     overflow: 'hidden',
-                    borderLeft: '4px solid',
-                    borderColor: 'grey.500'
+                    borderTop: '4px solid',
+                    borderColor: 'grey.500',
+                    bgcolor: 'background.paper'
                   }}>
-                    <CardContent>
-                      <Typography variant="h4" align="center" color="text.secondary" fontWeight="bold">
+                    <CardContent sx={{ p: 2 }}>
+                      <Box display="flex" alignItems="center" gap={1} mb={1}>
+                        <PeopleIcon color="action" />
+                        <Typography variant="subtitle2" color="text.secondary">
+                          {strings.noResponse}
+                        </Typography>
+                      </Box>
+                      <Typography variant="h4" color="text.secondary" fontWeight="bold">
                         {rsvpStats.NO_RESPONSE}
                       </Typography>
-                      <Typography variant="body2" align="center" color="text.secondary">
-                        {strings.noResponse}
-                      </Typography>
-                      <Box position="absolute" bottom={5} right={5} sx={{ opacity: 0.1 }}>
-                        <PeopleIcon sx={{ fontSize: 40 }} />
-                      </Box>
                     </CardContent>
                   </Card>
                 </Grid>
               </Grid>
 
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: 'right' }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 3, textAlign: 'center' }}>
                 {strings.totalRegisteredUsers}: <strong>{rsvpStats.TOTAL}</strong>
               </Typography>
             </Box>

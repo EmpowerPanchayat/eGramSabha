@@ -558,7 +558,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                     setShowAttendanceForm(false);
                     stopCamera();
                 }}
-                maxWidth="md"
+                maxWidth="sm"
                 fullWidth
                 disableBackdropClick
                 disableEscapeKeyDown

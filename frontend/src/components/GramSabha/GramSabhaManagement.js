@@ -63,7 +63,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
         time: '',
         location: '',
         agenda: '',
-            scheduledDurationMinutes: 60,
+            scheduledDurationHours: 60,
             attachments: []
     });
     const [previewTitle, setPreviewTitle] = useState('');
@@ -137,7 +137,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
                 location: gramSabha.location,
                 agenda: gramSabha.agenda,
                 description: gramSabha.description,
-                    scheduledDurationMinutes: gramSabha.scheduledDurationMinutes,
+                    scheduledDurationHours: gramSabha.scheduledDurationHours,
                     attachments: gramSabha.attachments || []
             });
         } else {
@@ -149,7 +149,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
                 location: '',
                 agenda: '',
                 description: '',
-                    scheduledDurationMinutes: 60,
+                    scheduledDurationHours: 60,
                     attachments: []
             });
         }
@@ -208,28 +208,80 @@ const GramSabhaManagement = ({ panchayatId }) => {
             // Create FormData object for multipart/form-data
             const formDataToSend = new FormData();
             formDataToSend.append('panchayatId', panchayatId);
-            formDataToSend.append('title', formData.title || '');
-            formDataToSend.append('dateTime', dateTime.toISOString());
-            formDataToSend.append('date', formData.date);
-            formDataToSend.append('time', formData.time);
-            formDataToSend.append('location', formData.location);
-            formDataToSend.append('agenda', formData.agenda);
-            formDataToSend.append('scheduledDurationMinutes', formData.scheduledDurationMinutes);
 
-            // Append each attachment file
-            formData.attachments.forEach(file => {
-                formDataToSend.append('attachments', file);
-            });
-
-            let response;
             if (selectedGramSabha) {
-                response = await updateGramSabhaMeeting(selectedGramSabha._id, formDataToSend);
-            } else {
-                response = await createGramSabhaMeeting(formDataToSend);
-            }
+                // For updates, only include changed fields
+                let hasChanges = false;
 
-            handleCloseDialog();
-            loadGramSabhas();
+                if (formData.title !== selectedGramSabha.title) {
+                    formDataToSend.append('title', formData.title || '');
+                    hasChanges = true;
+                }
+
+                // Format the existing dateTime for comparison
+                const existingDate = new Date(selectedGramSabha.dateTime);
+                if (dateTime.getTime() !== existingDate.getTime()) {
+                    formDataToSend.append('dateTime', dateTime.toISOString());
+                    hasChanges = true;
+                }
+
+                formDataToSend.append('date', formData.date);
+                formDataToSend.append('time', formData.time);
+
+                if (formData.location !== selectedGramSabha.location) {
+                    formDataToSend.append('location', formData.location);
+                    hasChanges = true;
+                }
+
+                if (formData.agenda !== selectedGramSabha.agenda) {
+                    formDataToSend.append('agenda', formData.agenda);
+                    hasChanges = true;
+                }
+
+                if (parseInt(formData.scheduledDurationHours) !== parseInt(selectedGramSabha.scheduledDurationHours)) {
+                    formDataToSend.append('scheduledDurationHours', formData.scheduledDurationHours);
+                    hasChanges = true;
+                }
+
+                // Handle attachments - don't send the attachments array directly
+                if (formData.attachments && formData.attachments.length > 0) {
+                    // Only add files that are actual File objects (new uploads)
+                    const newFiles = formData.attachments.filter(file => file instanceof File);
+
+                    newFiles.forEach(file => {
+                        formDataToSend.append('attachments', file);
+                        hasChanges = true;
+                    });
+                }
+
+                if (hasChanges) {
+                    await updateGramSabhaMeeting(selectedGramSabha._id, formDataToSend);
+                }
+
+                handleCloseDialog();
+                loadGramSabhas();
+            } else {
+                // For new record, add all fields
+                formDataToSend.append('title', formData.title || '');
+                formDataToSend.append('dateTime', dateTime.toISOString());
+                formDataToSend.append('location', formData.location);
+                formDataToSend.append('agenda', formData.agenda);
+                formDataToSend.append('scheduledDurationHours', formData.scheduledDurationHours);
+                formDataToSend.append('date', formData.date);
+                formDataToSend.append('time', formData.time);
+                // Append each attachment file
+                if (formData.attachments && formData.attachments.length > 0) {
+                    formData.attachments.forEach(file => {
+                        if (file instanceof File) {
+                            formDataToSend.append('attachments', file);
+                        }
+                    });
+                }
+
+                await createGramSabhaMeeting(formDataToSend);
+                handleCloseDialog();
+                loadGramSabhas();
+            }
         } catch (err) {
             if (err.message === 'Invalid token' || err.message === 'Token has expired') {
                 logout();
@@ -237,6 +289,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
             } else {
                 setError(err.message || 'Failed to save Gram Sabha meeting');
             }
+            console.error('Error submitting form:', err);
         } finally {
             setLoading(false);
         }
@@ -334,7 +387,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
                                         <TableCell>{gramSabha.title}</TableCell>
                                         <TableCell>{new Date(gramSabha.dateTime).toLocaleString()}</TableCell>
                                         <TableCell>{gramSabha.location}</TableCell>
-                                        <TableCell>{gramSabha.scheduledDurationMinutes} minutes</TableCell>
+                                        <TableCell>{gramSabha.scheduledDurationHours} minutes</TableCell>
                                         <TableCell>{gramSabha.status}</TableCell>
                                         <TableCell>
                                             <IconButton 
@@ -432,9 +485,9 @@ const GramSabhaManagement = ({ panchayatId }) => {
                             <TextField
                                 fullWidth
                                 label={strings.duration}
-                                name="scheduledDurationMinutes"
+                                name="scheduledDurationHours"
                                 type="number"
-                                value={formData.scheduledDurationMinutes}
+                                value={formData.scheduledDurationHours}
                                 onChange={handleInputChange}
                                 InputProps={{ inputProps: { min: 15, max: 480 } }}
                                 helperText={strings.durationHelperText}
@@ -528,13 +581,17 @@ const GramSabhaManagement = ({ panchayatId }) => {
                                                     </ListItemIcon>
                                                     <ListItemText
                                                         primary={
-                                                            <Typography variant="body2" noWrap title={file.name}>
-                                                                {file.name}
+                                                            <Typography variant="body2" noWrap title={file.name || file.filename}>
+                                                                {file.name || file.filename}
                                                             </Typography>
                                                         }
                                                         secondary={
                                                             <Typography variant="caption" noWrap component="div" color="text.secondary">
-                                                                {`${(file.size / 1024).toFixed(1)} KB • ${file.type || 'Unknown type'}`}
+                                                                {file instanceof File 
+                                                                    ? `${(file.size / 1024).toFixed(1)} KB • ${file.type || 'Unknown type'}`
+                                                                    : file.mimeType 
+                                                                        ? `${file.mimeType} • ${new Date(file.uploadedAt).toLocaleDateString()}`
+                                                                        : 'Existing attachment'}
                                                             </Typography>
                                                         }
                                                         sx={{ m: 0 }}

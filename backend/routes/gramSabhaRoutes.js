@@ -34,7 +34,7 @@ function calculateFaceDistance(descriptor1, descriptor2) {
 // Create a new Gram Sabha meeting with attachments
 router.post('/', auth.isAuthenticated, isPanchayatPresident, upload.array('attachments'), async (req, res) => {
     try {
-        const { panchayatId, title, dateTime, date, time, location, agenda, description, scheduledDurationMinutes } = req.body;
+        const { panchayatId, title, dateTime, date, time, location, agenda, description, scheduledDurationHours } = req.body;
         
         // Generate default title if not provided
         let generatedTitle = title;
@@ -75,7 +75,7 @@ router.post('/', auth.isAuthenticated, isPanchayatPresident, upload.array('attac
             agenda,
             description,
             scheduledById: req.official.id,
-            scheduledDurationMinutes,
+            scheduledDurationHours,
             attachments
         });
 
@@ -124,31 +124,64 @@ router.get('/:id', async (req, res) => {
 });
 
 // Update a Gram Sabha meeting
-router.patch('/:id', auth.isAuthenticated, isPanchayatPresident, async (req, res) => {
-  const updates = Object.keys(req.body);
-  const allowedUpdates = ['title', 'agenda', 'dateTime', 'date', 'time', 'location', 'scheduledDurationMinutes', 
-    'meetingLink', 'status', 'minutes', 'meetingNotes', 'recordingLink', 'panchayatId',
-    'actualDurationMinutes', 'transcript', 'conclusion', 'issues', 'guests'];
-  
-  const isValidOperation = updates.every(update => allowedUpdates.includes(update));
-  const invalidUpdates = updates.filter(update => !allowedUpdates.includes(update));
-  console.log({ invalidUpdates });
-  if (!isValidOperation) {
-    return res.status(400).send({ error: `Invalid updates! ${invalidUpdates.join(', ')}` });
-  }
-
+router.patch('/:id', auth.isAuthenticated, isPanchayatPresident, upload.array('attachments'), async (req, res) => {
   try {
+    // Find the existing gram sabha first to verify it exists
     const gramSabha = await GramSabha.findOne({ _id: req.params.id, scheduledById: req.official.id });
-    
+
     if (!gramSabha) {
-      return res.status(404).send();
+      return res.status(404).send({ error: 'Gram Sabha not found or you do not have permission to update it' });
     }
 
-    updates.forEach(update => gramSabha[update] = req.body[update]);
+    // Get the updates from the request body
+    const updates = Object.keys(req.body);
+    const allowedUpdates = ['title', 'agenda', 'dateTime', 'date', 'time', 'location', 'scheduledDurationHours',
+      'meetingLink', 'status', 'minutes', 'meetingNotes', 'recordingLink', 'panchayatId',
+      'actualDurationMinutes', 'transcript', 'conclusion', 'issues', 'guests'];
+
+    // Only keep allowed updates
+    const validUpdates = updates.filter(update => allowedUpdates.includes(update));
+
+    // Apply only the provided updates
+    validUpdates.forEach(update => {
+      if (req.body[update] !== undefined) {
+        gramSabha[update] = req.body[update];
+      }
+    });
+
+    // Handle file attachments if any
+    if (req.files && req.files.length > 0) {
+      const newAttachments = req.files.map(file => ({
+        filename: file.originalname,
+        mimeType: file.mimetype,
+        attachment: file.buffer.toString('base64'),
+        uploadedAt: new Date()
+      }));
+
+      // Add new attachments to existing ones
+      if (!gramSabha.attachments) {
+        gramSabha.attachments = [];
+      }
+
+      gramSabha.attachments = [...gramSabha.attachments, ...newAttachments];
+    }
+
+    // Save the updated gram sabha
     await gramSabha.save();
-    res.send(gramSabha);
+
+    // Return the updated gram sabha with attachment data URLs for frontend
+    const responseData = {
+      ...gramSabha.toObject(),
+      attachments: gramSabha.attachments?.map(att => ({
+        ...att,
+        attachment: att.attachment ? `data:${att.mimeType};base64,${att.attachment}` : null
+      }))
+    };
+
+    res.send(responseData);
   } catch (error) {
-    res.status(400).send(error);
+    console.error('Error updating Gram Sabha:', error);
+    res.status(400).send({ error: error.message || 'Error updating Gram Sabha' });
   }
 });
 
@@ -234,7 +267,7 @@ router.post('/:id/attachments', auth.isAuthenticated, upload.single('file'), asy
 // Get upcoming meetings for a panchayat
 router.get('/panchayat/:panchayatId/upcoming', async (req, res) => {
     try {
-        const now = new Date();
+        const now = new Date().toISOString(); // Get current time in ISO format (UTC/GMT)
         const gramSabhas = await GramSabha.find({
             panchayatId: req.params.panchayatId,
             dateTime: { $gt: now },

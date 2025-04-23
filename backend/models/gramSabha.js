@@ -19,7 +19,7 @@ const gramSabhaSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  scheduledDurationMinutes: {
+  scheduledDurationHours: {
     type: Number,
     required: true
   },

@@ -121,6 +121,11 @@ export const createGramSabhaMeeting = async (formData) => {
  */
 export const updateGramSabhaMeeting = async (id, formData) => {
     try {
+        // Check if formData has any entries to update
+        if ([...formData.keys()].length === 0) {
+            return { message: 'No changes to update' };
+        }
+
         const response = await api.patch(`/gram-sabha/${id}`, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data'

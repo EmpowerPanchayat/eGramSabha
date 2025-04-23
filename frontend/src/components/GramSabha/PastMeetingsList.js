@@ -14,7 +14,10 @@ import {
     ListItem,
     ListItemText,
     ListItemSecondaryAction,
-    Divider
+    Divider,
+    Card,
+    CardHeader,
+    CardContent
 } from '@mui/material';
 import { Event as EventIcon, LocationOn as LocationIcon } from '@mui/icons-material';
 import { fetchPastMeetings } from '../../api/gram-sabha';
@@ -56,9 +59,9 @@ const PastMeetingsList = ({ panchayatId, user }) => {
 
     if (loading) {
         return (
-            <Box display="flex" justifyContent="center" p={3}>
-                <CircularProgress />
-            </Box>
+            <Paper elevation={0} sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
+                <CircularProgress size={40} />
+            </Paper>
         );
     }
 
@@ -72,7 +75,16 @@ const PastMeetingsList = ({ panchayatId, user }) => {
 
     if (meetings.length === 0) {
         return (
-            <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'background.default' }}>
+            <Paper
+                elevation={1}
+                sx={{
+                    p: 3,
+                    textAlign: 'center',
+                    bgcolor: 'background.default',
+                    borderRadius: 2,
+                    mb: 3
+                }}
+            >
                 <Typography variant="body1" color="text.secondary">
                     {strings.noPastMeetings}
                 </Typography>
@@ -81,75 +93,111 @@ const PastMeetingsList = ({ panchayatId, user }) => {
     }
 
     return (
-        <Box>
-            <Paper sx={{ overflow: 'hidden' }}>
-                <Box sx={{ bgcolor: 'primary.main', color: 'white', p: 2 }}>
-                    <Typography variant="h6">
-                        {strings.pastMeetings}
-                    </Typography>
-                </Box>
+        <Box sx={{ mb: 3 }}>
+            <Card
+                elevation={1}
+                sx={{
+                    borderRadius: 2,
+                    overflow: 'hidden',
+                    border: '1px solid',
+                    borderColor: 'divider'
+                }}
+            >
+                <CardHeader
+                    sx={{
+                        bgcolor: 'primary.main',
+                        color: 'white',
+                        py: 1,
+                        '& .MuiCardHeader-title': {
+                            fontSize: '1rem',
+                            fontWeight: 'bold'
+                        }
+                    }}
+                    title={strings.pastMeetings}
+                    disableTypography
+                />
 
-                <List>
-                    {meetings.map((meeting, index) => (
-                        <React.Fragment key={meeting._id}>
-                            <ListItem>
-                                <ListItemText
-                                    primary={meeting.title}
-                                    secondary={
-                                        <Box sx={{ mt: 1 }}>
-                                            <Box display="flex" alignItems="center" gap={1}>
-                                                <LocationIcon fontSize="small" color="action" />
-                                                <Typography variant="body2">
-                                                    {meeting.location}
-                                                </Typography>
+                <CardContent sx={{ p: 0 }}>
+                    <List>
+                        {meetings.map((meeting, index) => (
+                            <React.Fragment key={meeting._id}>
+                                <ListItem>
+                                    <ListItemText
+                                        primary={
+                                            <Typography
+                                                variant="h6"
+                                                fontWeight="bold"
+                                                color="text.primary"
+                                                gutterBottom
+                                            >
+                                                {meeting.title}
+                                            </Typography>
+                                        }
+                                        secondary={
+                                            <Box sx={{ mt: 1 }}>
+                                                <Box display="flex" alignItems="center" gap={1}>
+                                                    <LocationIcon fontSize="small" color="primary" />
+                                                    <Typography variant="body1" color="text.secondary">
+                                                        {meeting.location}
+                                                    </Typography>
+                                                </Box>
+                                                <Box display="flex" alignItems="center" gap={1}>
+                                                    <EventIcon fontSize="small" color="primary" />
+                                                    <Typography variant="body1" color="text.secondary">
+                                                        {new Date(meeting.dateTime).toLocaleString('en-IN', {
+                                                            year: 'numeric',
+                                                            month: 'long',
+                                                            day: 'numeric',
+                                                            hour: 'numeric',
+                                                            minute: 'numeric',
+                                                            hour12: true
+                                                        })}
+                                                    </Typography>
+                                                </Box>
                                             </Box>
-                                            <Box display="flex" alignItems="center" gap={1}>
-                                                <EventIcon fontSize="small" color="action" />
-                                                <Typography variant="body2">
-                                                    {new Date(meeting.dateTime).toLocaleString('en-IN', {
-                                                        year: 'numeric',
-                                                        month: 'long',
-                                                        day: 'numeric',
-                                                        hour: 'numeric',
-                                                        minute: 'numeric',
-                                                        hour12: true
-                                                    })}
-                                                </Typography>
-                                            </Box>
-                                        </Box>
-                                    }
-                                />
-                                <ListItemSecondaryAction>
-                                    <Button
-                                        variant="outlined"
-                                        size="small"
-                                        onClick={() => setSelectedMeeting(meeting)}
-                                    >
-                                        {strings.viewDetails}
-                                    </Button>
-                                </ListItemSecondaryAction>
-                            </ListItem>
-                            {index < meetings.length - 1 && <Divider />}
-                        </React.Fragment>
-                    ))}
-                </List>
-            </Paper>
+                                        }
+                                    />
+                                    <ListItemSecondaryAction>
+                                        <Button
+                                            variant="contained"
+                                            color="primary"
+                                            onClick={() => setSelectedMeeting(meeting)}
+                                            sx={{ px: 3 }}
+                                        >
+                                            {strings.viewDetails}
+                                        </Button>
+                                    </ListItemSecondaryAction>
+                                </ListItem>
+                                {index < meetings.length - 1 && <Divider />}
+                            </React.Fragment>
+                        ))}
+                    </List>
+                </CardContent>
+            </Card>
 
             {/* Meeting Details Dialog */}
             <Dialog
                 open={!!selectedMeeting}
                 onClose={() => setSelectedMeeting(null)}
-                maxWidth="lg"
+                maxWidth="md"
                 fullWidth
+                PaperProps={{
+                    sx: { borderRadius: 2 }
+                }}
             >
-                <DialogTitle>{strings.meetingDetails}</DialogTitle>
-                <DialogContent>
+                <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white' }}>
+                    {strings.meetingDetails}
+                </DialogTitle>
+                <DialogContent sx={{ pt: 3 }}>
                     {selectedMeeting && (
                         <GramSabhaDetails meetingId={selectedMeeting._id} user={user} />
                     )}
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setSelectedMeeting(null)}>
+                <DialogActions sx={{ p: 2 }}>
+                    <Button
+                        onClick={() => setSelectedMeeting(null)}
+                        variant="contained"
+                    >
                         {strings.close}
                     </Button>
                 </DialogActions>
