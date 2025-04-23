@@ -1,8 +1,27 @@
 // File: frontend/src/utils/axiosConfig.js
 import axios from 'axios';
+import tokenManager from './tokenManager';
 
 // Use environment variable for API URL if available, fallback to localhost
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+// Flag to prevent multiple concurrent refresh attempts
+let isRefreshing = false;
+// Store of requests to retry after token refresh
+let failedQueue = [];
+
+// Process the failed queue either resolving or rejecting based on refresh success
+const processQueue = (error, token = null) => {
+    failedQueue.forEach(prom => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+
+    failedQueue = [];
+};
 
 // Create axios instance with default config
 const axiosInstance = axios.create({
@@ -16,8 +35,13 @@ const axiosInstance = axios.create({
 // Request interceptor for adding auth token
 axiosInstance.interceptors.request.use(
     (config) => {
-        // Add token to request if it exists
-        const token = localStorage.getItem('token');
+        // Don't add token for refresh token requests to avoid circular dependencies
+        if (config.url === '/auth/refresh-token') {
+            return config;
+        }
+
+        // Add token to request if it exists - use tokenManager instead of direct localStorage access
+        const token = tokenManager.getToken();
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -36,50 +60,90 @@ axiosInstance.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
+        // Skip for refresh token or login requests to avoid loops
+        if (originalRequest.url === '/auth/refresh-token' || originalRequest.url === '/auth/login') {
+            return Promise.reject(error);
+        }
+
         // If error is due to token expiry and we haven't tried refreshing the token yet
-        if (error.response?.status === 401 && 
-            error.response?.data?.expired && 
+        if (error.response?.status === 401 &&
+            (error.response?.data?.expired || error.response?.data?.message?.includes('expired')) &&
             !originalRequest._retry) {
-            
+
+            if (isRefreshing) {
+                // If we're already refreshing, add this request to the queue
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                })
+                    .then(token => {
+                        originalRequest.headers.Authorization = `Bearer ${token}`;
+                        return axiosInstance(originalRequest);
+                    })
+                    .catch(err => {
+                        return Promise.reject(err);
+                    });
+            }
+
             originalRequest._retry = true;
+            isRefreshing = true;
 
             try {
-                // Try to refresh the token
-                const refreshToken = localStorage.getItem('refreshToken');
+                // Get refresh token via tokenManager
+                const refreshToken = tokenManager.getRefreshToken();
                 if (!refreshToken) {
-                    // No refresh token, force re-login
+                    isRefreshing = false;
+                    processQueue(new Error('No refresh token'));
                     return handleAuthError();
                 }
 
-                // Call refresh token endpoint
+                // Use a standalone axios call to avoid interceptors
                 const response = await axios.post(`${API_URL}/auth/refresh-token`, {
                     refreshToken
                 });
 
-                const { token } = response.data.data;
-                
-                // Update stored token
-                localStorage.setItem('token', token);
-                
+                // Check for proper response structure
+                if (!response.data?.data?.token) {
+                    throw new Error('Invalid token refresh response');
+                }
+
+                const { token, refreshToken: newRefreshToken } = response.data.data;
+
+                // Update stored tokens using tokenManager
+                tokenManager.setTokens(token, newRefreshToken || refreshToken);
+
                 // Update authorization header
                 originalRequest.headers.Authorization = `Bearer ${token}`;
-                
+
+                // Process any requests that were waiting
+                processQueue(null, token);
+                isRefreshing = false;
+
                 // Retry the original request
                 return axiosInstance(originalRequest);
             } catch (refreshError) {
-                // Only clear tokens if refresh token is invalid or expired
-                if (refreshError.response?.status === 401) {
+                console.error('Token refresh error:', refreshError);
+
+                isRefreshing = false;
+                processQueue(refreshError);
+
+                // Handle different error scenarios
+                if (refreshError.response?.status === 401 ||
+                    refreshError.message?.includes('Invalid token') ||
+                    refreshError.message?.includes('expired')) {
                     return handleAuthError();
                 }
+
                 // For other errors, just reject the request
                 return Promise.reject(refreshError);
             }
         }
 
-        // For other 401 errors, don't clear tokens immediately
+        // For other 401 errors that specifically mention token problems
         if (error.response?.status === 401) {
-            // Check if it's a token-related error
-            if (error.response?.data?.message?.includes('token')) {
+            const errorMsg = error.response?.data?.message || '';
+            if (errorMsg.includes('token invalid') ||
+                errorMsg.includes('token expired') ||
+                errorMsg.includes('Token is invalid')) {
                 return handleAuthError();
             }
         }
@@ -90,111 +154,26 @@ axiosInstance.interceptors.response.use(
 
 // Function to handle authentication errors
 const handleAuthError = () => {
-    // Clear auth data
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    
-    // Redirect to login page
-    window.location.href = '/admin/login';
-    
+    // Clear auth data using tokenManager
+    tokenManager.clearTokens();
+
+    // Store the current location for redirect after login
+    const currentPath = window.location.pathname;
+    if (currentPath !== '/admin/login' && currentPath !== '/citizen/login') {
+        sessionStorage.setItem('redirectAfterLogin', currentPath);
+    }
+
+    // Redirect to appropriate login page based on current URL
+    if (currentPath.includes('/admin') || currentPath.includes('/official')) {
+        window.location.href = '/admin/login';
+    } else {
+        window.location.href = '/citizen/login';
+    }
+
     return Promise.reject(new Error('Authentication failed. Please login again.'));
 };
 
-// Helper functions for API calls
-
-/**
- * Makes a GET request
- * @param {string} url - API endpoint
- * @param {Object} params - Query parameters
- * @returns {Promise} - API response
- */
-export const get = async (url, params = {}) => {
-    try {
-        const response = await axiosInstance.get(url, { params });
-        return response.data;
-    } catch (error) {
-        handleAxiosError(error);
-        throw error;
-    }
-};
-
-/**
- * Makes a POST request
- * @param {string} url - API endpoint
- * @param {Object} data - Request body
- * @returns {Promise} - API response
- */
-export const post = async (url, data = {}) => {
-    try {
-        const response = await axiosInstance.post(url, data);
-        return response.data;
-    } catch (error) {
-        handleAxiosError(error);
-        throw error;
-    }
-};
-
-/**
- * Makes a PUT request
- * @param {string} url - API endpoint
- * @param {Object} data - Request body
- * @returns {Promise} - API response
- */
-export const put = async (url, data = {}) => {
-    try {
-        const response = await axiosInstance.put(url, data);
-        return response.data;
-    } catch (error) {
-        handleAxiosError(error);
-        throw error;
-    }
-};
-
-/**
- * Makes a DELETE request
- * @param {string} url - API endpoint
- * @param {Object} params - Query parameters
- * @returns {Promise} - API response
- */
-export const del = async (url, params = {}) => {
-    try {
-        const response = await axiosInstance.delete(url, { params });
-        return response.data;
-    } catch (error) {
-        handleAxiosError(error);
-        throw error;
-    }
-};
-
-/**
- * Makes a multipart POST request (for file uploads)
- * @param {string} url - API endpoint
- * @param {FormData} formData - Form data
- * @param {Function} onProgress - Progress callback
- * @returns {Promise} - API response
- */
-export const upload = async (url, formData, onProgress = null) => {
-    try {
-        const response = await axiosInstance.post(url, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data'
-            },
-            onUploadProgress: onProgress ? (progressEvent) => {
-                const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                onProgress(percentCompleted);
-            } : undefined
-        });
-        return response.data;
-    } catch (error) {
-        handleAxiosError(error);
-        throw error;
-    }
-};
-
-/**
- * Handle and format axios errors
- * @param {Error} error - Axios error
- */
+// Basic error handling
 const handleAxiosError = (error) => {
     if (error.response) {
         // The request was made and the server responded with a status code
@@ -211,11 +190,4 @@ const handleAxiosError = (error) => {
     }
 };
 
-export default {
-    axiosInstance,
-    get,
-    post,
-    put,
-    del,
-    upload
-};
+export default axiosInstance;

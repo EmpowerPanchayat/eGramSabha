@@ -13,8 +13,24 @@ export const tokenManager = {
     setTokens: (token, refreshToken) => {
         if (token) {
             localStorage.setItem(TOKEN_KEY, token);
+            // Update the default axios authorization header
             axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         }
+        if (refreshToken) {
+            localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+        }
+    },
+
+    // Set just the access token
+    setToken: (token) => {
+        if (token) {
+            localStorage.setItem(TOKEN_KEY, token);
+            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        }
+    },
+
+    // Set just the refresh token
+    setRefreshToken: (refreshToken) => {
         if (refreshToken) {
             localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
         }
@@ -40,5 +56,32 @@ export const tokenManager = {
         } else {
             delete axios.defaults.headers.common['Authorization'];
         }
+    },
+
+    // Decode JWT token to get user info (without verification)
+    decodeToken: (token = null) => {
+        try {
+            const tokenToUse = token || localStorage.getItem(TOKEN_KEY);
+            if (!tokenToUse) return null;
+
+            // JWT tokens are made of three parts: header.payload.signature
+            const payload = tokenToUse.split('.')[1];
+            // The payload is base64 encoded
+            return JSON.parse(atob(payload));
+        } catch (e) {
+            console.error('Error decoding token:', e);
+            return null;
+        }
+    },
+
+    // Get user ID from token
+    getUserIdFromToken: () => {
+        const decoded = tokenManager.decodeToken();
+        return decoded?.id || null;
     }
-}; 
+};
+
+// Initialize axios headers on module load
+tokenManager.updateAxiosHeaders();
+
+export default tokenManager;

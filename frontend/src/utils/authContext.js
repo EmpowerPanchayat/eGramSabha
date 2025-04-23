@@ -1,8 +1,8 @@
 // File: frontend/src/utils/authContext.js
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { login, refreshToken } from '../api/auth';
 import { getProfile } from '../api/profile';
-import { tokenManager } from './tokenManager';
+import tokenManager from './tokenManager';
 
 // Create the auth context
 const AuthContext = createContext();
@@ -16,11 +16,41 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [lastActivity, setLastActivity] = useState(Date.now());
-    const [tokenRefreshTimer, setTokenRefreshTimer] = useState(null);
-    const [inactivityTimer, setInactivityTimer] = useState(null);
 
-    // Handle token refresh
+    // Use refs for timers to prevent dependency issues
+    const tokenRefreshTimerRef = useRef(null);
+    const inactivityTimerRef = useRef(null);
+    const isRefreshingRef = useRef(false);
+    const initialCheckDoneRef = useRef(false);
+
+    // Clear auth data
+    const clearAuthData = useCallback(() => {
+        // Clear timers first
+        if (tokenRefreshTimerRef.current) {
+            clearInterval(tokenRefreshTimerRef.current);
+            tokenRefreshTimerRef.current = null;
+        }
+        if (inactivityTimerRef.current) {
+            clearInterval(inactivityTimerRef.current);
+            inactivityTimerRef.current = null;
+        }
+
+        // Then clear tokens and user data
+        tokenManager.clearTokens();
+        setUser(null);
+        setError(null);
+    }, []);
+
+    // Handle token refresh - with guard against concurrent calls
     const handleRefreshToken = useCallback(async () => {
+        // Prevent concurrent refresh attempts
+        if (isRefreshingRef.current) {
+            console.log('Token refresh already in progress, skipping...');
+            return false;
+        }
+
+        isRefreshingRef.current = true;
+
         try {
             const refreshTokenValue = tokenManager.getRefreshToken();
             if (!refreshTokenValue) {
@@ -28,25 +58,24 @@ export const AuthProvider = ({ children }) => {
             }
 
             const response = await refreshToken(refreshTokenValue);
-            const { token } = response;
 
-            // We don't need to update refreshToken if it's not in the response
-            // tokenManager.setTokens will handle this case
+            // Check if the response contains the expected data
+            if (!response?.token) {
+                throw new Error('Invalid refresh token response');
+            }
 
+            // Update tokens using token manager
+            tokenManager.setTokens(response.token, response.refreshToken);
+
+            isRefreshingRef.current = false;
             return true;
         } catch (error) {
             console.error('Error refreshing token:', error);
             clearAuthData();
+            isRefreshingRef.current = false;
             return false;
         }
-    }, []);
-
-    // Clear auth data
-    const clearAuthData = useCallback(() => {
-        tokenManager.clearTokens();
-        setUser(null);
-        setError(null);
-    }, []);
+    }, [clearAuthData]);
 
     // Set user data safely
     const setUserData = useCallback((userData) => {
@@ -54,9 +83,9 @@ export const AuthProvider = ({ children }) => {
             setUser(null);
             return;
         }
-        console.log({ userData });
+
         // For admin or regular officials
-        if (['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY'].includes(userData.role)) {
+        if (['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY', 'ADMIN'].includes(userData.role)) {
             setUser({
                 id: userData._id || userData.id,
                 user: userData.linkedUser ? userData.linkedUser._id || userData.linkedUser.id : null,
@@ -90,9 +119,51 @@ export const AuthProvider = ({ children }) => {
         }
     }, []);
 
-    // Check for existing token on component mount
+    // Start token refresh timer
+    const startTokenRefreshTimer = useCallback(() => {
+        // Clear any existing timer
+        if (tokenRefreshTimerRef.current) {
+            clearInterval(tokenRefreshTimerRef.current);
+            tokenRefreshTimerRef.current = null;
+        }
+
+        // Set up a timer to refresh the token every 15 minutes
+        const timer = setInterval(() => {
+            handleRefreshToken();
+        }, 15 * 60 * 1000); // 15 minutes
+
+        tokenRefreshTimerRef.current = timer;
+    }, [handleRefreshToken]);
+
+    // Start inactivity timer
+    const startInactivityTimer = useCallback(() => {
+        // Clear any existing timer
+        if (inactivityTimerRef.current) {
+            clearInterval(inactivityTimerRef.current);
+            inactivityTimerRef.current = null;
+        }
+
+        // Set up a timer to check for inactivity
+        const timer = setInterval(() => {
+            const now = Date.now();
+            if (now - lastActivity > INACTIVITY_TIMEOUT) {
+                clearAuthData();
+            }
+        }, 60000); // Check every minute
+
+        inactivityTimerRef.current = timer;
+    }, [lastActivity, clearAuthData]);
+
+    // Check for existing token on component mount - only runs once
     useEffect(() => {
+        // Skip if already checked
+        if (initialCheckDoneRef.current) {
+            return;
+        }
+
         const checkAuthStatus = async () => {
+            initialCheckDoneRef.current = true;
+
             if (!tokenManager.hasTokens()) {
                 clearAuthData();
                 setLoading(false);
@@ -102,8 +173,11 @@ export const AuthProvider = ({ children }) => {
             try {
                 // Try to get user data with existing token
                 const response = await getProfile();
-                if (response?.data?.user) {
+
+                // Correctly navigate the response structure
+                if (response?.success && response?.data?.user) {
                     setUserData(response.data.user);
+
                     // Start session management
                     startTokenRefreshTimer();
                     startInactivityTimer();
@@ -112,9 +186,32 @@ export const AuthProvider = ({ children }) => {
                 }
             } catch (err) {
                 console.error('Error verifying authentication:', err);
+
                 // Try to refresh the token if verification fails
-                const refreshed = await handleRefreshToken();
-                if (!refreshed) {
+                if (!isRefreshingRef.current) {
+                    const refreshed = await handleRefreshToken();
+
+                    if (refreshed) {
+                        // Try getting profile again if refresh was successful
+                        try {
+                            const refreshedResponse = await getProfile();
+                            if (refreshedResponse?.success && refreshedResponse?.data?.user) {
+                                setUserData(refreshedResponse.data.user);
+
+                                // Start session management
+                                startTokenRefreshTimer();
+                                startInactivityTimer();
+                            } else {
+                                throw new Error('Invalid user data after token refresh');
+                            }
+                        } catch (profileError) {
+                            console.error('Failed to get profile after token refresh:', profileError);
+                            clearAuthData();
+                        }
+                    } else {
+                        clearAuthData();
+                    }
+                } else {
                     clearAuthData();
                 }
             } finally {
@@ -123,7 +220,10 @@ export const AuthProvider = ({ children }) => {
         };
 
         checkAuthStatus();
+    }, [clearAuthData, handleRefreshToken, setUserData, startInactivityTimer, startTokenRefreshTimer]);
 
+    // Setup activity tracking
+    useEffect(() => {
         // Track user activity
         const activityEvents = ['mousedown', 'keydown', 'touchstart', 'scroll'];
         const handleUserActivity = () => {
@@ -141,48 +241,17 @@ export const AuthProvider = ({ children }) => {
                 window.removeEventListener(event, handleUserActivity);
             });
 
-            if (tokenRefreshTimer) {
-                clearInterval(tokenRefreshTimer);
+            if (tokenRefreshTimerRef.current) {
+                clearInterval(tokenRefreshTimerRef.current);
+                tokenRefreshTimerRef.current = null;
             }
 
-            if (inactivityTimer) {
-                clearInterval(inactivityTimer);
+            if (inactivityTimerRef.current) {
+                clearInterval(inactivityTimerRef.current);
+                inactivityTimerRef.current = null;
             }
         };
-    }, [handleRefreshToken, clearAuthData, setUserData]);
-
-    // Start token refresh timer
-    const startTokenRefreshTimer = useCallback(() => {
-        // Clear any existing timer
-        if (tokenRefreshTimer) {
-            clearInterval(tokenRefreshTimer);
-        }
-
-        // Set up a timer to refresh the token every 15 minutes
-        const timer = setInterval(async () => {
-            await handleRefreshToken();
-        }, 15 * 60 * 1000);
-
-        setTokenRefreshTimer(timer);
-    }, [handleRefreshToken]);
-
-    // Start inactivity timer
-    const startInactivityTimer = useCallback(() => {
-        // Clear any existing timer
-        if (inactivityTimer) {
-            clearInterval(inactivityTimer);
-        }
-
-        // Set up a timer to check for inactivity
-        const timer = setInterval(() => {
-            const now = Date.now();
-            if (now - lastActivity > INACTIVITY_TIMEOUT) {
-                clearAuthData();
-            }
-        }, 60000); // Check every minute
-
-        setInactivityTimer(timer);
-    }, [lastActivity, clearAuthData]);
+    }, []);
 
     // Login function
     const handleLogin = async (username, password) => {
@@ -225,7 +294,9 @@ export const AuthProvider = ({ children }) => {
             logout: handleLogout,
             hasRole: (roles) => {
                 if (!user) return false;
-                return roles.includes(user.role);
+                return Array.isArray(roles)
+                    ? roles.includes(user.role)
+                    : user.role === roles;
             }
         }}>
             {children}

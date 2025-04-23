@@ -1,69 +1,6 @@
 // File: frontend/src/api/auth.js
-import axios from 'axios';
-
-// Base URL from environment variables or default
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-
-// Create axios instance with default config
-const api = axios.create({
-    baseURL: API_URL,
-    headers: {
-        'Content-Type': 'application/json'
-    }
-});
-
-// Add request interceptor to handle tokens
-api.interceptors.request.use(
-    (config) => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-    },
-    (error) => {
-        return Promise.reject(error);
-    }
-);
-
-// Add response interceptor to handle token refresh
-api.interceptors.response.use(
-    (response) => response,
-    async (error) => {
-        const originalRequest = error.config;
-
-        // If error is 401 and we haven't tried to refresh token yet
-        if (error.response?.status === 401 && !originalRequest._retry) {
-            originalRequest._retry = true;
-
-            try {
-                const refreshToken = localStorage.getItem('refreshToken');
-                if (!refreshToken) {
-                    throw new Error('No refresh token available');
-                }
-
-                const response = await api.post('/auth/refresh-token', { refreshToken });
-                const { token, refreshToken: newRefreshToken } = response.data;
-
-                // Update tokens in localStorage
-                localStorage.setItem('token', token);
-                localStorage.setItem('refreshToken', newRefreshToken);
-
-                // Update the failed request with new token
-                originalRequest.headers.Authorization = `Bearer ${token}`;
-                return api(originalRequest);
-            } catch (refreshError) {
-                // If refresh token fails, clear auth data and redirect to login
-                localStorage.removeItem('token');
-                localStorage.removeItem('refreshToken');
-                window.location.href = '/admin/login';
-                return Promise.reject(refreshError);
-            }
-        }
-
-        return Promise.reject(error);
-    }
-);
+import axiosInstance from '../utils/axiosConfig';
+import tokenManager from '../utils/tokenManager';
 
 /**
  * Login with username and password
@@ -73,20 +10,26 @@ api.interceptors.response.use(
  */
 export const login = async (username, password) => {
     try {
-        const response = await api.post('/auth/login', {
+        const response = await axiosInstance.post('/auth/login', {
             username,
             password
         });
 
-        if (!response.data?.data?.token || !response.data?.data?.refreshToken) {
-            throw new Error('Invalid login response: missing tokens');
+        // Check if response has the expected structure
+        if (!response.data?.success || !response.data?.data) {
+            throw new Error('Invalid API response format');
         }
 
-        // Store tokens
-        localStorage.setItem('token', response.data.data.token);
-        localStorage.setItem('refreshToken', response.data.data.refreshToken);
+        const { token, refreshToken, user } = response.data.data;
 
-        return response.data.data;
+        if (!token || !refreshToken || !user) {
+            throw new Error('Invalid login response: missing tokens or user data');
+        }
+
+        // Store tokens using tokenManager (not directly in localStorage)
+        tokenManager.setTokens(token, refreshToken);
+
+        return { token, refreshToken, user };
     } catch (error) {
         console.error('API Error in login:', error);
         throw error.response?.data || { message: 'Login failed' };
@@ -100,17 +43,27 @@ export const login = async (username, password) => {
  */
 export const refreshToken = async (refreshToken) => {
     try {
-        const response = await api.post('/auth/refresh-token', { refreshToken });
+        const response = await axiosInstance.post('/auth/refresh-token', { refreshToken });
 
-        if (!response.data?.data?.token || !response.data?.data?.refreshToken) {
-            throw new Error('Invalid refresh response: missing tokens');
+        // Check if response has the expected structure
+        if (!response.data?.success || !response.data?.data) {
+            throw new Error('Invalid API response format');
         }
 
-        // Store new tokens
-        localStorage.setItem('token', response.data.data.token);
-        localStorage.setItem('refreshToken', response.data.data.refreshToken);
+        const { token, refreshToken: newRefreshToken } = response.data.data;
 
-        return response.data.data;
+        if (!token) {
+            throw new Error('Invalid refresh response: missing token');
+        }
+
+        // Note: We don't store the tokens here, that's the responsibility of the caller
+        // This separation of concerns makes the code more maintainable
+
+        return {
+            token,
+            refreshToken: newRefreshToken || refreshToken, // Use new refresh token if provided, otherwise keep the old one
+            user: response.data.data.user
+        };
     } catch (error) {
         console.error('API Error in refreshToken:', error);
         throw error.response?.data || { message: 'Failed to refresh token' };
@@ -124,7 +77,7 @@ export const refreshToken = async (refreshToken) => {
  */
 export const registerAdmin = async (adminData) => {
     try {
-        const response = await api.post('/auth/register-admin', adminData);
+        const response = await axiosInstance.post('/auth/register-admin', adminData);
         return response.data;
     } catch (error) {
         console.error('API Error in registerAdmin:', error);
@@ -139,7 +92,7 @@ export const registerAdmin = async (adminData) => {
  */
 export const forgotPassword = async (email) => {
     try {
-        const response = await api.post('/auth/forgot-password', { email });
+        const response = await axiosInstance.post('/auth/forgot-password', { email });
         return response.data;
     } catch (error) {
         console.error('API Error in forgotPassword:', error);
@@ -155,7 +108,7 @@ export const forgotPassword = async (email) => {
  */
 export const resetPassword = async (token, password) => {
     try {
-        const response = await api.post('/auth/reset-password', { token, password });
+        const response = await axiosInstance.post(`/auth/reset-password/${token}`, { password });
         return response.data;
     } catch (error) {
         console.error('API Error in resetPassword:', error);
@@ -163,4 +116,19 @@ export const resetPassword = async (token, password) => {
     }
 };
 
-export default api;
+/**
+ * Logout - clears tokens from storage
+ * @returns {void}
+ */
+export const logout = () => {
+    tokenManager.clearTokens();
+};
+
+export default {
+    login,
+    refreshToken,
+    registerAdmin,
+    forgotPassword,
+    resetPassword,
+    logout
+};
