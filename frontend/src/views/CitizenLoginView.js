@@ -9,6 +9,7 @@ import {
     Alert,
     CircularProgress,
     Card,
+    Stack,
     CardContent,
     Divider,
     Paper,
@@ -24,174 +25,272 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import PanchayatSelector from '../components/PanchayatSelector';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useLanguage } from '../utils/LanguageContext';
+import { FaceMesh } from '@mediapipe/face_mesh';
+import { Camera } from '@mediapipe/camera_utils';
 
 const CitizenLoginView = ({ onLogin }) => {
     const { strings } = useLanguage();
+    const [cameraActive, setCameraActive] = useState(false);
     const [isCameraActive, setIsCameraActive] = useState(false);
+    const isCameraActiveRef = useRef(isCameraActive);
     const [capturedImage, setCapturedImage] = useState(null);
     const [loading, setLoading] = useState(false);
     const [modelsLoaded, setModelsLoaded] = useState(false);
     const [error, setError] = useState('');
     const [selectedPanchayat, setSelectedPanchayat] = useState('');
     const [cameraPermissionDenied, setCameraPermissionDenied] = useState(false);
-    const [faceDetected, setFaceDetected] = useState(false);
     const [voterIdLastFour, setVoterIdLastFour] = useState('');
+    const [verificationState, setVerificationState] = useState({
+        faceDetected: false,
+        blink: { verified: false, count: 0 },
+        movement: { verified: false, count: 0 }
+    });
 
     const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
+    const faceMeshRef = useRef(null);
+    const cameraRef = useRef(null);
     const streamRef = useRef(null);
     const detectionIntervalRef = useRef(null);
     const isMountedRef = useRef(true);
+    const detectionState = useRef({
+        previousLandmarks: null,
+        movementHistory: [],
+        baselineEAR: null,
+        blinkStartTime: null
+    });
 
-    // Set mounted state
+    const VERIFICATION_THRESHOLDS = {
+        blink: 4,
+        movement: 5
+    };
+
+    useEffect(() => {
+        isCameraActiveRef.current = isCameraActive;
+    }, [isCameraActive]);
+
     useEffect(() => {
         isMountedRef.current = true;
-        return () => {
-            isMountedRef.current = false;
-            // Cleanup on unmount
-            if (streamRef.current) {
-                streamRef.current.getTracks().forEach(track => track.stop());
-            }
-            if (detectionIntervalRef.current) {
-                clearInterval(detectionIntervalRef.current);
-            }
-        };
-    }, []);
-
-    // Load face-api models
-    useEffect(() => {
-        const loadModels = async () => {
+        const initializeModels = async () => {
             try {
-                // Use a CDN for models
-                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+                // Initialize FaceMesh
+                faceMeshRef.current = new FaceMesh({
+                    locateFile: (file) => {
+                        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`;
+                    }
+                });
 
+                faceMeshRef.current.setOptions({
+                    maxNumFaces: 1,
+                    refineLandmarks: true,
+                    minDetectionConfidence: 0.5,
+                    minTrackingConfidence: 0.5
+                });
+
+                faceMeshRef.current.onResults(handleFaceResults);
+
+                // Load face-api.js models
+                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
                 await Promise.all([
                     faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                     faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
                 ]);
 
-                if (isMountedRef.current) {
-                    setModelsLoaded(true);
-                    console.log('Face-api models loaded successfully from CDN');
-                }
+                setModelsLoaded(true);
             } catch (error) {
-                console.error('Error loading models:', error);
-                if (isMountedRef.current) {
-                    setError('Error loading facial recognition models. Please refresh the page.');
-                }
+                console.error('Model initialization error:', error);
+                setError(strings.errorLoadingModels);
             }
         };
 
-        loadModels();
+        initializeModels();
+
+        return () => {
+            isMountedRef.current = false;
+            stopCamera(); // Ensures full cleanup
+            if (detectionIntervalRef.current) {
+                clearInterval(detectionIntervalRef.current);
+            }
+        };
     }, []);
 
-    // Run face detection when camera is active
-    useEffect(() => {
-        if (isCameraActive && videoRef.current && canvasRef.current && modelsLoaded) {
-            startFaceDetection();
-        } else {
-            stopFaceDetection();
+    const handleFaceResults = (results) => {
+        if (!isMountedRef.current ||
+            !isCameraActiveRef.current ||
+            !canvasRef.current ||
+            !results.multiFaceLandmarks
+        ) {
+            setVerificationState(prev => ({ ...prev, faceDetected: false }));
+            return;
         }
-        
-        return () => {
-            stopFaceDetection();
-        };
-    }, [isCameraActive, modelsLoaded]);
-
-    const startFaceDetection = () => {
-        if (detectionIntervalRef.current) {
-            clearInterval(detectionIntervalRef.current);
+        if (canvasRef.current.width !== videoRef.current.videoWidth ||
+            canvasRef.current.height !== videoRef.current.videoHeight) {
+            canvasRef.current.width = videoRef.current.videoWidth;
+            canvasRef.current.height = videoRef.current.videoHeight;
         }
+        const ctx = canvasRef.current.getContext('2d');
+        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 
-        if (!videoRef.current || !canvasRef.current || !modelsLoaded) {
+        const faceLandmarks = results.multiFaceLandmarks[0];
+        if (!faceLandmarks || faceLandmarks.length < 468) {
+            setVerificationState(prev => ({ ...prev, faceDetected: false }));
             return;
         }
 
-        // Setup canvas positioning and sizing
-        const videoEl = videoRef.current;
-        const canvasEl = canvasRef.current;
-        
-        // Position canvas over video
-        canvasEl.style.position = 'absolute';
-        canvasEl.style.top = '0';
-        canvasEl.style.left = '0';
-        canvasEl.width = videoEl.offsetWidth;
-        canvasEl.height = videoEl.offsetHeight;
+        drawFaceOutline(faceLandmarks);
 
-        // Run detection at regular intervals
-        detectionIntervalRef.current = setInterval(async () => {
-            if (!videoRef.current || !canvasRef.current || !isCameraActive) {
-                return;
-            }
+        const livelinessChecks = {
+            blink: detectBlink(faceLandmarks),
+            movement: detectMacroMovement(faceLandmarks)
+        };
 
-            try {
-                const detections = await faceapi.detectSingleFace(
-                    videoRef.current,
-                    new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 })
-                ).withFaceLandmarks();
-
-                // Clear previous drawings
-                const context = canvasRef.current.getContext('2d');
-                context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-
-                if (detections) {
-                    // Face detected
-                    setFaceDetected(true);
-                    
-                    // Draw the detections
-                    const displaySize = { 
-                        width: videoRef.current.offsetWidth, 
-                        height: videoRef.current.offsetHeight 
-                    };
-                    
-                    const resizedDetections = faceapi.resizeResults(detections, displaySize);
-                    
-                    // Draw face outline
-                    context.beginPath();
-                    context.lineWidth = 3;
-                    context.strokeStyle = '#4CAF50';
-                    
-                    // Draw face box
-                    const { _box: box } = resizedDetections.detection;
-                    context.rect(box._x, box._y, box._width, box._height);
-                    context.stroke();
-                    
-                    // Optional: Draw landmarks
-                    if (resizedDetections.landmarks) {
-                        context.fillStyle = '#4CAF50';
-                        const landmarks = resizedDetections.landmarks.positions;
-                        for (let i = 0; i < landmarks.length; i++) {
-                            const { _x, _y } = landmarks[i];
-                            context.beginPath();
-                            context.arc(_x, _y, 2, 0, 2 * Math.PI);
-                            context.fill();
-                        }
-                    }
-                } else {
-                    // No face detected
-                    setFaceDetected(false);
-                }
-            } catch (error) {
-                console.error('Face detection error:', error);
-            }
-        }, 100); // Run detection every 100ms
+        updateVerificationState(livelinessChecks);
+        setVerificationState(prev => ({
+            ...prev,
+            faceDetected: true,
+            blink: livelinessChecks.blink ? updateCheck(prev.blink, VERIFICATION_THRESHOLDS.blink) : prev.blink,
+            movement: livelinessChecks.movement ? updateCheck(prev.movement, VERIFICATION_THRESHOLDS.movement) : prev.movement
+        }));
     };
 
-    const stopFaceDetection = () => {
-        if (detectionIntervalRef.current) {
-            clearInterval(detectionIntervalRef.current);
-            detectionIntervalRef.current = null;
+    const drawFaceOutline = (landmarks) => {
+        const canvas = canvasRef.current;
+        if (!canvas || !landmarks) return;
+
+        const ctx = canvas.getContext('2d');
+        const { width, height } = canvas; // Capture dimensions before use
+
+        ctx.clearRect(0, 0, width, height);
+
+
+        ctx.save();
+        ctx.translate(width, 0);
+        ctx.scale(-1, 1);
+
+        ctx.strokeStyle = '#42A5F5';
+        ctx.lineWidth = 2;
+
+        // Full face oval detection
+        const minX = Math.min(...landmarks.map(l => l.x));
+        const maxX = Math.max(...landmarks.map(l => l.x));
+        const minY = Math.min(...landmarks.map(l => l.y));
+        const maxY = Math.max(...landmarks.map(l => l.y));
+
+        const centerX = (minX + maxX) / 2 * width;
+        const centerY = (minY + maxY) / 2 * height;
+        const radiusX = (maxX - minX) / 2 * width * 1.2;
+        const radiusY = (maxY - minY) / 2 * height * 1.4;
+
+        ctx.beginPath();
+        ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
+        ctx.stroke();
+
+        ctx.restore();
+    };
+
+    const detectBlink = (landmarks) => {
+        const eyeIndices = {
+            left: [33, 160, 158, 133, 153, 144],
+            right: [362, 385, 387, 263, 373, 380]
+        };
+
+        const calculateEAR = (points) => {
+            const [p0, p1, p2, p3, p4, p5] = points;
+            const A = Math.hypot(p1.x - p5.x, p1.y - p5.y);
+            const B = Math.hypot(p2.x - p4.x, p2.y - p4.y);
+            const C = Math.hypot(p0.x - p3.x, p0.y - p3.y);
+            return (A + B) / (2 * C);
+        };
+
+        const avgEAR = (calculateEAR(eyeIndices.left.map(i => landmarks[i])) +
+            calculateEAR(eyeIndices.right.map(i => landmarks[i]))) / 2;
+
+        if (!detectionState.current.baselineEAR) {
+            detectionState.current.baselineEAR = avgEAR * 1.2;
+            return false;
         }
-        setFaceDetected(false);
-        
-        // Clear canvas if it exists
-        if (canvasRef.current) {
-            const context = canvasRef.current.getContext('2d');
-            context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+
+        const isBlinking = avgEAR < detectionState.current.baselineEAR * 0.5;
+        const now = Date.now();
+
+        if (isBlinking) {
+            detectionState.current.blinkStartTime ||= now;
+            return false;
         }
+
+        if (detectionState.current.blinkStartTime) {
+            const duration = now - detectionState.current.blinkStartTime;
+            detectionState.current.blinkStartTime = null;
+            return duration > 50 && duration < 150;
+        }
+        return false;
+    };
+
+    const detectMacroMovement = (currentLandmarks) => {
+        const state = detectionState.current;
+
+        // Initialize previous landmarks if not set
+        if (!state.previousLandmarks) {
+            state.previousLandmarks = currentLandmarks;
+            return false;
+        }
+
+        // Key facial points to track (nose, chin, eye corners)
+        const referencePoints = [1, 33, 4, 263, 61, 291, 168, 197];
+        let totalMovement = 0;
+        let validPoints = 0;
+
+        // Calculate movement for each reference point
+        referencePoints.forEach(index => {
+            const current = currentLandmarks[index];
+            const previous = state.previousLandmarks[index];
+
+            // Use Euclidean distance for movement calculation
+            const movement = Math.hypot(current.x - previous.x, current.y - previous.y);
+
+            // Only consider movements above noise threshold
+            if (movement > 0.0008) {  // Reduced from 0.001
+                totalMovement += movement;
+                validPoints++;
+            }
+        });
+
+        // Require at least 5 points to have meaningful movement
+        if (validPoints < 5) return false;
+
+        const avgMovement = totalMovement / validPoints;
+
+        // Increased movement threshold (reduced sensitivity)
+        const movementDetected = avgMovement > 0.0035;  // Increased from 0.0025
+
+        // Update movement history (larger window for more stable detection)
+        state.movementHistory.push(movementDetected);
+        state.movementHistory = state.movementHistory.slice(-15);  // Increased from 10
+
+        state.previousLandmarks = currentLandmarks;
+
+        // Require more consistent movement to register
+        return state.movementHistory.filter(Boolean).length >= 8;  // Increased from 5
+    };
+
+    const updateVerificationState = ({ blink, movement }) => {
+        setVerificationState(prev => ({
+            ...prev,
+            blink: blink ? updateCheck(prev.blink, VERIFICATION_THRESHOLDS.blink, 'Blink verified') : prev.blink,
+            movement: movement ? updateCheck(prev.movement, VERIFICATION_THRESHOLDS.movement, 'Movement verified') : prev.movement
+        }));
+    };
+
+    const updateCheck = (check, threshold) => {
+        if (check.verified) return check;
+        const newCount = check.count + 1;
+        if (newCount >= threshold) {
+            return { verified: true, count: newCount };
+        }
+        return { ...check, count: newCount };
     };
 
     const startCamera = async () => {
@@ -200,8 +299,15 @@ const CitizenLoginView = ({ onLogin }) => {
         setCameraPermissionDenied(false);
 
         try {
+
             if (!selectedPanchayat) {
                 setError(strings.selectPanchayat);
+                setLoading(false);
+                return;
+            }
+
+            if (!voterIdLastFour || voterIdLastFour.length !== 4) {
+                setError(strings.enterVoterId);
                 setLoading(false);
                 return;
             }
@@ -211,91 +317,122 @@ const CitizenLoginView = ({ onLogin }) => {
                 setLoading(false);
                 return;
             }
+            resetVerification();
+            if (!faceMeshRef.current) {
+                faceMeshRef.current = new FaceMesh({
+                    locateFile: (file) => {
+                        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`;
+                    }
+                });
 
-            // Stop any existing stream
-            if (streamRef.current) {
-                streamRef.current.getTracks().forEach(track => track.stop());
-                streamRef.current = null;
+                faceMeshRef.current.setOptions({
+                    maxNumFaces: 1,
+                    refineLandmarks: true,
+                    minDetectionConfidence: 0.5,
+                    minTrackingConfidence: 0.5
+                });
+
+                faceMeshRef.current.onResults(handleFaceResults);
             }
 
-            // Set camera active first to ensure DOM elements are rendered
             setIsCameraActive(true);
-
-            // Short timeout to ensure DOM is updated before accessing video element
             await new Promise(resolve => setTimeout(resolve, 100));
 
-            // Verify the video element exists
             if (!videoRef.current) {
-                throw new Error('Video element not available after activation');
+                throw new Error('Video element not available');
             }
 
-            const constraints = {
-                video: {
-                    width: { ideal: 640 },
-                    height: { ideal: 480 },
-                    facingMode: 'user'
+            if (canvasRef.current) {
+                const ctx = canvasRef.current.getContext('2d');
+                ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+            }
+
+            // Initialize camera
+            cameraRef.current = new Camera(videoRef.current, {
+                onFrame: async () => {
+                    if (faceMeshRef.current?.send && isCameraActiveRef.current) {
+                        await faceMeshRef.current.send({ image: videoRef.current });
+                    }
                 },
-                audio: false
-            };
+                facingMode: 'user',
+                width: 640,
+                height: 480
+            });
 
-            console.log('Requesting camera access with constraints:', constraints);
+            await cameraRef.current.start();
 
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            
-            if (!isMountedRef.current) return; // Component was unmounted during async operation
-            
-            if (!stream.active || stream.getTracks().length === 0) {
-                throw new Error('Camera stream is not active or has no tracks');
+            // Set canvas dimensions to match video
+            if (canvasRef.current && videoRef.current) {
+                canvasRef.current.width = videoRef.current.videoWidth;
+                canvasRef.current.height = videoRef.current.videoHeight;
             }
 
-            streamRef.current = stream;
-
-            // Connect stream to video element
-            videoRef.current.srcObject = stream;
-            videoRef.current.muted = true;
-            videoRef.current.playsInline = true;
-            
-            // Play video element
-            await videoRef.current.play();
-            console.log('Video playback started successfully');
-                
         } catch (error) {
             console.error('Error accessing camera:', error);
             setIsCameraActive(false);
 
-            // Set more specific error messages
             if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
                 setCameraPermissionDenied(true);
                 setError(strings.cameraAccessDenied);
-            } else if (error.name === 'NotFoundError') {
-                setError(strings.noCameraFound);
-            } else if (error.name === 'NotReadableError') {
-                setError(strings.cameraInUse);
-            } else if (error.name === 'OverconstrainedError') {
-                setError(strings.cameraConstraints);
-            } else if (error.name === 'AbortError') {
-                setError(strings.cameraAborted);
             } else {
                 setError(`${strings.cameraError}: ${error.message}`);
             }
         } finally {
-            if (isMountedRef.current) {
-                setLoading(false);
-            }
+            setLoading(false);
+        }
+    };
+
+    const resetVerification = () => {
+        setVerificationState({
+            faceDetected: false,
+            blink: { verified: false, count: 0 },
+            movement: { verified: false, count: 0 }
+        });
+
+        detectionState.current = {
+            previousLandmarks: null,
+            movementHistory: [],
+            baselineEAR: null,
+            blinkStartTime: null,
+            blinkState: 'open'
+        };
+
+        // Clear canvas if it exists
+        if (canvasRef.current) {
+            const ctx = canvasRef.current.getContext('2d');
+            ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
         }
     };
 
     const stopCamera = () => {
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-            streamRef.current = null;
+        // Clear any pending detection intervals
+        if (detectionIntervalRef.current) {
+            clearInterval(detectionIntervalRef.current);
+            detectionIntervalRef.current = null;
         }
 
-        if (videoRef.current) {
+        // Stop the MediaPipe camera
+        if (cameraRef.current) {
+            try {
+                cameraRef.current.stop();
+            } catch (e) {
+                console.warn('Error stopping camera:', e);
+            }
+            cameraRef.current = null;
+        }
+
+        // Stop all media tracks
+        if (videoRef.current && videoRef.current.srcObject) {
+            const stream = videoRef.current.srcObject;
+            const tracks = stream.getTracks();
+            tracks.forEach(track => track.stop());
             videoRef.current.srcObject = null;
         }
 
-        stopFaceDetection();
+        // Reset verification state
+        resetVerification();
+
+        // Update UI state
         setIsCameraActive(false);
     };
 
@@ -305,24 +442,25 @@ const CitizenLoginView = ({ onLogin }) => {
             return;
         }
 
-        if (!voterIdLastFour || voterIdLastFour.length !== 4) {
-            setError(strings.enterVoterId);
-            return;
-        }
-
         try {
             setLoading(true);
 
-            // Check if face is detected
-            if (!faceDetected) {
-                setError(strings.noFaceInFrame);
+            // Verify liveliness checks
+            if (!verificationState.blink.verified || !verificationState.movement.verified) {
+                setError(strings.completeLivelinessChecks);
                 setLoading(false);
                 return;
             }
 
-            // Detect face before capturing
+            // Capture image and get face descriptor
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = videoRef.current.videoWidth;
+            tempCanvas.height = videoRef.current.videoHeight;
+            const ctx = tempCanvas.getContext('2d');
+            ctx.drawImage(videoRef.current, 0, 0, tempCanvas.width, tempCanvas.height);
+
             const detections = await faceapi.detectSingleFace(
-                videoRef.current,
+                tempCanvas,
                 new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 })
             ).withFaceLandmarks().withFaceDescriptor();
 
@@ -332,24 +470,11 @@ const CitizenLoginView = ({ onLogin }) => {
                 return;
             }
 
-            // Create a temporary canvas for the image capture
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = videoRef.current.videoWidth;
-            tempCanvas.height = videoRef.current.videoHeight;
-            const ctx = tempCanvas.getContext('2d');
-            ctx.drawImage(videoRef.current, 0, 0, tempCanvas.width, tempCanvas.height);
-
-            // Get the face descriptor
-            const faceDescriptor = Array.from(detections.descriptor);
-
-            // Convert canvas to data URL
             const imageDataURL = tempCanvas.toDataURL('image/jpeg');
             setCapturedImage(imageDataURL);
-
-            // Stop camera after capturing image
             stopCamera();
 
-            // Call API for face login
+            // API call for face authentication
             try {
                 const response = await fetch(`${API_URL}/citizens/face-login`, {
                     method: 'POST',
@@ -357,7 +482,7 @@ const CitizenLoginView = ({ onLogin }) => {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        faceDescriptor,
+                        faceDescriptor: Array.from(detections.descriptor),
                         panchayatId: selectedPanchayat,
                         voterIdLastFour
                     })
@@ -366,25 +491,16 @@ const CitizenLoginView = ({ onLogin }) => {
                 const data = await response.json();
 
                 if (!response.ok) {
-                    // Map backend error messages to translation keys
                     const errorMessageMap = {
-                        'Valid face descriptor is required for authentication': strings.errorValidFaceDescriptor,
-                        'Last 4 digits of voter ID are required': strings.errorVoterIdRequired,
                         'Panchayat not found': strings.errorPanchayatNotFound,
-                        'No registered users found with matching voter ID': strings.errorNoRegisteredUsers,
-                        'Multiple potential matches found. Please try again or contact administrator.': strings.errorMultipleMatches,
-                        'Face not recognized. Please try again or contact administrator.': strings.errorFaceNotRecognized,
-                        'User registration incomplete. Please contact administrator.': strings.errorUserRegistrationIncomplete,
-                        'User not found': strings.errorUserNotFound,
-                        'Error fetching citizen profile': strings.errorFetchingProfile,
-                        'Error during face authentication': strings.errorFaceAuthentication
+                        'No registered users found': strings.errorNoRegisteredUsers,
+                        'Face not recognized': strings.errorFaceNotRecognized,
+                        'Multiple matches found': strings.errorMultipleMatches,
+                        'Invalid voter ID': strings.errorInvalidVoterId
                     };
-
-                    const translatedMessage = errorMessageMap[data.message] || strings.faceAuthFailed;
-                    throw new Error(translatedMessage);
+                    throw new Error(errorMessageMap[data.message] || strings.faceAuthFailed);
                 }
 
-                // Successful login
                 if (onLogin) {
                     onLogin(data.user);
                 }
@@ -393,9 +509,11 @@ const CitizenLoginView = ({ onLogin }) => {
                 setError(error.message || strings.faceNotRecognized);
                 setCapturedImage(null);
             }
+
         } catch (error) {
-            console.error('Error capturing image:', error);
-            setError(error.message || strings.errorCapturingImage);
+            console.error('Authentication error:', error);
+            setError(error.message || strings.faceAuthFailed);
+            setCapturedImage(null);
         } finally {
             setLoading(false);
         }
@@ -413,10 +531,10 @@ const CitizenLoginView = ({ onLogin }) => {
                 <Grid item xs={12} sm={10} md={8}>
                     <Card elevation={3}>
                         <CardContent sx={{ p: 0 }}>
-                            <Box 
-                                sx={{ 
-                                    p: 3, 
-                                    backgroundColor: 'primary.main', 
+                            <Box
+                                sx={{
+                                    p: 3,
+                                    backgroundColor: 'primary.main',
                                     color: 'white',
                                     borderTopLeftRadius: 8,
                                     borderTopRightRadius: 8,
@@ -427,7 +545,6 @@ const CitizenLoginView = ({ onLogin }) => {
                                 <Box sx={{ position: 'absolute', top: 8, right: 8 }}>
                                     <LanguageSwitcher />
                                 </Box>
-                                
                                 <Typography variant="h5" component="h1" gutterBottom>
                                     {strings.citizenLogin}
                                 </Typography>
@@ -442,7 +559,6 @@ const CitizenLoginView = ({ onLogin }) => {
                                         {error}
                                     </Alert>
                                 )}
-
                                 {cameraPermissionDenied && (
                                     <Alert severity="warning" sx={{ mb: 3 }}>
                                         {strings.cameraPermissionWarning}
@@ -474,15 +590,15 @@ const CitizenLoginView = ({ onLogin }) => {
                                         }}
                                         required
                                         error={voterIdLastFour.length > 0 && voterIdLastFour.length !== 4}
-                                        helperText={voterIdLastFour.length > 0 && voterIdLastFour.length !== 4 ? strings.exactlyFourDigits : ""}
+                                        helperText={voterIdLastFour.length > 0 && voterIdLastFour.length !== 4 ?
+                                            strings.exactlyFourDigits : ""}
                                         InputProps={{
                                             startAdornment: <AccountCircleIcon sx={{ mr: 1, color: 'text.secondary' }} />
                                         }}
                                     />
                                 </Box>
-
                                 {/* Face Recognition UI */}
-                                <Paper 
+                                <Paper
                                     elevation={2}
                                     sx={{
                                         position: 'relative',
@@ -495,7 +611,7 @@ const CitizenLoginView = ({ onLogin }) => {
                                         borderRadius: 2,
                                         overflow: 'hidden',
                                         mb: 3,
-                                        border: faceDetected ? '2px solid #4CAF50' : '2px solid transparent'
+                                        border: verificationState.faceDetected ? '2px solid #4CAF50' : '2px solid transparent'
                                     }}
                                 >
                                     {!isCameraActive && !capturedImage && (
@@ -527,7 +643,8 @@ const CitizenLoginView = ({ onLogin }) => {
                                                 style={{
                                                     width: '100%',
                                                     height: '100%',
-                                                    objectFit: 'cover'
+                                                    objectFit: 'cover',
+                                                    transform: 'scaleX(-1)'
                                                 }}
                                             />
                                             <canvas
@@ -540,19 +657,20 @@ const CitizenLoginView = ({ onLogin }) => {
                                                     height: '100%'
                                                 }}
                                             />
-                                            
-                                            <Chip
-                                                label={faceDetected ? strings.faceDetected : strings.noFaceDetected}
-                                                color={faceDetected ? "success" : "default"}
-                                                icon={<FaceIcon />}
-                                                sx={{
-                                                    position: 'absolute',
-                                                    bottom: 16,
-                                                    left: '50%',
-                                                    transform: 'translateX(-50%)',
-                                                    opacity: 0.9
-                                                }}
-                                            />
+                                            <Box sx={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
+                                                <Stack direction="row" spacing={1}>
+                                                    <Chip
+                                                        label={`Blinks: ${verificationState.blink.count}/${VERIFICATION_THRESHOLDS.blink}`}
+                                                        color={verificationState.blink.verified ? "success" : "default"}
+                                                        size="small"
+                                                    />
+                                                    <Chip
+                                                        label={`Movements: ${verificationState.movement.count}/${VERIFICATION_THRESHOLDS.movement}`}
+                                                        color={verificationState.movement.verified ? "success" : "default"}
+                                                        size="small"
+                                                    />
+                                                </Stack>
+                                            </Box>
                                         </Box>
                                     )}
 
@@ -566,17 +684,6 @@ const CitizenLoginView = ({ onLogin }) => {
                                                     width: '100%',
                                                     height: '100%',
                                                     objectFit: 'cover'
-                                                }}
-                                            />
-                                            <Chip
-                                                label={strings.imageCaptured}
-                                                color="primary"
-                                                sx={{
-                                                    position: 'absolute',
-                                                    bottom: 16,
-                                                    left: '50%',
-                                                    transform: 'translateX(-50%)',
-                                                    opacity: 0.9
                                                 }}
                                             />
                                         </Box>
@@ -605,22 +712,29 @@ const CitizenLoginView = ({ onLogin }) => {
                                 </Paper>
 
                                 <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
-                                    {!isCameraActive && !capturedImage && (
+                                    {!isCameraActive && !capturedImage ? (
                                         <Button
                                             variant="contained"
                                             color="primary"
                                             startIcon={<CameraAltIcon />}
                                             onClick={startCamera}
-                                            disabled={loading || !selectedPanchayat}
+                                            disabled={!selectedPanchayat || !voterIdLastFour || voterIdLastFour.length !== 4}
                                             fullWidth
                                             size="large"
                                             sx={{ py: 1.5 }}
                                         >
                                             {strings.startCamera}
                                         </Button>
-                                    )}
-
-                                    {isCameraActive && !capturedImage && (
+                                    ) : capturedImage ? (
+                                        <Button
+                                            variant="outlined"
+                                            onClick={retakePhoto}
+                                            fullWidth
+                                            size="large"
+                                        >
+                                            {strings.retake}
+                                        </Button>
+                                    ) : (
                                         <>
                                             <Button
                                                 variant="outlined"
@@ -637,7 +751,7 @@ const CitizenLoginView = ({ onLogin }) => {
                                                 color="success"
                                                 startIcon={<PhotoCameraIcon />}
                                                 onClick={captureImage}
-                                                disabled={loading || !faceDetected}
+                                                disabled={!verificationState.blink.verified || !verificationState.movement.verified}
                                                 size="large"
                                                 sx={{ flex: 2 }}
                                             >
@@ -645,7 +759,6 @@ const CitizenLoginView = ({ onLogin }) => {
                                             </Button>
                                         </>
                                     )}
-
                                     {capturedImage && (
                                         <Button
                                             variant="outlined"
