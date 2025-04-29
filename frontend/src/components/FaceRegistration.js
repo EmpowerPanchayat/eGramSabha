@@ -10,203 +10,317 @@ import {
   Alert,
   AlertTitle,
   Stack,
-  Grid,
-  Chip,
-  Divider
+  CircularProgress,
+  Chip
 } from '@mui/material';
-import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
-import SwitchCameraIcon from '@mui/icons-material/SwitchCamera';
-import HowToRegIcon from '@mui/icons-material/HowToReg';
-import StopCircleIcon from '@mui/icons-material/StopCircle';
+import {
+  PhotoCamera as CameraIcon,
+  SwitchCamera as SwitchCameraIcon,
+  HowToReg as RegisterIcon,
+  Stop as StopIcon,
+  Warning as WarningIcon,
+  VideocamOff as CameraOffIcon,
+  CheckCircle as CheckCircleIcon,
+  DirectionsRun as MotionIcon
+} from '@mui/icons-material';
+import { FaceMesh } from '@mediapipe/face_mesh';
+import { Camera } from '@mediapipe/camera_utils';
 
 const FaceRegistration = ({ user, modelsLoaded, onUserUpdate, setMessage, setLoading }) => {
-  const [isCameraActive, setIsCameraActive] = useState(false);
-  const [cameras, setCameras] = useState([]);
-  const [currentCamera, setCurrentCamera] = useState(null);
-  const [facingMode, setFacingMode] = useState('user'); // 'user' for front camera, 'environment' for back camera
-  const videoRef = useRef();
-  const canvasRef = useRef();
+  const [cameraState, setCameraState] = useState('inactive');
+  const [facingMode, setFacingMode] = useState('user');
+  const [verificationState, setVerificationState] = useState({
+    faceDetected: false,
+    blink: { verified: false, count: 0 },
+    movement: { verified: false, count: 0 }
+  });
+  const [activeFeedback, setActiveFeedback] = useState(null);
 
-  // Get available cameras when component mounts
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const faceMesh = useRef(null);
+  const camera = useRef(null);
+  const detectionState = useRef({
+    previousLandmarks: null,
+    movementHistory: [],
+    baselineEAR: null,
+    blinkStartTime: null
+  });
+
+  const VERIFICATION_THRESHOLDS = {
+    blink: 4,
+    movement: 5
+  };
+
   useEffect(() => {
-    const getCameras = async () => {
-      try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-          console.log("enumerateDevices() not supported.");
-          return;
-        }
-
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(device => device.kind === 'videoinput');
-        setCameras(videoDevices);
-
-        if (videoDevices.length > 0) {
-          console.log('Available cameras:', videoDevices);
-        }
-      } catch (error) {
-        console.error('Error getting cameras:', error);
-      }
+    const initialize = async () => {
+      await initializeFaceMesh();
     };
 
-    getCameras();
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
+    initialize();
     return () => {
       stopCamera();
+      faceMesh.current = null;
     };
   }, []);
 
-  // Start camera with specified facing mode
-  const startCamera = async () => {
-    if (!user) {
-      setMessage({ type: 'error', text: 'Please select a member first.' });
+  const initializeFaceMesh = async () => {
+    try {
+      faceMesh.current = new FaceMesh({
+        locateFile: (file) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`;
+        }
+      });
+
+      faceMesh.current.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
+
+      faceMesh.current.onResults(handleFaceResults);
+    } catch (error) {
+      console.error('FaceMesh initialization error:', error);
+      setMessage({
+        type: 'error',
+        text: 'Face detection model failed to load. Please refresh the page.'
+      });
+    }
+  };
+
+  const handleFaceResults = (results) => {
+    if (!canvasRef.current || !results.multiFaceLandmarks) {
+      setVerificationState(prev => ({ ...prev, faceDetected: false }));
       return;
     }
 
-    if (!modelsLoaded) {
-      setMessage({ type: 'error', text: 'Facial recognition models are not loaded yet.' });
+    const ctx = canvasRef.current.getContext('2d');
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+
+    const faceLandmarks = results.multiFaceLandmarks[0];
+    if (!faceLandmarks || faceLandmarks.length < 468) {
+      setVerificationState(prev => ({ ...prev, faceDetected: false }));
+      return;
+    }
+
+    drawFaceOutline(faceLandmarks);
+
+    const livelinessChecks = {
+      blink: detectBlink(faceLandmarks),
+      movement: detectMacroMovement(faceLandmarks)
+    };
+
+    updateVerificationState(livelinessChecks);
+    setVerificationState(prev => ({ ...prev, faceDetected: true }));
+  };
+
+  const drawFaceOutline = (landmarks) => {
+    if (!canvasRef.current || !landmarks) return;
+
+    const ctx = canvasRef.current.getContext('2d');
+    const { width, height } = canvasRef.current;
+
+    ctx.save();
+    if (facingMode === 'user') {
+      ctx.translate(width, 0);
+      ctx.scale(-1, 1);
+    }
+
+    ctx.strokeStyle = '#42A5F5';
+    ctx.lineWidth = 2;
+
+    // Full face oval detection
+    const minX = Math.min(...landmarks.map(l => l.x));
+    const maxX = Math.max(...landmarks.map(l => l.x));
+    const minY = Math.min(...landmarks.map(l => l.y));
+    const maxY = Math.max(...landmarks.map(l => l.y));
+
+    const centerX = (minX + maxX) / 2 * width;
+    const centerY = (minY + maxY) / 2 * height;
+    const radiusX = (maxX - minX) / 2 * width * 1.2;
+    const radiusY = (maxY - minY) / 2 * height * 1.4;
+
+    ctx.beginPath();
+    ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    ctx.restore();
+  };
+
+  const detectBlink = (landmarks) => {
+    const leftEyeIndices = [33, 160, 158, 133, 153, 144];
+    const rightEyeIndices = [362, 385, 387, 263, 373, 380];
+    const now = Date.now();
+
+    const calculateEAR = (eye) => {
+      const A = Math.hypot(eye[1].x - eye[5].x, eye[1].y - eye[5].y);
+      const B = Math.hypot(eye[2].x - eye[4].x, eye[2].y - eye[4].y);
+      const C = Math.hypot(eye[0].x - eye[3].x, eye[0].y - eye[3].y);
+      return (A + B) / (2 * C);
+    };
+
+    const leftEAR = calculateEAR(leftEyeIndices.map(i => landmarks[i]));
+    const rightEAR = calculateEAR(rightEyeIndices.map(i => landmarks[i]));
+    const avgEAR = (leftEAR + rightEAR) / 2;
+
+    if (!detectionState.current.baselineEAR) {
+      detectionState.current.baselineEAR = avgEAR * 1.2;
+      return false;
+    }
+
+    const earThreshold = detectionState.current.baselineEAR * 0.5;
+    const isBlinking = avgEAR < earThreshold;
+
+    if (isBlinking) {
+      detectionState.current.blinkStartTime ||= now;
+      return false;
+    }
+
+    if (detectionState.current.blinkStartTime) {
+      const duration = now - detectionState.current.blinkStartTime;
+      detectionState.current.blinkStartTime = null;
+      return duration > 50 && duration < 150;
+    }
+    return false;
+  };
+
+  const detectMacroMovement = (currentLandmarks) => {
+    const state = detectionState.current;
+    if (!state.previousLandmarks) {
+      state.previousLandmarks = currentLandmarks;
+      return false;
+    }
+
+    const referencePoints = [1, 33, 263, 61, 291];
+    let totalMovement = 0;
+    let validPoints = 0;
+
+    referencePoints.forEach(index => {
+      const current = currentLandmarks[index];
+      const previous = state.previousLandmarks[index];
+      const movement = Math.hypot(current.x - previous.x, current.y - previous.y);
+
+      if (movement > 0.001) {
+        totalMovement += movement;
+        validPoints++;
+      }
+    });
+
+    if (validPoints < 3) return false;
+
+    const avgMovement = totalMovement / validPoints;
+    const movementDetected = avgMovement > 0.0025;
+
+    state.movementHistory.push(movementDetected);
+    state.movementHistory = state.movementHistory.slice(-10);
+    state.previousLandmarks = currentLandmarks;
+
+    return state.movementHistory.filter(Boolean).length >= 5;
+  };
+
+  const updateVerificationState = ({ blink, movement }) => {
+    setVerificationState(prev => ({
+      ...prev,
+      blink: blink ? updateCheck(prev.blink, VERIFICATION_THRESHOLDS.blink, 'Blink verified') : prev.blink,
+      movement: movement ? updateCheck(prev.movement, VERIFICATION_THRESHOLDS.movement, 'Movement verified') : prev.movement
+    }));
+  };
+
+  const updateCheck = (check, threshold, message) => {
+    if (check.verified) return check;
+    const newCount = check.count + 1;
+    if (newCount >= threshold) {
+      showTemporaryFeedback(message);
+      return { verified: true, count: newCount };
+    }
+    return { ...check, count: newCount };
+  };
+
+  const showTemporaryFeedback = (message) => {
+    setActiveFeedback(message);
+    setTimeout(() => setActiveFeedback(null), 2000);
+  };
+
+  const startCamera = async () => {
+    if (!user || !modelsLoaded) {
+      setMessage({ type: 'error', text: !user ? 'Select a member first' : 'Models not loaded' });
       return;
     }
 
     try {
-      // First, make sure any previous streams are stopped
-      if (videoRef.current && videoRef.current.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach(track => track.stop());
-      }
+      setCameraState('starting');
+      setLoading(true);
+      resetVerification();
 
-      const constraints = {
-        video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: facingMode
-        }
-      };
+      if (!faceMesh.current) await initializeFaceMesh();
 
-      // If specific camera ID is selected and available
-      if (currentCamera && cameras.length > 0) {
-        constraints.video.deviceId = { exact: currentCamera };
-      }
-
-      console.log('Using camera constraints:', constraints);
-
-      // Get camera stream
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      // Set stream to video element
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-
-        // Make sure the video is fully loaded and playing before setting up detection
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current.play().catch(e => {
-            console.error('Error playing video:', e);
-            setMessage({ type: 'error', text: 'Error starting video: ' + e.message });
-          });
-        };
-
-        // When video is playing, set up face detection
-        videoRef.current.onplaying = () => {
-          setIsCameraActive(true);
-          console.log('Video is now playing, setting up face detection');
-
-          const canvas = canvasRef.current;
-          if (!canvas) {
-            console.error('Canvas reference is not available');
-            return;
+      camera.current = new Camera(videoRef.current, {
+        onFrame: async () => {
+          if (faceMesh.current?.send) {
+            await faceMesh.current.send({ image: videoRef.current });
           }
+        },
+        facingMode,
+        width: 1280,
+        height: 720
+      });
 
-          const displaySize = {
-            width: videoRef.current.videoWidth,
-            height: videoRef.current.videoHeight
-          };
-
-          console.log('Display size:', displaySize);
-
-          // Match dimensions
-          faceapi.matchDimensions(canvas, displaySize);
-
-          // Set up detection interval
-          const detectionInterval = setInterval(async () => {
-            if (!videoRef.current || videoRef.current.paused || videoRef.current.ended || !canvasRef.current) {
-              clearInterval(detectionInterval);
-              return;
-            }
-
-            try {
-              // Make sure video is ready for processing
-              if (videoRef.current.readyState === 4) {
-                const detections = await faceapi.detectSingleFace(
-                  videoRef.current,
-                  new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 })
-                ).withFaceLandmarks().withFaceDescriptor();
-
-                const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                if (detections) {
-                  const resizedDetections = faceapi.resizeResults(detections, displaySize);
-                  faceapi.draw.drawDetections(canvas, resizedDetections);
-                  faceapi.draw.drawFaceLandmarks(canvas, resizedDetections);
-                }
-              }
-            } catch (error) {
-              console.error('Error in face detection:', error);
-              clearInterval(detectionInterval);
-              setMessage({ type: 'error', text: 'Face detection error: ' + error.message });
-            }
-          }, 100);
-
-          // Clean up the interval when component unmounts
-          return () => clearInterval(detectionInterval);
-        };
-      }
+      await camera.current.start();
+      setCameraState('active');
     } catch (error) {
-      console.error('Error accessing camera:', error);
-      setMessage({ type: 'error', text: 'Error accessing camera: ' + error.message });
+      console.error('Camera error:', error);
+      setCameraState('error');
+      setMessage({
+        type: 'error',
+        text: 'Camera initialization failed. Please check permissions.'
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  // Switch camera
-  const switchCamera = () => {
-    if (cameras.length <= 1) {
-      setMessage({ type: 'error', text: 'No additional cameras available.' });
-      return;
-    }
-
-    // Toggle between front and back camera
-    const newFacingMode = facingMode === 'user' ? 'environment' : 'user';
-    setFacingMode(newFacingMode);
-
-    // If camera is active, restart it with new facing mode
-    if (isCameraActive) {
-      stopCamera();
-      setTimeout(() => {
-        startCamera();
-      }, 300); // Small delay to ensure previous camera is fully stopped
-    }
-  };
-
-  // Stop camera
   const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
+    if (camera.current) {
+      camera.current.stop();
+      camera.current = null;
     }
-    setIsCameraActive(false);
+    setCameraState('inactive');
+    resetVerification();
   };
 
-  // Register face
+  const switchCamera = () => {
+    setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
+    stopCamera();
+    setTimeout(startCamera, 300);
+  };
+
+  const resetVerification = () => {
+    setVerificationState({
+      faceDetected: false,
+      blink: { verified: false, count: 0 },
+      movement: { verified: false, count: 0 }
+    });
+    detectionState.current = {
+      previousLandmarks: null,
+      movementHistory: [],
+      baselineEAR: null,
+      blinkStartTime: null
+    };
+  };
+
   const handleRegisterFace = async () => {
-    if (!user) {
-      setMessage({ type: 'error', text: 'Please select a member first.' });
+    if (!user || cameraState !== 'active' || !verificationState.faceDetected) {
+      setMessage({ type: 'error', text: 'Invalid registration conditions' });
       return;
     }
 
-    if (!videoRef.current || !videoRef.current.srcObject) {
-      setMessage({ type: 'error', text: 'Please start the camera first.' });
+    const passedChecks = Object.values(verificationState)
+      .filter(val => typeof val === 'object')
+      .filter(check => check.verified).length;
+
+    if (passedChecks < 2) {
+      setMessage({ type: 'error', text: 'Complete both verification checks' });
       return;
     }
 
@@ -220,97 +334,110 @@ const FaceRegistration = ({ user, modelsLoaded, onUserUpdate, setMessage, setLoa
       }
 
       console.log('Attempting face detection for registration');
-
       const detections = await faceapi.detectSingleFace(
         videoRef.current,
         new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.6 })
       ).withFaceLandmarks().withFaceDescriptor();
 
-      if (!detections) {
-        setMessage({ type: 'error', text: 'No face detected. Please make sure your face is clearly visible.' });
-        setLoading(false);
-        return;
-      }
+      if (!detections) throw new Error('Face lost during registration');
 
-      console.log('Face detected, creating descriptor');
-      const faceDescriptor = Array.from(detections.descriptor);
-
-      // Capture face image
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
       canvas.height = videoRef.current.videoHeight;
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const faceImage = canvas.toDataURL('image/jpeg');
+      ctx.drawImage(videoRef.current, 0, 0);
+      const faceImage = canvas.toDataURL('image/jpeg', 0.8);
 
-      console.log('Face image data length:', faceImage.length); // Check that it's not empty
-      console.log('Sending face data to server for voter ID:', user.voterIdNumber);
-      console.log('Using panchayatId:', user.panchayatId);
-
-      console.log('Sending face descriptor to server');
       const response = await registerFace(
         user.voterIdNumber,
-        faceDescriptor,
+        Array.from(detections.descriptor),
         faceImage,
-        user.panchayatId  // Added panchayatId parameter
+        user.panchayatId
       );
 
-      console.log('Server response:', response);
       setMessage({ type: 'success', text: response.message });
       stopCamera();
-
-      // Update user
       onUserUpdate({ ...user, isRegistered: true });
     } catch (error) {
-      console.error('Error registering face:', error);
-      setMessage({
-        type: 'error',
-        text: error.message || 'Error registering face'
-      });
+      setMessage({ type: 'error', text: error.message || 'Registration failed' });
     } finally {
       setLoading(false);
     }
   };
 
+  const passedVerificationCount = Object.values(verificationState)
+    .filter(val => typeof val === 'object')
+    .filter(check => check.verified).length;
+
   return (
-    <Paper elevation={2} sx={{ p: 3 }}>
-      <Typography variant="h6" gutterBottom>
+    <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
+      <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
         Face Registration
       </Typography>
 
       <Alert severity="info" sx={{ mb: 3 }}>
-        <AlertTitle>Instructions for Good Photo Capture</AlertTitle>
-        <ol>
-          <li>Ensure proper lighting—avoid shadows and overly bright areas.</li>
-          <li>Keep your face fully visible, looking straight at the camera with a neutral expression.</li>
-          <li>Remove hats, sunglasses, or face coverings for clear recognition.</li>
-          <li>Use a plain, light-colored background without patterns or distractions.</li>
-        </ol>
+        <AlertTitle>Registration Instructions</AlertTitle>
+        <ul style={{ margin: 0, paddingLeft: 20 }}>
+          <li>Face the camera directly in good lighting</li>
+          <li>Blink naturally 4 times</li>
+          <li>Clearly move your head 5 times</li>
+          <li>Maintain a neutral expression</li>
+        </ul>
       </Alert>
 
-      <Box
-        sx={{
-          position: 'relative',
-          width: '100%',
-          aspectRatio: '4/3', // Add this instead of fixed height
-          backgroundColor: 'grey.200',
-          borderRadius: 1,
-          overflow: 'hidden',
-          mb: 3,
-          display: 'flex',  // Add this
-          justifyContent: 'center',  // Add this 
-          alignItems: 'center'  // Add this
-        }}
-      >
+      <Box sx={{
+        position: 'relative',
+        width: '100%',
+        aspectRatio: '4/3',
+        bgcolor: 'grey.100',
+        borderRadius: 1,
+        overflow: 'hidden',
+        mb: 3,
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        border: '1px solid',
+        borderColor: 'divider'
+      }}>
+        {cameraState === 'inactive' && (
+          <Box textAlign="center">
+            <CameraOffIcon sx={{ fontSize: 60, color: 'text.disabled', mb: 1 }} />
+            <Typography color="text.disabled" variant="body1">
+              Camera Inactive
+            </Typography>
+          </Box>
+        )}
+
+        {cameraState === 'starting' && (
+          <Box textAlign="center">
+            <CircularProgress size={60} thickness={4} />
+            <Typography color="text.secondary" sx={{ mt: 2 }}>
+              Initializing Camera...
+            </Typography>
+          </Box>
+        )}
+
+        {cameraState === 'error' && (
+          <Box textAlign="center">
+            <WarningIcon sx={{ fontSize: 60, color: 'error.main', mb: 1 }} />
+            <Typography color="error.main" variant="body1">
+              Camera Error
+            </Typography>
+          </Box>
+        )}
+
         <Box
           component="video"
           ref={videoRef}
           autoPlay
           muted
+          playsInline
           sx={{
             width: '100%',
             height: '100%',
-            objectFit: 'contain' // Change from 'cover' to 'contain'
+            objectFit: 'cover',
+            transform: facingMode === 'user' ? 'scaleX(-1)' : 'none',
+            display: cameraState === 'active' ? 'block' : 'none'
           }}
         />
         <Box
@@ -321,26 +448,71 @@ const FaceRegistration = ({ user, modelsLoaded, onUserUpdate, setMessage, setLoa
             top: 0,
             left: 0,
             width: '100%',
-            height: '100%'
+            height: '100%',
+            pointerEvents: 'none',
+            display: cameraState === 'active' ? 'block' : 'none'
           }}
         />
       </Box>
 
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={2}
-        justifyContent="center"
-        sx={{ mb: 3 }}
-      >
-        {!isCameraActive ? (
+      {cameraState === 'active' && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 500 }}>
+            Liveliness Verification (Need 2 checks)
+          </Typography>
+
+          <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+            <VerificationChip
+              label="Blink"
+              verified={verificationState.blink.verified}
+              count={verificationState.blink.count}
+              required={VERIFICATION_THRESHOLDS.blink}
+            />
+            <VerificationChip
+              label="Movement"
+              verified={verificationState.movement.verified}
+              count={verificationState.movement.count}
+              required={VERIFICATION_THRESHOLDS.movement}
+            />
+          </Stack>
+
+          {activeFeedback && (
+            <Alert
+              severity="success"
+              icon={<CheckCircleIcon />}
+              sx={{ mb: 2 }}
+            >
+              {activeFeedback}
+            </Alert>
+          )}
+
+          {passedVerificationCount < 2 && verificationState.faceDetected && (
+            <Alert
+              severity="warning"
+              icon={<MotionIcon />}
+              sx={{ mb: 2 }}
+            >
+              {passedVerificationCount > 0 ? (
+                `Complete ${2 - passedVerificationCount} more checks`
+              ) : (
+                'Perform natural movements and blinks'
+              )}
+            </Alert>
+          )}
+        </Box>
+      )}
+
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        {cameraState === 'inactive' || cameraState === 'error' ? (
           <Button
             variant="contained"
             size="large"
-            startIcon={<PhotoCameraIcon />}
+            startIcon={<CameraIcon />}
             onClick={startCamera}
             fullWidth
+            sx={{ py: 1.5 }}
           >
-            Start Camera
+            {cameraState === 'error' ? 'Try Again' : 'Start Camera'}
           </Button>
         ) : (
           <>
@@ -348,52 +520,40 @@ const FaceRegistration = ({ user, modelsLoaded, onUserUpdate, setMessage, setLoa
               variant="contained"
               color="primary"
               size="large"
-              startIcon={<HowToRegIcon />}
+              startIcon={<RegisterIcon />}
               onClick={handleRegisterFace}
+              disabled={passedVerificationCount < 2}
               fullWidth
+              sx={{ py: 1.5 }}
             >
               Register Face
             </Button>
-
             <Button
-              variant="contained"
-              color="error"
+              variant="outlined"
+              color="secondary"
               size="large"
-              startIcon={<StopCircleIcon />}
+              startIcon={<StopIcon />}
               onClick={stopCamera}
               fullWidth
+              sx={{ py: 1.5 }}
             >
               Stop Camera
             </Button>
-
-            {cameras.length > 1 && (
-              <Button
-                variant="outlined"
-                color="primary"
-                size="large"
-                startIcon={<SwitchCameraIcon />}
-                onClick={switchCamera}
-                fullWidth
-              >
-                Switch Camera
-              </Button>
-            )}
           </>
         )}
       </Stack>
-
-      {cameras.length > 0 && (
-        <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
-          <Typography variant="body2" color="text.secondary">
-            Camera: {facingMode === 'user' ? 'Front-facing' : 'Back-facing'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Available cameras: {cameras.length}
-          </Typography>
-        </Paper>
-      )}
     </Paper>
   );
 };
+
+const VerificationChip = ({ label, verified, count, required }) => (
+  <Chip
+    label={`${label}: ${count}/${required}`}
+    color={verified ? 'success' : 'default'}
+    variant={verified ? 'filled' : 'outlined'}
+    icon={verified ? <CheckCircleIcon fontSize="small" /> : undefined}
+    sx={{ flex: 1, maxWidth: 150, fontWeight: verified ? 600 : 400 }}
+  />
+);
 
 export default FaceRegistration;
