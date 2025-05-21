@@ -5,7 +5,9 @@ const csv = require('csv-parser');
 const fs = require('fs');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const PlatformConfiguration = require('./models/PlatformConfiguration');
 const path = require('path');
+
 const dotenv = require('dotenv');
 const helmet = require('helmet');
 const xss = require('xss-clean');
@@ -33,6 +35,7 @@ const citizenRoutes = require('./routes/citizenRoutes');
 const authRoutes = require('./routes/authRoutes');
 const officialRoutes = require('./routes/officialRoutes');
 const gramSabhaRoutes = require('./routes/gramSabhaRoutes');
+const platformConfigRoutes = require('./routes/platformConfigRoutes');
 
 // Import models
 const User = require('./models/User');
@@ -86,14 +89,28 @@ app.use('/uploads', (req, res, next) => {
 app.use('/static', express.static(path.join(__dirname, 'public')));
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/gram_panchayat', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-}).then(() => {
-  console.log('Connected to MongoDB');
-}).catch(err => {
-  console.error('MongoDB connection error:', err);
-});
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/voter_registration';
+
+mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(async () => {
+    // Initialize default configs if not present
+    const initialConfigs = [
+      { key: 'liveliness', value: true },
+      { key: 'blink_count', value: 2 },
+      { key: 'movement_count', value: 5 }
+    ];
+    for (const config of initialConfigs) {
+      await PlatformConfiguration.updateOne(
+        { key: config.key },
+        { $setOnInsert: config },
+        { upsert: true }
+      );
+    }
+    console.log('Platform configurations checked/initialized.');
+  })
+  .catch(err => {
+    console.error('Database connection error:', err);
+  });
 
 // File upload configuration
 const storage = multer.diskStorage({
@@ -455,6 +472,7 @@ app.use('/api/citizens', citizenRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/officials', officialRoutes);
 app.use('/api/gram-sabha', gramSabhaRoutes);
+app.use('/api/platform-configurations', platformConfigRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
