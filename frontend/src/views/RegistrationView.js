@@ -63,6 +63,13 @@ const RegistrationView = ({ user, navigateTo, children }) => {
     { value: 'Other', label: 'Other' }
   ];
 
+  const casteCategoryOptions = [
+    { value: 'General', label: 'General' },
+    { value: 'Scheduled Caste', label: 'Scheduled Caste' },
+    { value: 'Scheduled Tribe', label: 'Scheduled Tribe' },
+    { value: 'Other Backward Classes', label: 'Other Backward Classes' }
+  ];
+
   useEffect(() => {
     if (user) {
       setEditedUser({ ...user });
@@ -142,16 +149,32 @@ const RegistrationView = ({ user, navigateTo, children }) => {
         return value && !/^\d{10}$/.test(value) ? 'Mobile number must be 10 digits' : '';
       case 'gender':
         return value && value.trim().length === 0 ? 'Gender is required' : '';
+      case 'casteCategory':
+        return value && value.trim().length === 0 ? 'Caste category is required' : '';
       default:
         return '';
     }
   };
 
   const handleFieldChange = (field, value) => {
-    setEditedUser(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setEditedUser(prev => {
+      if (field === 'casteCategory') {
+        return {
+          ...prev,
+          caste: { ...prev.caste, category: value }
+        };
+      }
+      if (field === 'casteName') {
+        return {
+          ...prev,
+          caste: { ...prev.caste, name: value }
+        };
+      }
+      return {
+        ...prev,
+        [field]: value
+      };
+    });
 
     // Clear error when field is changed
     setErrors(prev => ({
@@ -175,10 +198,14 @@ const RegistrationView = ({ user, navigateTo, children }) => {
     });
 
     // Optional fields
-    const optionalFields = ['name', 'gender', 'mobileNumber', 'fatherName', 'motherName', 'husbandName', 'address'];
+    const optionalFields = ['name', 'gender', 'mobileNumber', 'fatherName', 'motherName', 'husbandName', 'address', 'casteName', 'casteCategory'];
     optionalFields.forEach(field => {
-      if (editedUser[field]) {
-        const error = validateField(field, editedUser[field]);
+      let value;
+      if (field === 'casteName') value = editedUser.caste?.name;
+      else if (field === 'casteCategory') value = editedUser.caste?.category;
+      else value = editedUser[field];
+      if (value) {
+        const error = validateField(field, value);
         if (error) {
           newErrors[field] = error;
           isValid = false;
@@ -588,6 +615,70 @@ const RegistrationView = ({ user, navigateTo, children }) => {
                         </>
                       )}
                     </List>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+                      Caste Information
+                    </Typography>
+                    {editMode ? (
+                      <>
+                        <TextField
+                          select
+                          fullWidth
+                          label="Caste Category"
+                          value={editedUser.caste?.category || ''}
+                          onChange={(e) => handleFieldChange('casteCategory', e.target.value)}
+                          variant="outlined"
+                          size="small"
+                          sx={{ mb: 2 }}
+                          error={!!errors.casteCategory}
+                          helperText={errors.casteCategory}
+                        >
+                          {casteCategoryOptions.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                              {option.label}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                        <TextField
+                          fullWidth
+                          label="Caste"
+                          value={editedUser.caste?.name || ''}
+                          onChange={(e) => handleFieldChange('casteName', e.target.value)}
+                          variant="outlined"
+                          size="small"
+                          sx={{ mb: 2 }}
+                          error={!!errors.casteName}
+                          helperText={errors.casteName}
+                        />
+                      </>
+                    ) : (
+                      (user.caste?.category || user.caste?.name) && (
+                        <List dense>
+                          {user.caste?.category && (
+                            <ListItem disableGutters>
+                              <ListItemText
+                                primary="Caste Category"
+                                secondary={user.caste.category}
+                                primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
+                                secondaryTypographyProps={{ variant: 'body1', fontWeight: 'medium' }}
+                              />
+                            </ListItem>
+                          )}
+                          {user.caste?.name && (
+                            <ListItem disableGutters>
+                              <ListItemText
+                                primary="Caste"
+                                secondary={user.caste.name}
+                                primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
+                                secondaryTypographyProps={{ variant: 'body1', fontWeight: 'medium' }}
+                              />
+                            </ListItem>
+                          )}
+                        </List>
+                      )
+                    )}
                   </Grid>
                 </Grid>
 

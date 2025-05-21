@@ -50,3 +50,6 @@ Thumbs.db
 
 # uploads
 backend/uploads/
+
+# private keys
+backend/keys/RSA-PrivateKey.pem
