@@ -112,7 +112,7 @@ const upload = multer({
   },
   fileFilter: (req, file, cb) => {
     // Define allowed file types
-    const allowedTypes = /jpeg|jpg|png|gif|csv|pdf|doc|docx|xls|xlsx/;
+    const allowedTypes = /jpeg|jpg|png|gif|csv|pdf|doc|docx|xls|xlsx|application\/vnd.ms-excel/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
 
@@ -221,6 +221,10 @@ app.post('/api/import-csv', upload.single('file'), async (req, res) => {
           address: data.Address || '',
           mobileNumber: data['Mobile number'] ? data['Mobile number'].toString() : '',
           voterIdNumber: voterIdValue.trim().replaceAll('/', '-'), // Clean up voter ID
+          caste: {
+            name: data.Caste || '',
+            category: data['Caste Category'] || ''
+          },
           isRegistered: false,
           panchayatId: panchayatId // Add panchayatId to each user
         });

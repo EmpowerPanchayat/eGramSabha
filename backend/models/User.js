@@ -13,6 +13,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  caste: {
+    name: { type: String, default: '' },
+    category: {
+      type: String,
+      enum: ['General', 'Scheduled Caste', 'Scheduled Tribe', 'Other Backward Classes', ''],
+      default: ''
+    }
+  },
   faceDescriptor: Array,
   faceImagePath: String,
   isRegistered: {

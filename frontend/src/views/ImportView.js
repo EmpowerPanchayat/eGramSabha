@@ -139,7 +139,9 @@ const ImportView = ({ fileInputRef, handleFileUpload, selectedPanchayat }) => {
             'Husband Name',
             'Mother Name',
             'Address',
-            'Mobile number'
+            'Mobile number',
+            'Caste',
+            'Caste Category'
           ].map((field) => (
             <Grid item xs={12} sm={6} md={4} key={field}>
               <FieldItem
