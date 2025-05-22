@@ -1,4 +1,10 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import * as faceapi from "face-api.js";
 import { registerFace } from "../api";
 import {
@@ -60,7 +66,6 @@ const FaceRegistration = ({
   const containerRef = useRef(null);
   const sliderContainerRef = useRef(null);
   const faceMesh = useRef(null);
-  const camera = useRef(null);
   const detectionState = useRef({
     previousLandmarks: null,
     movementHistory: [],
@@ -68,13 +73,17 @@ const FaceRegistration = ({
     blinkStartTime: null,
   });
 
-  const VERIFICATION_THRESHOLDS = {
-    blink: 4,
-    movement: 5,
-  };
+  const VERIFICATION_THRESHOLDS = useMemo(
+    () => ({
+      blink: 4,
+      movement: 5,
+    }),
+    []
+  );
 
   // Initialize component
   useEffect(() => {
+    let unmounted = false;
     const initialize = async () => {
       await initializeFaceMesh();
       await checkCameraDevices();
@@ -82,9 +91,18 @@ const FaceRegistration = ({
 
     initialize();
     return () => {
+      unmounted = true;
       stopCamera();
-      faceMesh.current = null;
+      if (faceMesh.current) {
+        try {
+          faceMesh.current.close?.();
+        } catch (e) {
+          // Already closed
+        }
+        faceMesh.current = null;
+      }
     };
+    // eslint-disable-next-line
   }, []);
 
   // Delay slider initialization
@@ -97,7 +115,7 @@ const FaceRegistration = ({
     }
   }, [cameraState, zoomLevel]);
 
-  const checkCameraDevices = async () => {
+  const checkCameraDevices = useCallback(async () => {
     try {
       const tempStream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -145,88 +163,7 @@ const FaceRegistration = ({
       console.error("Failed to enumerate cameras:", err);
       setMessage({ type: "error", text: "Camera access issue. Please retry." });
     }
-  };
-
-  const initializeFaceMesh = async () => {
-    try {
-      faceMeshReady.current = false;
-
-      if (faceMesh.current?.close) {
-        try {
-          await faceMesh.current.close();
-        } catch (e) {
-          console.warn("FaceMesh already closed or deleted", e);
-        }
-      }
-
-      faceMesh.current = new FaceMesh({
-        locateFile: (file) =>
-          `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`,
-      });
-
-      faceMesh.current.setOptions({
-        maxNumFaces: 1,
-        refineLandmarks: true,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      });
-
-      faceMesh.current.onResults(handleFaceResults);
-      faceMeshReady.current = true;
-      faceMeshId.current += 1;
-    } catch (error) {
-      console.error("FaceMesh init error:", error);
-      faceMeshReady.current = false;
-    }
-  };
-
-  const getVideoTransform = useCallback(() => {
-    const transforms = [];
-
-    try {
-      const stream = videoRef.current?.srcObject;
-      const track = stream?.getVideoTracks?.()[0];
-      const mode = track?.getSettings?.().facingMode;
-      if (mode === "user") transforms.push("scaleX(-1)");
-    } catch (e) {
-      console.warn("Unable to determine facing mode, skipping mirror.");
-    }
-
-    if (zoomLevel > 1) {
-      transforms.push(`scale(${zoomLevel})`);
-      transforms.push(
-        `translate(${cameraPosition.x * 100}%, ${cameraPosition.y * 100}%)`
-      );
-    }
-
-    return transforms.join(" ");
-  }, [zoomLevel, cameraPosition]);
-
-  const handleFaceResults = useCallback((results) => {
-    if (!canvasRef.current || !results.multiFaceLandmarks) {
-      setVerificationState((prev) => ({ ...prev, faceDetected: false }));
-      return;
-    }
-
-    const ctx = canvasRef.current.getContext("2d");
-    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-
-    const faceLandmarks = results.multiFaceLandmarks[0];
-    if (!faceLandmarks || faceLandmarks.length < 468) {
-      setVerificationState((prev) => ({ ...prev, faceDetected: false }));
-      return;
-    }
-
-    drawFaceOutline(faceLandmarks);
-
-    const livelinessChecks = {
-      blink: detectBlink(faceLandmarks),
-      movement: detectMacroMovement(faceLandmarks),
-    };
-
-    updateVerificationState(livelinessChecks);
-    setVerificationState((prev) => ({ ...prev, faceDetected: true }));
-  }, []);
+  }, [setMessage]);
 
   const drawFaceOutline = useCallback(
     (landmarks) => {
@@ -346,39 +283,143 @@ const FaceRegistration = ({
     return state.movementHistory.filter(Boolean).length >= 5;
   }, []);
 
-  const updateVerificationState = useCallback(({ blink, movement }) => {
-    setVerificationState((prev) => ({
-      ...prev,
-      blink: blink
-        ? updateCheck(
-            prev.blink,
-            VERIFICATION_THRESHOLDS.blink,
-            "Blink verified"
-          )
-        : prev.blink,
-      movement: movement
-        ? updateCheck(
-            prev.movement,
-            VERIFICATION_THRESHOLDS.movement,
-            "Movement verified"
-          )
-        : prev.movement,
-    }));
-  }, []);
-
-  const updateCheck = useCallback((check, threshold, message) => {
-    if (check.verified) return check;
-    const newCount = check.count + 1;
-    if (newCount >= threshold) {
-      showTemporaryFeedback(message);
-      return { verified: true, count: newCount };
-    }
-    return { ...check, count: newCount };
-  }, []);
-
   const showTemporaryFeedback = useCallback((message) => {
     setActiveFeedback(message);
     setTimeout(() => setActiveFeedback(null), 2000);
+  }, []);
+
+  const updateCheck = useCallback(
+    (check, threshold, message) => {
+      if (check.verified) return check;
+      const newCount = check.count + 1;
+      if (newCount >= threshold) {
+        showTemporaryFeedback(message);
+        return { verified: true, count: newCount };
+      }
+      return { ...check, count: newCount };
+    },
+    [showTemporaryFeedback]
+  );
+
+  const updateVerificationState = useCallback(
+    ({ blink, movement }) => {
+      setVerificationState((prev) => ({
+        ...prev,
+        blink: blink
+          ? updateCheck(
+              prev.blink,
+              VERIFICATION_THRESHOLDS.blink,
+              "Blink verified"
+            )
+          : prev.blink,
+        movement: movement
+          ? updateCheck(
+              prev.movement,
+              VERIFICATION_THRESHOLDS.movement,
+              "Movement verified"
+            )
+          : prev.movement,
+      }));
+    },
+    [updateCheck, VERIFICATION_THRESHOLDS]
+  );
+
+  const handleFaceResults = useCallback(
+    (results) => {
+      if (!canvasRef.current || !results.multiFaceLandmarks) {
+        setVerificationState((prev) => ({ ...prev, faceDetected: false }));
+        return;
+      }
+
+      const ctx = canvasRef.current.getContext("2d");
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+
+      const faceLandmarks = results.multiFaceLandmarks[0];
+      if (!faceLandmarks || faceLandmarks.length < 468) {
+        setVerificationState((prev) => ({ ...prev, faceDetected: false }));
+        return;
+      }
+
+      drawFaceOutline(faceLandmarks);
+
+      const livelinessChecks = {
+        blink: detectBlink(faceLandmarks),
+        movement: detectMacroMovement(faceLandmarks),
+      };
+
+      updateVerificationState(livelinessChecks);
+      setVerificationState((prev) => ({ ...prev, faceDetected: true }));
+    },
+    [drawFaceOutline, detectBlink, detectMacroMovement, updateVerificationState]
+  );
+
+  const initializeFaceMesh = useCallback(async () => {
+    try {
+      faceMeshReady.current = false;
+
+      if (faceMesh.current?.close) {
+        try {
+          await faceMesh.current.close();
+        } catch (e) {
+          console.warn("FaceMesh already closed or deleted", e);
+        }
+      }
+
+      faceMesh.current = new FaceMesh({
+        locateFile: (file) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`,
+      });
+
+      faceMesh.current.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+
+      faceMesh.current.onResults(handleFaceResults);
+      faceMeshReady.current = true;
+      faceMeshId.current += 1;
+    } catch (error) {
+      console.error("FaceMesh init error:", error);
+      faceMeshReady.current = false;
+    }
+  }, [handleFaceResults]);
+
+  const getVideoTransform = useCallback(() => {
+    const transforms = [];
+
+    try {
+      const stream = videoRef.current?.srcObject;
+      const track = stream?.getVideoTracks?.()[0];
+      const mode = track?.getSettings?.().facingMode;
+      if (mode === "user") transforms.push("scaleX(-1)");
+    } catch (e) {
+      // skip
+    }
+
+    if (zoomLevel > 1) {
+      transforms.push(`scale(${zoomLevel})`);
+      transforms.push(
+        `translate(${cameraPosition.x * 100}%, ${cameraPosition.y * 100}%)`
+      );
+    }
+
+    return transforms.join(" ");
+  }, [zoomLevel, cameraPosition]);
+
+  const resetVerification = useCallback(() => {
+    setVerificationState({
+      faceDetected: false,
+      blink: { verified: false, count: 0 },
+      movement: { verified: false, count: 0 },
+    });
+    detectionState.current = {
+      previousLandmarks: null,
+      movementHistory: [],
+      baselineEAR: null,
+      blinkStartTime: null,
+    };
   }, []);
 
   // Camera controls
@@ -424,17 +465,11 @@ const FaceRegistration = ({
             ) {
               await faceMesh.current.send({ image: videoRef.current });
             }
-            if (
-              faceMeshReady.current &&
-              faceMesh.current &&
-              faceMesh.current.send &&
-              videoRef.current?.videoWidth > 0 &&
-              videoRef.current?.videoHeight > 0
-            ) {
-              await faceMesh.current.send({ image: videoRef.current });
-            }
           } catch (e) {
-            console.error("FaceMesh send error:", e);
+            // Only log if not already deleted
+            if (!/already deleted/i.test(e?.message)) {
+              console.error("FaceMesh send error:", e);
+            }
           }
 
           if (faceMeshId.current === id) {
@@ -458,7 +493,21 @@ const FaceRegistration = ({
     } finally {
       setLoading(false);
     }
-  }, [user, modelsLoaded, cameras, selectedCameraIndex]);
+  }, [
+    user,
+    modelsLoaded,
+    cameras,
+    selectedCameraIndex,
+    setMessage,
+    setLoading,
+    initializeFaceMesh,
+    resetVerification,
+  ]);
+
+  const resetCameraView = useCallback(() => {
+    setZoomLevel(1);
+    setCameraPosition({ x: 0, y: 0 });
+  }, []);
 
   const stopCamera = useCallback(() => {
     // Stop all tracks
@@ -470,17 +519,20 @@ const FaceRegistration = ({
     // Prevent send() from firing
     faceMeshReady.current = false;
 
-    // Cleanup FaceMesh instance if it exists
-    if (faceMesh.current?.close) {
-      faceMesh.current
-        .close()
-        .catch((err) => console.warn("FaceMesh close error", err));
+    // Cleanup FaceMesh instance if it exists and not already deleted
+    if (faceMesh.current) {
+      try {
+        faceMesh.current.close?.();
+      } catch (err) {
+        // Already closed
+      }
+      faceMesh.current = null;
     }
 
     setCameraState("inactive");
     resetVerification();
     resetCameraView();
-  }, []);
+  }, [resetVerification, resetCameraView]);
 
   const switchCamera = useCallback(() => {
     if (cameras.length <= 1) {
@@ -489,34 +541,18 @@ const FaceRegistration = ({
     }
 
     const newIndex = (selectedCameraIndex + 1) % cameras.length;
-    const selectedCamera = cameras[newIndex];
-
-    // Update facing mode from stored metadata
     setSelectedCameraIndex(newIndex);
 
     stopCamera();
     setTimeout(() => startCamera(), 300);
     return newIndex;
-  }, [cameras, selectedCameraIndex, startCamera, stopCamera]);
-
-  const resetVerification = useCallback(() => {
-    setVerificationState({
-      faceDetected: false,
-      blink: { verified: false, count: 0 },
-      movement: { verified: false, count: 0 },
-    });
-    detectionState.current = {
-      previousLandmarks: null,
-      movementHistory: [],
-      baselineEAR: null,
-      blinkStartTime: null,
-    };
-  }, []);
-
-  const resetCameraView = useCallback(() => {
-    setZoomLevel(1);
-    setCameraPosition({ x: 0, y: 0 });
-  }, []);
+  }, [
+    cameras.length,
+    selectedCameraIndex,
+    setMessage,
+    stopCamera,
+    startCamera,
+  ]);
 
   // Zoom and pan controls
   const handleZoom = useCallback((direction) => {
@@ -640,6 +676,9 @@ const FaceRegistration = ({
       setMessage({ type: "success", text: response.message });
       stopCamera();
       onUserUpdate({ ...user, isRegistered: true });
+
+      // Automatically clear the success message after 3 seconds
+      setTimeout(() => setMessage({ type: "", text: "" }), 3000);
     } catch (error) {
       setMessage({
         type: "error",
@@ -656,11 +695,17 @@ const FaceRegistration = ({
     cameraPosition,
     stopCamera,
     onUserUpdate,
+    setMessage,
+    setLoading,
   ]);
 
-  const passedVerificationCount = Object.values(verificationState)
-    .filter((val) => typeof val === "object")
-    .filter((check) => check.verified).length;
+  const passedVerificationCount = useMemo(
+    () =>
+      Object.values(verificationState)
+        .filter((val) => typeof val === "object")
+        .filter((check) => check.verified).length,
+    [verificationState]
+  );
 
   return (
     <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
