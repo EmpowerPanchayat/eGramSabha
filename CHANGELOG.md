@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),  
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Liveliness checks ([#25](https://github.com/EmpowerPanchayat/eGramSabha/pull/25))
 - Caste feature implementation ([#35](https://github.com/EmpowerPanchayat/eGramSabha/pull/35))
 - Attendance Statistics Display and Export feature implementation ([#38](https://github.com/EmpowerPanchayat/eGramSabha/pull/38))
-- Facial Recognition Enhancements [#9](https://github.com/EmpowerPanchayat/eGramSabha/pull/39)
+- Facial Recognition Enhancements [#9](https://github.com/EmpowerPanchayat/eGramSabha/pull/39))
 
 ## [0.1.0] - 2025-04-23
 
@@ -39,6 +39,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.1.0...HEAD  
-[0.1.0]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.0.1...0.1.0  
+[Unreleased]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.1.0...HEAD
+[0.1.0]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.0.1...0.1.0
 [0.0.1]: https://github.com/EmpowerPanchayat/eGramSabha/releases/tag/0.0.1
