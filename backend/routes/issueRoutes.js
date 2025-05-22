@@ -90,6 +90,125 @@ router.post('/', async (req, res) => {
     }
 });
 
+// Get all issues/suggestions created by a specific user or panchayatId
+router.get('/', async (req, res) => {
+    try {
+        const {
+            userId,
+            panchayatId,
+            page = 1,
+            limit = 10,
+            category,
+            subcategory,
+            status,
+            createdOn,
+            creator,
+            sort = 'desc'
+        } = req.query;
+
+        // Validate required filters
+        if (!userId && !panchayatId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Either userId or panchayatId is required.'
+            });
+        }
+
+        // Validating panchayatId exist in system or not
+        if (panchayatId) {
+            const panchayatExists = await Panchayat.exists({ _id: panchayatId });
+            if (!panchayatExists) {
+                return res.status(404).json({ success: false, message: 'Panchayat not found' });
+            }
+        }
+
+        // Validating userId exist in system or not
+        if (userId) {
+            const userExists = await User.exists({ _id: userId });
+            if (!userExists) {
+                return res.status(404).json({ success: false, message: 'User not found' });
+            }
+        }
+
+        // Build query
+        const query = {};
+        if (userId) query.creatorId = userId;
+        if (panchayatId) query.panchayatId = panchayatId;
+        if (category) query.category = category;
+        if (subcategory) query.subcategory = subcategory;
+        if (status) query.status = status;
+
+        // Date filter
+        if (createdOn) {
+            const [from, to] = createdOn.split('_to_');
+            if (from && to) {
+                query.createdAt = {
+                    $gte: new Date(from),
+                    $lte: new Date(to + 'T23:59:59.999Z')
+                };
+            } else if (from) {
+                query.createdAt = {
+                    $gte: new Date(from),
+                    $lte: new Date(from + 'T23:59:59.999Z')
+                };
+            }
+        }
+
+        // Creator name filter
+        if (creator?.trim()) {
+            const users = await User.find({
+                name: { $regex: new RegExp(creator.trim(), 'i') }
+            }).select('_id');
+
+            const creatorIds = users.map(u => u._id);
+            if (creatorIds.length === 0) {
+                res.set('X-Total-Count', 0);
+                return res.status(200).json([]);
+            }
+
+            query.creatorId = { $in: creatorIds };
+        }
+
+        // Pagination & sorting
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const sortOrder = sort.toLowerCase() === 'asc' ? 1 : -1;
+
+        // Fetch data and count in parallel
+        const [issues, total] = await Promise.all([
+            Issue.find(query)
+                .sort({ createdAt: sortOrder })
+                .skip(skip)
+                .limit(parseInt(limit))
+                .select('-attachments.attachment')
+                .populate({ path: 'creatorId', select: 'name' }),
+
+            Issue.countDocuments(query)
+        ]);
+
+        // Format issues
+        const formattedIssues = issues.map(issue => ({
+            ...issue.toObject(),
+            creator: {
+                name: issue.creatorId?.name || 'Unknown'
+            }
+        }));
+
+        // Send total count in header
+        res.set('X-Total-Count', total.toString());
+
+        //  Response
+        return res.status(200).json(formattedIssues);
+
+    } catch (error) {
+        console.error('Error fetching issues:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+});
+
 // Get all issues/suggestions for a panchayat
 router.get('/panchayat/:panchayatId', async (req, res) => {
     try {
