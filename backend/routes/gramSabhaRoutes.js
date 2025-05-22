@@ -414,6 +414,22 @@ router.post("/:id/attendance", auth.isAuthenticated, async (req, res) => {
   }
 });
 
+// Get specific details of users and panchayats of past Gram Sabha meeting
+router.get("/:id/attendance", auth.isAuthenticated, async (req, res) => {
+  try {
+    const gramSabha = await GramSabha.findById(req.params.id)
+      .select("attendances panchayatId guests") // include only these
+      .populate("attendances.userId", "name gender caste")
+      .populate("panchayatId", "name block district state");
+    if (!gramSabha) {
+      return res.status(404).send();
+    }
+    res.send(gramSabha);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
 // Add attachment to a Gram Sabha meeting
 router.post(
   "/:id/attachments",
