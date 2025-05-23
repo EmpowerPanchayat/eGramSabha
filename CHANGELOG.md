@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - API Liveness monitor ([#33](https://github.com/EmpowerPanchayat/eGramSabha/issues/33))
 - Attendance Statistics Display and Export feature implementation([#13](https://github.com/EmpowerPanchayat/eGramSabha/issues/13))
 - Filters for category, subcategory, and status in issue list ([#18](https://github.com/EmpowerPanchayat/eGramSabha/issues/18))
+- Platform level configurations([#27])(https://github.com/EmpowerPanchayat/eGramSabha/issues/27)
 
 ### Changed
 

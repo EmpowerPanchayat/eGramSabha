@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   Box,
   Typography,
@@ -71,6 +77,16 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     type: "",
     text: "",
   });
+  const [platformConfig, setPlatformConfig] = useState({
+    liveliness: true,
+    blink_count: 2,
+    movement_count: 5,
+  });
+  const [thresholds, setThresholds] = useState({
+    blink: 2,
+    movement: 5,
+  });
+  const thresholdsRef = useRef(thresholds);
 
   // Camera and face detection state
   const [cameraState, setCameraState] = useState("inactive");
@@ -90,13 +106,11 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   const [activeFeedback, setActiveFeedback] = useState(null);
 
   const faceMeshId = useRef(0);
-  const VERIFICATION_THRESHOLDS = { blink: 2, movement: 5 };
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const sliderContainerRef = useRef(null);
   const faceMesh = useRef(null);
-  const camera = useRef(null);
   const detectionState = useRef({
     previousLandmarks: null,
     movementHistory: [],
@@ -106,6 +120,12 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
+  // Memoized thresholds for checks
+  useEffect(() => {
+    thresholdsRef.current = thresholds;
+  }, [thresholds]);
+
+  // Delay slider initialization
   useEffect(() => {
     if (cameraState === "active" && zoomLevel > 1) {
       const timer = setTimeout(() => setSliderReady(true), 100);
@@ -114,7 +134,8 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
       setSliderReady(false);
     }
   }, [cameraState, zoomLevel]);
-  // Initialize face detection models
+
+  // Initialize face detection models and camera devices
   useEffect(() => {
     const initializeFaceDetection = async () => {
       try {
@@ -156,26 +177,11 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     initializeFaceDetection();
     checkCameraDevices();
     return () => stopCamera();
+    // eslint-disable-next-line
   }, []);
 
-  const getVideoTransform = useCallback(() => {
-    const transforms = [];
-    const stream = videoRef.current?.srcObject;
-    const track = stream?.getVideoTracks?.()[0];
-    const facingMode = track?.getSettings?.().facingMode;
-
-    if (facingMode === "user") transforms.push("scaleX(-1)");
-    if (zoomLevel > 1) {
-      transforms.push(`scale(${zoomLevel})`);
-      transforms.push(
-        `translate(${cameraPosition.x * 100}%, ${cameraPosition.y * 100}%)`
-      );
-    }
-    return transforms.join(" ");
-  }, [zoomLevel, cameraPosition]);
-
   // Camera device management
-  const checkCameraDevices = async () => {
+  const checkCameraDevices = useCallback(async () => {
     try {
       const tempStream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -223,35 +229,26 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
         text: "Camera access issue. Please retry.",
       });
     }
-  };
-
-  // Face detection handlers
-  const handleFaceResults = useCallback((results) => {
-    if (!canvasRef.current || !results.multiFaceLandmarks) {
-      setVerificationState((prev) => ({ ...prev, faceDetected: false }));
-      return;
-    }
-
-    const ctx = canvasRef.current.getContext("2d");
-    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-
-    const faceLandmarks = results.multiFaceLandmarks[0];
-    if (!faceLandmarks || faceLandmarks.length < 468) {
-      setVerificationState((prev) => ({ ...prev, faceDetected: false }));
-      return;
-    }
-
-    drawFaceOutline(faceLandmarks);
-
-    const livelinessChecks = {
-      blink: detectBlink(faceLandmarks),
-      movement: detectMacroMovement(faceLandmarks),
-    };
-
-    updateVerificationState(livelinessChecks);
-    setVerificationState((prev) => ({ ...prev, faceDetected: true }));
   }, []);
 
+  // Video transform
+  const getVideoTransform = useCallback(() => {
+    const transforms = [];
+    const stream = videoRef.current?.srcObject;
+    const track = stream?.getVideoTracks?.()[0];
+    const facingMode = track?.getSettings?.().facingMode;
+
+    if (facingMode === "user") transforms.push("scaleX(-1)");
+    if (zoomLevel > 1) {
+      transforms.push(`scale(${zoomLevel})`);
+      transforms.push(
+        `translate(${cameraPosition.x * 100}%, ${cameraPosition.y * 100}%)`
+      );
+    }
+    return transforms.join(" ");
+  }, [zoomLevel, cameraPosition]);
+
+  // Face detection handlers
   const drawFaceOutline = useCallback(
     (landmarks) => {
       if (!canvasRef.current || !landmarks) return;
@@ -368,39 +365,112 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     return state.movementHistory.filter(Boolean).length >= 5;
   }, []);
 
-  const updateVerificationState = useCallback(({ blink, movement }) => {
-    setVerificationState((prev) => ({
-      ...prev,
-      blink: blink
-        ? updateCheck(
-            prev.blink,
-            VERIFICATION_THRESHOLDS.blink,
-            "Blink verified"
-          )
-        : prev.blink,
-      movement: movement
-        ? updateCheck(
-            prev.movement,
-            VERIFICATION_THRESHOLDS.movement,
-            "Movement verified"
-          )
-        : prev.movement,
-    }));
-  }, []);
-
-  const updateCheck = useCallback((check, threshold, message) => {
-    if (check.verified) return check;
-    const newCount = check.count + 1;
-    if (newCount >= threshold) {
-      showTemporaryFeedback(message);
-      return { verified: true, count: newCount };
-    }
-    return { ...check, count: newCount };
-  }, []);
-
   const showTemporaryFeedback = useCallback((message) => {
     setActiveFeedback(message);
     setTimeout(() => setActiveFeedback(null), 2000);
+  }, []);
+
+  const updateCheck = useCallback(
+    (check, threshold, message) => {
+      if (check.verified) return check;
+      const newCount = check.count + 1;
+      if (newCount >= threshold) {
+        if (platformConfig.liveliness) {
+          showTemporaryFeedback(message);
+        }
+        return { verified: true, count: newCount };
+      }
+      return { ...check, count: newCount };
+    },
+    [platformConfig.liveliness, showTemporaryFeedback]
+  );
+
+  const updateVerificationState = useCallback(
+    ({ blink, movement }) => {
+      setVerificationState((prev) => ({
+        ...prev,
+        blink: blink
+          ? updateCheck(
+              prev.blink,
+              thresholdsRef.current.blink,
+              "Blink verified"
+            )
+          : prev.blink,
+        movement: movement
+          ? updateCheck(
+              prev.movement,
+              thresholdsRef.current.movement,
+              "Movement verified"
+            )
+          : prev.movement,
+      }));
+    },
+    [updateCheck]
+  );
+
+  const handleFaceResults = useCallback(
+    (results) => {
+      if (!canvasRef.current || !results.multiFaceLandmarks) {
+        setVerificationState((prev) => ({ ...prev, faceDetected: false }));
+        return;
+      }
+
+      const ctx = canvasRef.current.getContext("2d");
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+
+      const faceLandmarks = results.multiFaceLandmarks[0];
+      if (!faceLandmarks || faceLandmarks.length < 468) {
+        setVerificationState((prev) => ({ ...prev, faceDetected: false }));
+        return;
+      }
+
+      drawFaceOutline(faceLandmarks);
+
+      // If liveliness is false, auto-verify both checks and skip notifications
+      if (!platformConfig.liveliness) {
+        setVerificationState((prev) => ({
+          ...prev,
+          faceDetected: true,
+          blink: { verified: true, count: thresholdsRef.current.blink },
+          movement: { verified: true, count: thresholdsRef.current.movement },
+        }));
+        return;
+      }
+
+      const livelinessChecks = {
+        blink: detectBlink(faceLandmarks),
+        movement: detectMacroMovement(faceLandmarks),
+      };
+
+      updateVerificationState(livelinessChecks);
+      setVerificationState((prev) => ({ ...prev, faceDetected: true }));
+    },
+    [
+      drawFaceOutline,
+      detectBlink,
+      detectMacroMovement,
+      platformConfig.liveliness,
+      updateVerificationState,
+    ]
+  );
+
+  const resetVerification = useCallback(() => {
+    setVerificationState({
+      faceDetected: false,
+      blink: { verified: false, count: 0 },
+      movement: { verified: false, count: 0 },
+    });
+    detectionState.current = {
+      previousLandmarks: null,
+      movementHistory: [],
+      baselineEAR: null,
+      blinkStartTime: null,
+    };
+  }, []);
+
+  const resetCameraView = useCallback(() => {
+    setZoomLevel(1);
+    setCameraPosition({ x: 0, y: 0 });
   }, []);
 
   // Camera controls
@@ -453,7 +523,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
         text: "Camera failed to start. Check permissions.",
       });
     }
-  }, [user, modelsLoaded, cameras, selectedCameraIndex]);
+  }, [user, modelsLoaded, cameras, selectedCameraIndex, resetVerification]);
 
   const stopCamera = useCallback(() => {
     if (videoRef.current?.srcObject) {
@@ -463,7 +533,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     setCameraState("inactive");
     resetVerification();
     resetCameraView();
-  }, []);
+  }, [resetVerification, resetCameraView]);
 
   const switchCamera = useCallback(() => {
     if (cameras.length <= 1) {
@@ -477,26 +547,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     setSelectedCameraIndex(newIndex);
     stopCamera();
     setTimeout(startCamera, 300);
-  }, [cameras, selectedCameraIndex, startCamera, stopCamera]);
-
-  const resetVerification = useCallback(() => {
-    setVerificationState({
-      faceDetected: false,
-      blink: { verified: false, count: 0 },
-      movement: { verified: false, count: 0 },
-    });
-    detectionState.current = {
-      previousLandmarks: null,
-      movementHistory: [],
-      baselineEAR: null,
-      blinkStartTime: null,
-    };
-  }, []);
-
-  const resetCameraView = useCallback(() => {
-    setZoomLevel(1);
-    setCameraPosition({ x: 0, y: 0 });
-  }, []);
+  }, [cameras, selectedCameraIndex, stopCamera, startCamera]);
 
   const handleZoom = useCallback((direction) => {
     const step = 0.1;
@@ -549,9 +600,10 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     if (panchayatId) {
       loadTodaysMeetings();
     }
+    // eslint-disable-next-line
   }, [panchayatId]);
 
-  const loadTodaysMeetings = async () => {
+  const loadTodaysMeetings = useCallback(async () => {
     if (!panchayatId) return;
 
     try {
@@ -570,61 +622,62 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [panchayatId]);
 
-  const loadAttendanceStats = async (meetingId) => {
-    try {
-      const response = await fetch(
-        `${API_URL}/gram-sabha/${meetingId}/attendance-stats`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-            "Content-Type": "application/json",
-          },
+  const loadAttendanceStats = useCallback(
+    async (meetingId) => {
+      try {
+        const response = await fetch(
+          `${API_URL}/gram-sabha/${meetingId}/attendance-stats`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch attendance statistics");
         }
-      );
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch attendance statistics");
+        const data = await response.json();
+
+        setAttendanceStats({
+          total: data.totalRegistered || 0,
+          totalVoters: data.totalVoters || 0,
+          present: data.present || 0,
+          quorum: data.quorumRequired || 0,
+          quorumMet: (data.present || 0) >= (data.quorumRequired || 0),
+        });
+      } catch (error) {
+        console.error("Error loading attendance stats:", error);
+        setAttendanceStats({
+          total: 0,
+          totalVoters: 0,
+          present: 0,
+          quorum: 0,
+          quorumMet: false,
+        });
       }
+    },
+    [API_URL]
+  );
 
-      const data = await response.json();
-
-      setAttendanceStats({
-        total: data.totalRegistered || 0,
-        totalVoters: data.totalVoters || 0,
-        present: data.present || 0,
-        quorum: data.quorumRequired || 0,
-        quorumMet: (data.present || 0) >= (data.quorumRequired || 0),
+  const handleStartRecording = useCallback(
+    async (meetingId, meetingLink, roomPIN, hostToken) => {
+      setMeetingDetails({
+        meetingId,
+        meetingLink,
+        roomPIN,
+        hostToken,
       });
-    } catch (error) {
-      console.error("Error loading attendance stats:", error);
-      setAttendanceStats({
-        total: 0,
-        totalVoters: 0,
-        present: 0,
-        quorum: 0,
-        quorumMet: false,
-      });
-    }
-  };
+      setShowMeetingDetails(true);
+    },
+    []
+  );
 
-  const handleStartRecording = async (
-    meetingId,
-    meetingLink,
-    roomPIN,
-    hostToken
-  ) => {
-    setMeetingDetails({
-      meetingId,
-      meetingLink,
-      roomPIN,
-      hostToken,
-    });
-    setShowMeetingDetails(true);
-  };
-
-  const copyToClipboard = () => {
+  const copyToClipboard = useCallback(() => {
     const detailsText = `Meeting ID: ${meetingDetails.meetingId}
   Meeting Link: ${meetingDetails.meetingLink}
   Room PIN: ${meetingDetails.roomPIN}`;
@@ -638,16 +691,49 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
       .catch((err) => {
         console.error("Failed to copy: ", err);
       });
-  };
+  }, [meetingDetails]);
 
-  const handleMarkAttendance = async (meetingId) => {
-    setVoterIdLastFour("");
-    setAttendanceMessage({ type: "", text: "" });
-    loadAttendanceStats(meetingId);
-    setShowAttendanceForm(true);
-  };
+  // --- MODIFIED handleMarkAttendance ---
+  const handleMarkAttendance = useCallback(
+    async (meetingId) => {
+      // Fetch platform config before opening dialog
+      try {
+        const res = await fetch(`${API_URL}/platform-configurations`);
+        const data = await res.json();
+        const configObj = {};
+        (Array.isArray(data) ? data : data.config || []).forEach((item) => {
+          configObj[item.key] = item.value;
+        });
+        setPlatformConfig({
+          liveliness:
+            configObj.liveliness === "false" ? false : !!configObj.liveliness,
+          blink_count: Number(configObj.blink_count) || 2,
+          movement_count: Number(configObj.movement_count) || 5,
+        });
+        setThresholds({
+          blink: Number(configObj.blink_count) || 2,
+          movement: Number(configObj.movement_count) || 5,
+        });
+      } catch (err) {
+        setPlatformConfig({
+          liveliness: true,
+          blink_count: 2,
+          movement_count: 5,
+        });
+        setThresholds({
+          blink: 2,
+          movement: 5,
+        });
+      }
+      setVoterIdLastFour("");
+      setAttendanceMessage({ type: "", text: "" });
+      loadAttendanceStats(meetingId);
+      setShowAttendanceForm(true);
+    },
+    [API_URL, loadAttendanceStats]
+  );
 
-  const handleSubmitAttendance = async () => {
+  const handleSubmitAttendance = useCallback(async () => {
     if (!voterIdLastFour || voterIdLastFour.length !== 4) {
       setAttendanceMessage({
         type: "error",
@@ -656,11 +742,12 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
       return;
     }
 
-    const passedChecks = Object.values(verificationState)
-      .filter((val) => typeof val === "object")
-      .filter((check) => check.verified).length;
-
-    if (passedChecks < 2) {
+    // Only require checks if liveliness is true
+    if (
+      platformConfig.liveliness &&
+      (!verificationState.blink.verified ||
+        !verificationState.movement.verified)
+    ) {
       setAttendanceMessage({
         type: "error",
         text: "Complete both verification checks (blink and movement)",
@@ -753,7 +840,20 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     } finally {
       setAttendanceLoading(false);
     }
-  };
+  }, [
+    voterIdLastFour,
+    platformConfig.liveliness,
+    verificationState,
+    zoomLevel,
+    cameraPosition,
+    API_URL,
+    todaysMeetings,
+    panchayatId,
+    attendanceStats,
+    loadAttendanceStats,
+    stopCamera,
+    loadTodaysMeetings,
+  ]);
 
   if (loading && todaysMeetings.length === 0) {
     return (
@@ -1395,7 +1495,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                     </>
                   )}
 
-                  {cameraState === "active" && (
+                  {cameraState === "active" && platformConfig.liveliness && (
                     <Box
                       sx={{
                         position: "absolute",
@@ -1409,19 +1509,19 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                           label="Blink"
                           verified={verificationState.blink.verified}
                           count={verificationState.blink.count}
-                          required={VERIFICATION_THRESHOLDS.blink}
+                          required={thresholds.blink}
                         />
                         <VerificationChip
                           label="Movement"
                           verified={verificationState.movement.verified}
                           count={verificationState.movement.count}
-                          required={VERIFICATION_THRESHOLDS.movement}
+                          required={thresholds.movement}
                         />
                       </Stack>
                     </Box>
                   )}
 
-                  {activeFeedback && (
+                  {activeFeedback && platformConfig.liveliness && (
                     <Alert
                       severity="success"
                       sx={{
@@ -1502,9 +1602,10 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                     onClick={handleSubmitAttendance}
                     disabled={
                       attendanceLoading ||
-                      !verificationState.blink.verified ||
-                      !verificationState.movement.verified ||
-                      voterIdLastFour.length !== 4
+                      voterIdLastFour.length !== 4 ||
+                      (platformConfig.liveliness &&
+                        (!verificationState.blink.verified ||
+                          !verificationState.movement.verified))
                     }
                     startIcon={<HowToRegIcon />}
                   >
@@ -1563,7 +1664,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   );
 };
 
-const VerificationChip = ({ label, verified, count, required }) => (
+const VerificationChip = React.memo(({ label, verified, count, required }) => (
   <Chip
     label={`${label}: ${count}/${required}`}
     color={verified ? "success" : "default"}
@@ -1577,6 +1678,6 @@ const VerificationChip = ({ label, verified, count, required }) => (
       borderColor: !verified ? "rgba(255, 255, 255, 0.3)" : undefined,
     }}
   />
-);
+));
 
 export default TodaysMeetingsBanner;
