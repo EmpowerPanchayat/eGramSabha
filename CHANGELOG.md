@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - favicon, page title, and meta description in app ([#18](https://github.com/EmpowerPanchayat/eGramSabha/issues/18))
+- Attendance stats are now displayed only for concluded Gram Sabha meetings. ([#50](https://github.com/EmpowerPanchayat/eGramSabha/issues/50))
 
 ## [0.1.0] - 2025-04-23
 
