@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useRef,
-  useEffect,
-  useCallback,
-  useMemo,
-} from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import * as faceapi from "face-api.js";
 import {
   Box,
@@ -39,6 +33,7 @@ import PanchayatSelector from "../components/PanchayatSelector";
 import LanguageSwitcher from "../components/LanguageSwitcher";
 import { useLanguage } from "../utils/LanguageContext";
 import { FaceMesh } from "@mediapipe/face_mesh";
+import { Camera } from "@mediapipe/camera_utils";
 
 const CitizenLoginView = ({ onLogin }) => {
   const { strings } = useLanguage();
@@ -72,6 +67,7 @@ const CitizenLoginView = ({ onLogin }) => {
   const containerRef = useRef(null);
   const sliderContainerRef = useRef(null);
   const faceMesh = useRef(null);
+  const camera = useRef(null);
   const isMountedRef = useRef(true);
   const faceMeshId = useRef(0);
   const detectionState = useRef({
@@ -81,15 +77,10 @@ const CitizenLoginView = ({ onLogin }) => {
     blinkStartTime: null,
   });
 
-  const VERIFICATION_THRESHOLDS = useMemo(
-    () => ({
-      blink: 4,
-      movement: 5,
-    }),
-    []
-  );
-
-  // --- Effects ---
+  const VERIFICATION_THRESHOLDS = {
+    blink: 4,
+    movement: 5,
+  };
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -102,7 +93,214 @@ const CitizenLoginView = ({ onLogin }) => {
       isMountedRef.current = false;
       stopCamera();
     };
-    // eslint-disable-next-line
+  }, []);
+
+  useEffect(() => {
+    if (isCameraActive && zoomLevel > 1) {
+      const timer = setTimeout(() => setSliderReady(true), 100);
+      return () => clearTimeout(timer);
+    } else {
+      setSliderReady(false);
+    }
+  }, [isCameraActive, zoomLevel]);
+
+  useEffect(() => {
+    const initializeCamera = async () => {
+      if (!isCameraActive || !videoRef.current) return;
+
+      try {
+        const deviceId = cameras[selectedCameraIndex]?.deviceId;
+        if (!deviceId) throw new Error("No camera device found");
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: deviceId } },
+        });
+
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+
+        // Initialize FaceMesh and processing
+        faceMesh.current = new FaceMesh({
+          locateFile: (file) =>
+            `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`,
+        });
+
+        faceMesh.current.setOptions({
+          maxNumFaces: 1,
+          refineLandmarks: true,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
+
+        faceMesh.current.onResults(handleFaceResults);
+
+        const processFrame = (id) => {
+          const loop = async () => {
+            try {
+              if (videoRef.current && videoRef.current.readyState >= 2) {
+                await faceMesh.current.send({ image: videoRef.current });
+              }
+            } catch (e) {
+              console.error("FaceMesh send error:", e);
+            }
+
+            if (id === faceMeshId.current) {
+              requestAnimationFrame(loop);
+            }
+          };
+          loop();
+        };
+
+        faceMeshId.current++;
+        processFrame(faceMeshId.current);
+      } catch (error) {
+        console.error("Error accessing camera:", error);
+        setIsCameraActive(false);
+        if (
+          error.name === "NotAllowedError" ||
+          error.name === "PermissionDeniedError"
+        ) {
+          setCameraPermissionDenied(true);
+          setError(strings.cameraAccessDenied);
+        } else {
+          setError(`${strings.cameraError}: ${error.message}`);
+        }
+      }
+    };
+
+    initializeCamera();
+  }, [isCameraActive, cameras, selectedCameraIndex, strings]);
+
+  const checkCameraDevices = async () => {
+    try {
+      const tempStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+      });
+      tempStream.getTracks().forEach((t) => t.stop());
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter((d) => d.kind === "videoinput");
+
+      const categorized = { user: null, environment: null };
+
+      for (const device of videoDevices) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: device.deviceId } },
+          });
+          const track = stream.getVideoTracks()[0];
+          const facingMode = track.getSettings().facingMode;
+
+          if (facingMode === "user" && !categorized.user) {
+            categorized.user = device;
+          } else if (
+            (facingMode === "environment" || facingMode === "back") &&
+            !categorized.environment
+          ) {
+            categorized.environment = device;
+          }
+
+          track.stop();
+          if (categorized.user && categorized.environment) break;
+        } catch (err) {
+          console.warn("Error checking facingMode for device:", device.label);
+        }
+      }
+
+      const filtered = [categorized.user, categorized.environment].filter(
+        Boolean
+      );
+      setCameras(filtered);
+      setSelectedCameraIndex(0);
+    } catch (err) {
+      console.error("Failed to enumerate cameras:", err);
+      setError("Camera access issue. Please retry.");
+    }
+  };
+
+  const initializeFaceMesh = async () => {
+    try {
+      faceMesh.current = new FaceMesh({
+        locateFile: (file) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`,
+      });
+
+      faceMesh.current.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+
+      faceMesh.current.onResults(handleFaceResults);
+
+      const MODEL_URL =
+        "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model";
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+      ]);
+
+      setModelsLoaded(true);
+    } catch (error) {
+      console.error("Model initialization error:", error);
+      setError(strings.errorLoadingModels);
+    }
+  };
+
+  const getVideoTransform = useCallback(() => {
+    const transforms = [];
+
+    try {
+      const stream = videoRef.current?.srcObject;
+      const track = stream?.getVideoTracks?.()[0];
+      const facingMode = track?.getSettings?.().facingMode;
+
+      const isFront = facingMode === "user";
+      if (isFront) transforms.push("scaleX(-1)");
+    } catch (e) {
+      console.warn("Unable to determine facing mode, skipping mirror.");
+    }
+
+    if (zoomLevel > 1) {
+      transforms.push(`scale(${zoomLevel})`);
+      transforms.push(
+        `translate(${cameraPosition.x * 100}%, ${cameraPosition.y * 100}%)`
+      );
+    }
+
+    return transforms.join(" ");
+  }, [zoomLevel, cameraPosition]);
+
+  const handleFaceResults = useCallback((results) => {
+    if (
+      !isMountedRef.current ||
+      !canvasRef.current ||
+      !results.multiFaceLandmarks
+    ) {
+      setVerificationState((prev) => ({ ...prev, faceDetected: false }));
+      return;
+    }
+
+    const ctx = canvasRef.current.getContext("2d");
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+
+    const faceLandmarks = results.multiFaceLandmarks[0];
+    if (!faceLandmarks || faceLandmarks.length < 468) {
+      setVerificationState((prev) => ({ ...prev, faceDetected: false }));
+      return;
+    }
+
+    drawFaceOutline(faceLandmarks);
+
+    const livelinessChecks = {
+      blink: detectBlink(faceLandmarks),
+      movement: detectMacroMovement(faceLandmarks),
+    };
+
+    updateVerificationState(livelinessChecks);
+    setVerificationState((prev) => ({ ...prev, faceDetected: true }));
   }, []);
 
   const drawFaceOutline = useCallback(
@@ -112,6 +310,7 @@ const CitizenLoginView = ({ onLogin }) => {
       const { width, height } = canvasRef.current;
 
       ctx.save();
+
       try {
         const stream = videoRef.current?.srcObject;
         const track = stream?.getVideoTracks?.()[0];
@@ -121,7 +320,7 @@ const CitizenLoginView = ({ onLogin }) => {
           ctx.scale(-1, 1);
         }
       } catch (e) {
-        // skip
+        console.warn("Error determining facing mode for drawing");
       }
 
       if (zoomLevel > 1) {
@@ -227,289 +426,39 @@ const CitizenLoginView = ({ onLogin }) => {
     return state.movementHistory.filter(Boolean).length >= 5;
   }, []);
 
+  const updateVerificationState = useCallback(({ blink, movement }) => {
+    setVerificationState((prev) => ({
+      ...prev,
+      blink: blink
+        ? updateCheck(
+            prev.blink,
+            VERIFICATION_THRESHOLDS.blink,
+            "Blink verified"
+          )
+        : prev.blink,
+      movement: movement
+        ? updateCheck(
+            prev.movement,
+            VERIFICATION_THRESHOLDS.movement,
+            "Movement verified"
+          )
+        : prev.movement,
+    }));
+  }, []);
+
+  const updateCheck = useCallback((check, threshold, message) => {
+    if (check.verified) return check;
+    const newCount = check.count + 1;
+    if (newCount >= threshold) {
+      showTemporaryFeedback(message);
+      return { verified: true, count: newCount };
+    }
+    return { ...check, count: newCount };
+  }, []);
+
   const showTemporaryFeedback = useCallback((message) => {
     setActiveFeedback(message);
     setTimeout(() => setActiveFeedback(null), 2000);
-  }, []);
-
-  const updateCheck = useCallback(
-    (check, threshold, message) => {
-      if (check.verified) return check;
-      const newCount = check.count + 1;
-      if (newCount >= threshold) {
-        showTemporaryFeedback(message);
-        return { verified: true, count: newCount };
-      }
-      return { ...check, count: newCount };
-    },
-    [showTemporaryFeedback]
-  );
-
-  const updateVerificationState = useCallback(
-    ({ blink, movement }) => {
-      setVerificationState((prev) => ({
-        ...prev,
-        blink: blink
-          ? updateCheck(
-              prev.blink,
-              VERIFICATION_THRESHOLDS.blink,
-              "Blink verified"
-            )
-          : prev.blink,
-        movement: movement
-          ? updateCheck(
-              prev.movement,
-              VERIFICATION_THRESHOLDS.movement,
-              "Movement verified"
-            )
-          : prev.movement,
-      }));
-    },
-    [updateCheck, VERIFICATION_THRESHOLDS]
-  );
-
-  useEffect(() => {
-    if (isCameraActive && zoomLevel > 1) {
-      const timer = setTimeout(() => setSliderReady(true), 100);
-      return () => clearTimeout(timer);
-    } else {
-      setSliderReady(false);
-    }
-  }, [isCameraActive, zoomLevel]);
-
-  const handleFaceResults = useCallback(
-    (results) => {
-      if (
-        !isMountedRef.current ||
-        !canvasRef.current ||
-        !results.multiFaceLandmarks
-      ) {
-        setVerificationState((prev) => ({ ...prev, faceDetected: false }));
-        return;
-      }
-
-      const ctx = canvasRef.current.getContext("2d");
-      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-
-      const faceLandmarks = results.multiFaceLandmarks[0];
-      if (!faceLandmarks || faceLandmarks.length < 468) {
-        setVerificationState((prev) => ({ ...prev, faceDetected: false }));
-        return;
-      }
-
-      drawFaceOutline(faceLandmarks);
-
-      const livelinessChecks = {
-        blink: detectBlink(faceLandmarks),
-        movement: detectMacroMovement(faceLandmarks),
-      };
-
-      updateVerificationState(livelinessChecks);
-      setVerificationState((prev) => ({ ...prev, faceDetected: true }));
-    },
-    [drawFaceOutline, detectBlink, detectMacroMovement, updateVerificationState]
-  );
-
-  useEffect(() => {
-    if (!isCameraActive || !videoRef.current) return;
-
-    let cancelled = false;
-    const initializeCamera = async () => {
-      try {
-        const deviceId = cameras[selectedCameraIndex]?.deviceId;
-        if (!deviceId) throw new Error("No camera device found");
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: deviceId } },
-        });
-
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-
-        faceMesh.current = new FaceMesh({
-          locateFile: (file) =>
-            `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`,
-        });
-
-        faceMesh.current.setOptions({
-          maxNumFaces: 1,
-          refineLandmarks: true,
-          minDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5,
-        });
-
-        faceMesh.current.onResults(handleFaceResults);
-
-        const processFrame = (id) => {
-          const loop = async () => {
-            try {
-              if (
-                videoRef.current &&
-                videoRef.current.readyState >= 2 &&
-                faceMesh.current
-              ) {
-                await faceMesh.current.send({ image: videoRef.current });
-              }
-            } catch (e) {
-              if (!/already deleted/i.test(e?.message)) {
-                console.error("FaceMesh send error:", e);
-              }
-            }
-            if (id === faceMeshId.current && !cancelled) {
-              requestAnimationFrame(loop);
-            }
-          };
-          loop();
-        };
-
-        faceMeshId.current++;
-        processFrame(faceMeshId.current);
-      } catch (error) {
-        console.error("Error accessing camera:", error);
-        setIsCameraActive(false);
-        if (
-          error.name === "NotAllowedError" ||
-          error.name === "PermissionDeniedError"
-        ) {
-          setCameraPermissionDenied(true);
-          setError(strings.cameraAccessDenied);
-        } else {
-          setError(`${strings.cameraError}: ${error.message}`);
-        }
-      }
-    };
-
-    initializeCamera();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    isCameraActive,
-    cameras,
-    selectedCameraIndex,
-    strings,
-    handleFaceResults,
-  ]);
-
-  // --- Camera and FaceMesh Initialization ---
-
-  const checkCameraDevices = useCallback(async () => {
-    try {
-      const tempStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-      });
-      tempStream.getTracks().forEach((t) => t.stop());
-
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoDevices = devices.filter((d) => d.kind === "videoinput");
-
-      const categorized = { user: null, environment: null };
-
-      for (const device of videoDevices) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: { exact: device.deviceId } },
-          });
-          const track = stream.getVideoTracks()[0];
-          const facingMode = track.getSettings().facingMode;
-
-          if (facingMode === "user" && !categorized.user) {
-            categorized.user = device;
-          } else if (
-            (facingMode === "environment" || facingMode === "back") &&
-            !categorized.environment
-          ) {
-            categorized.environment = device;
-          }
-
-          track.stop();
-          if (categorized.user && categorized.environment) break;
-        } catch (err) {
-          console.warn("Error checking facingMode for device:", device.label);
-        }
-      }
-
-      const filtered = [categorized.user, categorized.environment].filter(
-        Boolean
-      );
-      setCameras(filtered);
-      setSelectedCameraIndex(0);
-    } catch (err) {
-      console.error("Failed to enumerate cameras:", err);
-      setError("Camera access issue. Please retry.");
-    }
-  }, []);
-
-  const initializeFaceMesh = useCallback(async () => {
-    try {
-      faceMesh.current = new FaceMesh({
-        locateFile: (file) =>
-          `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`,
-      });
-
-      faceMesh.current.setOptions({
-        maxNumFaces: 1,
-        refineLandmarks: true,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      });
-
-      faceMesh.current.onResults(handleFaceResults);
-
-      const MODEL_URL =
-        "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model";
-      await Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-      ]);
-
-      setModelsLoaded(true);
-    } catch (error) {
-      console.error("Model initialization error:", error);
-      setError(strings.errorLoadingModels);
-    }
-  }, [handleFaceResults, strings.errorLoadingModels]);
-
-  // --- Video Transform ---
-
-  const getVideoTransform = useCallback(() => {
-    const transforms = [];
-    try {
-      const stream = videoRef.current?.srcObject;
-      const track = stream?.getVideoTracks?.()[0];
-      const facingMode = track?.getSettings?.().facingMode;
-      if (facingMode === "user") transforms.push("scaleX(-1)");
-    } catch (e) {
-      // skip
-    }
-    if (zoomLevel > 1) {
-      transforms.push(`scale(${zoomLevel})`);
-      transforms.push(
-        `translate(${cameraPosition.x * 100}%, ${cameraPosition.y * 100}%)`
-      );
-    }
-    return transforms.join(" ");
-  }, [zoomLevel, cameraPosition]);
-
-  const resetVerification = useCallback(() => {
-    setVerificationState({
-      faceDetected: false,
-      blink: { verified: false, count: 0 },
-      movement: { verified: false, count: 0 },
-    });
-    detectionState.current = {
-      previousLandmarks: null,
-      movementHistory: [],
-      baselineEAR: null,
-      blinkStartTime: null,
-    };
-  }, []);
-  // --- Camera Controls ---
-
-  const resetCameraView = useCallback(() => {
-    setZoomLevel(1);
-    setCameraPosition({ x: 0, y: 0 });
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -537,9 +486,9 @@ const CitizenLoginView = ({ onLogin }) => {
       resetVerification();
       resetCameraView();
       if (!faceMesh.current || typeof faceMesh.current.send !== "function") {
-        await initializeFaceMesh();
+        await initializeFaceMesh(); // ✅ Safe re-initialization
       }
-      setIsCameraActive(true);
+      setIsCameraActive(true); // This triggers the useEffect
     } catch (error) {
       console.error("Camera startup error:", error);
       setIsCameraActive(false);
@@ -547,16 +496,7 @@ const CitizenLoginView = ({ onLogin }) => {
     } finally {
       setLoading(false);
     }
-  }, [
-    selectedPanchayat,
-    voterIdLastFour,
-    modelsLoaded,
-    strings.selectPanchayat,
-    strings.errorLoadingModels,
-    initializeFaceMesh,
-    resetVerification,
-    resetCameraView,
-  ]);
+  }, [selectedPanchayat, voterIdLastFour, modelsLoaded, strings]);
 
   const stopCamera = useCallback(() => {
     if (videoRef.current?.srcObject) {
@@ -569,13 +509,13 @@ const CitizenLoginView = ({ onLogin }) => {
         .close()
         .catch((err) => console.warn("FaceMesh close error", err))
         .finally(() => {
-          faceMesh.current = null;
+          faceMesh.current = null; // ✅ Explicitly remove reference
         });
     }
 
     setIsCameraActive(false);
     resetVerification();
-  }, [resetVerification]);
+  }, []);
 
   const switchCamera = useCallback(() => {
     if (cameras.length <= 1) {
@@ -594,7 +534,24 @@ const CitizenLoginView = ({ onLogin }) => {
     strings.noAdditionalCameras,
   ]);
 
-  // --- Zoom and Pan Controls ---
+  const resetVerification = useCallback(() => {
+    setVerificationState({
+      faceDetected: false,
+      blink: { verified: false, count: 0 },
+      movement: { verified: false, count: 0 },
+    });
+    detectionState.current = {
+      previousLandmarks: null,
+      movementHistory: [],
+      baselineEAR: null,
+      blinkStartTime: null,
+    };
+  }, []);
+
+  const resetCameraView = useCallback(() => {
+    setZoomLevel(1);
+    setCameraPosition({ x: 0, y: 0 });
+  }, []);
 
   const handleZoom = useCallback((direction) => {
     const step = 0.1;
@@ -642,8 +599,6 @@ const CitizenLoginView = ({ onLogin }) => {
   const handlePanEnd = useCallback(() => {
     setIsDragging(false);
   }, []);
-
-  // --- Capture and Authenticate ---
 
   const captureImage = useCallback(async () => {
     if (!videoRef.current || !isCameraActive) {
@@ -736,15 +691,9 @@ const CitizenLoginView = ({ onLogin }) => {
     startCamera();
   }, [startCamera]);
 
-  const passedVerificationCount = useMemo(
-    () =>
-      Object.values(verificationState)
-        .filter((val) => typeof val === "object")
-        .filter((check) => check.verified).length,
-    [verificationState]
-  );
-
-  // --- Render ---
+  const passedVerificationCount = Object.values(verificationState)
+    .filter((val) => typeof val === "object")
+    .filter((check) => check.verified).length;
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
