@@ -67,6 +67,18 @@ const GramSabhaDetails = ({ meetingId, user }) => {
     }
   };
 
+  function hasMeetingEndedFn(meeting) {
+  if (!meeting || !meeting.dateTime) return false;
+
+  const MS_PER_HOUR = 60 * 60 * 1000;
+  const meetingStartTime = new Date(meeting.dateTime);
+  const durationInHours = meeting.scheduledDurationHours || 0;
+
+  const meetingEndTime = new Date(meetingStartTime.getTime() + durationInHours * MS_PER_HOUR);
+
+  return new Date() > meetingEndTime;
+}
+
   // Consolidated data fetching in a single useEffect
   useEffect(() => {
     const fetchData = async () => {
@@ -738,7 +750,7 @@ const GramSabhaDetails = ({ meetingId, user }) => {
             </Box>
           )}
 
-          {attendanceStats && (
+          {hasMeetingEndedFn(meeting) && attendanceStats && (
             <Box sx={{ mb: 4 }}>
               <Box
                 display="flex"
