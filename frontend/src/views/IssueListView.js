@@ -54,6 +54,9 @@ import { format } from 'date-fns';
 import AttachmentViewer from '../components/AttachmentViewer';
 import AudioPlayer from '../components/AudioPlayer';
 import { useAuth } from '../utils/authContext';
+import IssueStatusDropdown from '../components/IssueStatusDropdown';
+import CategorySubcategorySelector from '../components/IssueCategorySubcategorySelector';
+import filterIssues from '../utils/filterIssues';
 
 const IssueListView = ({ user, onBack, onViewIssue }) => {
     const { strings } = useLanguage();
@@ -69,6 +72,9 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [refreshing, setRefreshing] = useState(false);
+    const [category, setCategory] = useState('');
+    const [subcategory, setSubcategory] = useState('');
+    const [status, setStatus] = useState('');
 
     const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -155,14 +161,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     };
 
     // Filter issues based on search term
-    const filteredIssues = issues.filter(issue => {
-        const searchLower = searchTerm.toLowerCase();
-        return (
-            issue.text.toLowerCase().includes(searchLower) ||
-            issue.category.toLowerCase().includes(searchLower) ||
-            (issue.createdFor && issue.createdFor.toLowerCase().includes(searchLower))
-        );
-    });
+    const filteredIssues = filterIssues(issues, { category, subcategory, status, searchTerm });
 
     // Get status chip based on issue status
     const getStatusChip = (status) => {
@@ -291,6 +290,14 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
         }
     };
 
+    const handleRefreshClick = () => {
+        setSearchTerm("");
+        setCategory("");
+        setSubcategory("");
+        setStatus("");
+        fetchIssues();
+    }
+
     return (
         <Container maxWidth="lg" sx={{ py: 4 }}>
             <Card elevation={3}>
@@ -308,8 +315,8 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                     }}
                 >
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <IconButton 
-                            onClick={onBack} 
+                        <IconButton
+                            onClick={onBack}
                             sx={{ mr: 1, color: 'white' }}
                             size="small"
                         >
@@ -333,21 +340,21 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                             variant="fullWidth"
                             indicatorColor="primary"
                             textColor="primary"
-                            sx={{ 
-                                borderBottom: 1, 
+                            sx={{
+                                borderBottom: 1,
                                 borderColor: 'divider',
                                 '& .MuiTab-root': {
                                     py: 2
                                 }
                             }}
                         >
-                            <Tab 
-                                label={strings.myIssues} 
-                                icon={<PersonIcon />} 
+                            <Tab
+                                label={strings.myIssues}
+                                icon={<PersonIcon />}
                                 iconPosition="start"
                             />
-                            <Tab 
-                                label={strings.allIssues} 
+                            <Tab
+                                label={strings.allIssues}
                                 icon={<FolderIcon />}
                                 iconPosition="start"
                             />
@@ -355,13 +362,13 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                     </Paper>
 
                     <Box sx={{ p: 3 }}>
-                        <Box 
-                            sx={{ 
-                                display: 'flex', 
+                        <Box
+                            sx={{
+                                display: 'flex',
                                 flexDirection: { xs: 'column', sm: 'row' },
-                                alignItems: { xs: 'stretch', sm: 'center' }, 
+                                alignItems: { xs: 'stretch', sm: 'center' },
                                 gap: 2,
-                                mb: 3 
+                                mb: 3
                             }}
                         >
                             <TextField
@@ -381,10 +388,14 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                 }}
                             />
 
+                            <CategorySubcategorySelector category={category} setCategory={setCategory} subcategory={subcategory} setSubcategory={setSubcategory} />
+
+                            <IssueStatusDropdown status={status} setStatus={setStatus} />
+
                             <Button
                                 variant="outlined"
                                 color="primary"
-                                onClick={fetchIssues}
+                                onClick={handleRefreshClick}
                                 disabled={refreshing}
                                 startIcon={refreshing ? <CircularProgress size={20} /> : <RefreshIcon />}
                                 sx={{ minWidth: 120 }}
@@ -404,10 +415,10 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                 <CircularProgress size={60} />
                             </Box>
                         ) : filteredIssues.length === 0 ? (
-                            <Paper 
-                                elevation={1} 
-                                sx={{ 
-                                    p: 4, 
+                            <Paper
+                                elevation={1}
+                                sx={{
+                                    p: 4,
                                     textAlign: 'center',
                                     borderRadius: 2,
                                     bgcolor: 'background.default'
@@ -418,8 +429,8 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                     {strings.noIssuesFound}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary">
-                                    {tabValue === 0 
-                                        ? 'You have not reported any issues yet. Click "Report New Issue" on the dashboard to create one.' 
+                                    {tabValue === 0
+                                        ? 'You have not reported any issues yet. Click "Report New Issue" on the dashboard to create one.'
                                         : 'No issues have been reported in your panchayat yet.'}
                                 </Typography>
                             </Paper>
@@ -449,7 +460,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                             key={issue._id}
                                                             hover
                                                             onClick={() => handleViewIssue(issue)}
-                                                            sx={{ 
+                                                            sx={{
                                                                 cursor: 'pointer',
                                                                 '&:hover': {
                                                                     bgcolor: 'action.hover'
@@ -481,7 +492,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                             <TableCell>
                                                                 {issue.attachments && issue.attachments.find(att => att.mimeType.startsWith('audio/')) && (
                                                                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                                        <AudioPlayer 
+                                                                        <AudioPlayer
                                                                             audioUrl={`${API_URL}/issues/${issue._id}/attachment/${issue.attachments.find(att => att.mimeType.startsWith('audio/'))._id}`}
                                                                         />
                                                                     </Box>
@@ -556,7 +567,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                             </Typography>
                                                         </Box>
                                                     </Box>
-                                                    
+
                                                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                                                         <PersonIcon sx={{ mr: 1, fontSize: '1rem' }} />
                                                         <Typography variant="body2">
@@ -572,7 +583,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                         </Box>
                                                         {issue.attachments && issue.attachments.find(att => att.mimeType.startsWith('audio/')) && (
                                                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                                <AudioPlayer 
+                                                                <AudioPlayer
                                                                     audioUrl={`${API_URL}/issues/${issue._id}/attachment/${issue.attachments.find(att => att.mimeType.startsWith('audio/'))._id}`}
                                                                 />
                                                             </Box>
@@ -580,7 +591,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                     </Box>
                                                 </Paper>
                                             ))}
-                                            
+
                                         <TablePagination
                                             rowsPerPageOptions={[5, 10]}
                                             component="div"
@@ -615,9 +626,9 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
             >
                 {selectedIssue && (
                     <>
-                        <DialogTitle 
-                            sx={{ 
-                                bgcolor: 'primary.main', 
+                        <DialogTitle
+                            sx={{
+                                bgcolor: 'primary.main',
                                 color: 'white',
                                 pr: 6
                             }}
@@ -793,10 +804,10 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                         {strings.remark}
                                                     </Typography>
                                                 </Box>
-                                                <Paper 
-                                                    variant="outlined" 
-                                                    sx={{ 
-                                                        p: 2, 
+                                                <Paper
+                                                    variant="outlined"
+                                                    sx={{
+                                                        p: 2,
                                                         bgcolor: 'background.default',
                                                         borderRadius: 2
                                                     }}
@@ -831,7 +842,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                             </Stack>
                         </DialogContent>
                         <DialogActions sx={{ p: 2 }}>
-                            <Button 
+                            <Button
                                 variant="outlined"
                                 onClick={handleCloseDialog}
                                 startIcon={<CloseIcon />}

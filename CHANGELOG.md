@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Facial Recognition Enhancements ([#10](https://github.com/EmpowerPanchayat/eGramSabha/issues/10))
 - API Liveness monitor ([#33](https://github.com/EmpowerPanchayat/eGramSabha/issues/33))
 - Attendance Statistics Display and Export feature implementation([#13](https://github.com/EmpowerPanchayat/eGramSabha/issues/13))
+- Filters for category, subcategory, and status in issue list ([#18](https://github.com/EmpowerPanchayat/eGramSabha/issues/18))
+
+### Changed
+
+- favicon, page title, and meta description in app ([#18](https://github.com/EmpowerPanchayat/eGramSabha/issues/18))
 
 ## [0.1.0] - 2025-04-23
 
