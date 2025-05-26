@@ -2,15 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),  
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
 ### Added
 
-- Liveliness checks ([#25](https://github.com/EmpowerPanchayat/eGramSabha/pull/25))
-- Caste feature implementation ([#35](https://github.com/EmpowerPanchayat/eGramSabha/pull/35))
+- Liveliness checks ([#12](https://github.com/EmpowerPanchayat/eGramSabha/issues/12))
+- Caste feature implementation ([#5](https://github.com/EmpowerPanchayat/eGramSabha/issues/5))
+- Facial Recognition Enhancements ([#10](https://github.com/EmpowerPanchayat/eGramSabha/issues/10))
+- API Liveness monitor ([#33](https://github.com/EmpowerPanchayat/eGramSabha/issues/33))
+- Attendance Statistics Display and Export feature implementation([#13](https://github.com/EmpowerPanchayat/eGramSabha/issues/13))
+- Filters for category, subcategory, and status in issue list ([#18](https://github.com/EmpowerPanchayat/eGramSabha/issues/18))
+- Platform level configurations([#27])(https://github.com/EmpowerPanchayat/eGramSabha/issues/27)
+
+### Changed
+
+- favicon, page title, and meta description in app ([#18](https://github.com/EmpowerPanchayat/eGramSabha/issues/18))
+- Attendance stats are now displayed only for concluded Gram Sabha meetings. ([#50](https://github.com/EmpowerPanchayat/eGramSabha/issues/50))
 
 ## [0.1.0] - 2025-04-23
 
@@ -37,6 +47,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.1.0...HEAD  
-[0.1.0]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.0.1...0.1.0  
+[Unreleased]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.1.0...HEAD
+[0.1.0]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.0.1...0.1.0
 [0.0.1]: https://github.com/EmpowerPanchayat/eGramSabha/releases/tag/0.0.1

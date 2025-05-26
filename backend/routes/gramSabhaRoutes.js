@@ -414,6 +414,25 @@ router.post("/:id/attendance", auth.isAuthenticated, async (req, res) => {
   }
 });
 
+// Get specific details of users and panchayats of past Gram Sabha meeting
+router.get("/:id/attendance", auth.isAuthenticated, async (req, res) => {
+  try {
+    const gramSabha = await GramSabha.findById(req.params.id)
+      .select("attendances panchayatId guests") // include only these
+      .populate("attendances.userId", "name gender caste")
+      .populate("panchayatId", "name block district state");
+    if (!gramSabha) {
+      return res.status(404).json({
+        success: false,
+        message: "Gram Sabha meeting not found",
+      });
+    }
+    res.send(gramSabha);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
 // Add attachment to a Gram Sabha meeting
 router.post(
   "/:id/attachments",
@@ -795,7 +814,7 @@ router.post("/:id/mark-attendance", auth.isAuthenticated, async (req, res) => {
  * @desc    Get attendance statistics for a meeting
  * @access  Private
  */
-router.get("/:id/attendance-stats", auth.isAuthenticated, async (req, res) => {
+router.get("/:id/attendance-stats", async (req, res) => {
   try {
     const { id } = req.params;
 

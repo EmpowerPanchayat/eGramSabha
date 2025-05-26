@@ -1,5 +1,10 @@
-// File: frontend/src/components/FaceRegistration.js (Updated to include panchayatId)
-import React, { useState, useRef, useEffect } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import * as faceapi from "face-api.js";
 import { registerFace } from "../api";
 import {
@@ -12,6 +17,9 @@ import {
   Stack,
   CircularProgress,
   Chip,
+  Slider,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
 import {
   PhotoCamera as CameraIcon,
@@ -22,6 +30,8 @@ import {
   VideocamOff as CameraOffIcon,
   CheckCircle as CheckCircleIcon,
   DirectionsRun as MotionIcon,
+  ZoomIn as ZoomInIcon,
+  ZoomOut as ZoomOutIcon,
 } from "@mui/icons-material";
 import { FaceMesh } from "@mediapipe/face_mesh";
 import { Camera } from "@mediapipe/camera_utils";
@@ -33,19 +43,29 @@ const FaceRegistration = ({
   setMessage,
   setLoading,
 }) => {
+  // State declarations
   const [cameraState, setCameraState] = useState("inactive");
-  const [facingMode, setFacingMode] = useState("user");
+  const [cameras, setCameras] = useState([]);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [selectedCameraIndex, setSelectedCameraIndex] = useState(0);
   const [verificationState, setVerificationState] = useState({
     faceDetected: false,
     blink: { verified: false, count: 0 },
     movement: { verified: false, count: 0 },
   });
   const [activeFeedback, setActiveFeedback] = useState(null);
+  const [sliderReady, setSliderReady] = useState(false);
 
+  // Refs
+  const faceMeshId = useRef(0);
+  const faceMeshReady = useRef(false);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const containerRef = useRef(null);
+  const sliderContainerRef = useRef(null);
   const faceMesh = useRef(null);
-  const camera = useRef(null);
   const detectionState = useRef({
     previousLandmarks: null,
     movementHistory: [],
@@ -53,108 +73,144 @@ const FaceRegistration = ({
     blinkStartTime: null,
   });
 
-  const VERIFICATION_THRESHOLDS = {
-    blink: 4,
-    movement: 5,
-  };
+  const VERIFICATION_THRESHOLDS = useMemo(
+    () => ({
+      blink: 4,
+      movement: 5,
+    }),
+    []
+  );
 
+  // Initialize component
   useEffect(() => {
+    let unmounted = false;
     const initialize = async () => {
       await initializeFaceMesh();
+      await checkCameraDevices();
     };
 
     initialize();
     return () => {
+      unmounted = true;
       stopCamera();
-      faceMesh.current = null;
+      if (faceMesh.current) {
+        try {
+          faceMesh.current.close?.();
+        } catch (e) {
+          // Already closed
+        }
+        faceMesh.current = null;
+      }
     };
+    // eslint-disable-next-line
   }, []);
 
-  const initializeFaceMesh = async () => {
+  // Delay slider initialization
+  useEffect(() => {
+    if (cameraState === "active" && zoomLevel > 1) {
+      const timer = setTimeout(() => setSliderReady(true), 100);
+      return () => clearTimeout(timer);
+    } else {
+      setSliderReady(false);
+    }
+  }, [cameraState, zoomLevel]);
+
+  const checkCameraDevices = useCallback(async () => {
     try {
-      faceMesh.current = new FaceMesh({
-        locateFile: (file) => {
-          return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`;
-        },
+      const tempStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
       });
+      tempStream.getTracks().forEach((t) => t.stop());
 
-      faceMesh.current.setOptions({
-        maxNumFaces: 1,
-        refineLandmarks: true,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      });
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter((d) => d.kind === "videoinput");
 
-      faceMesh.current.onResults(handleFaceResults);
-    } catch (error) {
-      console.error("FaceMesh initialization error:", error);
-      setMessage({
-        type: "error",
-        text: "Face detection model failed to load. Please refresh the page.",
-      });
+      const categorized = { user: null, environment: null };
+
+      for (const device of videoDevices) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: device.deviceId } },
+          });
+          const track = stream.getVideoTracks()[0];
+          const facingMode = track.getSettings().facingMode;
+
+          if (facingMode === "user" && !categorized.user) {
+            categorized.user = { device, facingMode };
+          } else if (
+            (facingMode === "environment" || facingMode === "back") &&
+            !categorized.environment
+          ) {
+            categorized.environment = { device, facingMode };
+          }
+
+          track.stop();
+          if (categorized.user && categorized.environment) break;
+        } catch (err) {
+          console.warn("Error checking facingMode for device:", device.label);
+        }
+      }
+
+      const filtered = [categorized.user, categorized.environment]
+        .filter(Boolean)
+        .map((cam) => ({
+          device: cam.device,
+          facingMode: cam.facingMode,
+        }));
+      setCameras(filtered);
+      setSelectedCameraIndex(0);
+    } catch (err) {
+      console.error("Failed to enumerate cameras:", err);
+      setMessage({ type: "error", text: "Camera access issue. Please retry." });
     }
-  };
+  }, [setMessage]);
 
-  const handleFaceResults = (results) => {
-    if (!canvasRef.current || !results.multiFaceLandmarks) {
-      setVerificationState((prev) => ({ ...prev, faceDetected: false }));
-      return;
-    }
+  const drawFaceOutline = useCallback(
+    (landmarks) => {
+      if (!canvasRef.current || !landmarks) return;
+      const ctx = canvasRef.current.getContext("2d");
+      const { width, height } = canvasRef.current;
 
-    const ctx = canvasRef.current.getContext("2d");
-    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      ctx.save();
+      const stream = videoRef.current?.srcObject;
+      const track = stream?.getVideoTracks?.()[0];
+      const mode = track?.getSettings?.().facingMode;
+      if (mode === "user") {
+        ctx.translate(width, 0);
+        ctx.scale(-1, 1);
+      }
 
-    const faceLandmarks = results.multiFaceLandmarks[0];
-    if (!faceLandmarks || faceLandmarks.length < 468) {
-      setVerificationState((prev) => ({ ...prev, faceDetected: false }));
-      return;
-    }
+      if (zoomLevel > 1) {
+        ctx.translate(width * 0.5, height * 0.5);
+        ctx.scale(zoomLevel, zoomLevel);
+        ctx.translate(
+          -width * 0.5 + cameraPosition.x * width,
+          -height * 0.5 + cameraPosition.y * height
+        );
+      }
 
-    drawFaceOutline(faceLandmarks);
+      ctx.strokeStyle = "#42A5F5";
+      ctx.lineWidth = 2;
 
-    const livelinessChecks = {
-      blink: detectBlink(faceLandmarks),
-      movement: detectMacroMovement(faceLandmarks),
-    };
+      const minX = Math.min(...landmarks.map((l) => l.x));
+      const maxX = Math.max(...landmarks.map((l) => l.x));
+      const minY = Math.min(...landmarks.map((l) => l.y));
+      const maxY = Math.max(...landmarks.map((l) => l.y));
 
-    updateVerificationState(livelinessChecks);
-    setVerificationState((prev) => ({ ...prev, faceDetected: true }));
-  };
+      const centerX = ((minX + maxX) / 2) * width;
+      const centerY = ((minY + maxY) / 2) * height;
+      const radiusX = ((maxX - minX) / 2) * width * 1.2;
+      const radiusY = ((maxY - minY) / 2) * height * 1.4;
 
-  const drawFaceOutline = (landmarks) => {
-    if (!canvasRef.current || !landmarks) return;
+      ctx.beginPath();
+      ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.restore();
+    },
+    [zoomLevel, cameraPosition]
+  );
 
-    const ctx = canvasRef.current.getContext("2d");
-    const { width, height } = canvasRef.current;
-
-    ctx.save();
-    if (facingMode === "user") {
-      ctx.translate(width, 0);
-      ctx.scale(-1, 1);
-    }
-
-    ctx.strokeStyle = "#42A5F5";
-    ctx.lineWidth = 2;
-
-    // Full face oval detection
-    const minX = Math.min(...landmarks.map((l) => l.x));
-    const maxX = Math.max(...landmarks.map((l) => l.x));
-    const minY = Math.min(...landmarks.map((l) => l.y));
-    const maxY = Math.max(...landmarks.map((l) => l.y));
-
-    const centerX = ((minX + maxX) / 2) * width;
-    const centerY = ((minY + maxY) / 2) * height;
-    const radiusX = ((maxX - minX) / 2) * width * 1.2;
-    const radiusY = ((maxY - minY) / 2) * height * 1.4;
-
-    ctx.beginPath();
-    ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
-    ctx.stroke();
-
-    ctx.restore();
-  };
-
-  const detectBlink = (landmarks) => {
+  const detectBlink = useCallback((landmarks) => {
     const leftEyeIndices = [33, 160, 158, 133, 153, 144];
     const rightEyeIndices = [362, 385, 387, 263, 373, 380];
     const now = Date.now();
@@ -189,9 +245,9 @@ const FaceRegistration = ({
       return duration > 50 && duration < 150;
     }
     return false;
-  };
+  }, []);
 
-  const detectMacroMovement = (currentLandmarks) => {
+  const detectMacroMovement = useCallback((currentLandmarks) => {
     const state = detectionState.current;
     if (!state.previousLandmarks) {
       state.previousLandmarks = currentLandmarks;
@@ -217,7 +273,6 @@ const FaceRegistration = ({
     });
 
     if (validPoints < 3) return false;
-
     const avgMovement = totalMovement / validPoints;
     const movementDetected = avgMovement > 0.0025;
 
@@ -226,100 +281,134 @@ const FaceRegistration = ({
     state.previousLandmarks = currentLandmarks;
 
     return state.movementHistory.filter(Boolean).length >= 5;
-  };
+  }, []);
 
-  const updateVerificationState = ({ blink, movement }) => {
-    setVerificationState((prev) => ({
-      ...prev,
-      blink: blink
-        ? updateCheck(
-            prev.blink,
-            VERIFICATION_THRESHOLDS.blink,
-            "Blink verified"
-          )
-        : prev.blink,
-      movement: movement
-        ? updateCheck(
-            prev.movement,
-            VERIFICATION_THRESHOLDS.movement,
-            "Movement verified"
-          )
-        : prev.movement,
-    }));
-  };
-
-  const updateCheck = (check, threshold, message) => {
-    if (check.verified) return check;
-    const newCount = check.count + 1;
-    if (newCount >= threshold) {
-      showTemporaryFeedback(message);
-      return { verified: true, count: newCount };
-    }
-    return { ...check, count: newCount };
-  };
-
-  const showTemporaryFeedback = (message) => {
+  const showTemporaryFeedback = useCallback((message) => {
     setActiveFeedback(message);
     setTimeout(() => setActiveFeedback(null), 2000);
-  };
+  }, []);
 
-  const startCamera = async () => {
-    if (!user || !modelsLoaded) {
-      setMessage({
-        type: "error",
-        text: !user ? "Select a member first" : "Models not loaded",
+  const updateCheck = useCallback(
+    (check, threshold, message) => {
+      if (check.verified) return check;
+      const newCount = check.count + 1;
+      if (newCount >= threshold) {
+        showTemporaryFeedback(message);
+        return { verified: true, count: newCount };
+      }
+      return { ...check, count: newCount };
+    },
+    [showTemporaryFeedback]
+  );
+
+  const updateVerificationState = useCallback(
+    ({ blink, movement }) => {
+      setVerificationState((prev) => ({
+        ...prev,
+        blink: blink
+          ? updateCheck(
+              prev.blink,
+              VERIFICATION_THRESHOLDS.blink,
+              "Blink verified"
+            )
+          : prev.blink,
+        movement: movement
+          ? updateCheck(
+              prev.movement,
+              VERIFICATION_THRESHOLDS.movement,
+              "Movement verified"
+            )
+          : prev.movement,
+      }));
+    },
+    [updateCheck, VERIFICATION_THRESHOLDS]
+  );
+
+  const handleFaceResults = useCallback(
+    (results) => {
+      if (!canvasRef.current || !results.multiFaceLandmarks) {
+        setVerificationState((prev) => ({ ...prev, faceDetected: false }));
+        return;
+      }
+
+      const ctx = canvasRef.current.getContext("2d");
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+
+      const faceLandmarks = results.multiFaceLandmarks[0];
+      if (!faceLandmarks || faceLandmarks.length < 468) {
+        setVerificationState((prev) => ({ ...prev, faceDetected: false }));
+        return;
+      }
+
+      drawFaceOutline(faceLandmarks);
+
+      const livelinessChecks = {
+        blink: detectBlink(faceLandmarks),
+        movement: detectMacroMovement(faceLandmarks),
+      };
+
+      updateVerificationState(livelinessChecks);
+      setVerificationState((prev) => ({ ...prev, faceDetected: true }));
+    },
+    [drawFaceOutline, detectBlink, detectMacroMovement, updateVerificationState]
+  );
+
+  const initializeFaceMesh = useCallback(async () => {
+    try {
+      faceMeshReady.current = false;
+
+      if (faceMesh.current?.close) {
+        try {
+          await faceMesh.current.close();
+        } catch (e) {
+          console.warn("FaceMesh already closed or deleted", e);
+        }
+      }
+
+      faceMesh.current = new FaceMesh({
+        locateFile: (file) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`,
       });
-      return;
+
+      faceMesh.current.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+
+      faceMesh.current.onResults(handleFaceResults);
+      faceMeshReady.current = true;
+      faceMeshId.current += 1;
+    } catch (error) {
+      console.error("FaceMesh init error:", error);
+      faceMeshReady.current = false;
     }
+  }, [handleFaceResults]);
+
+  const getVideoTransform = useCallback(() => {
+    const transforms = [];
 
     try {
-      setCameraState("starting");
-      setLoading(true);
-      resetVerification();
-
-      if (!faceMesh.current) await initializeFaceMesh();
-
-      camera.current = new Camera(videoRef.current, {
-        onFrame: async () => {
-          if (faceMesh.current?.send) {
-            await faceMesh.current.send({ image: videoRef.current });
-          }
-        },
-        facingMode,
-        width: 1280,
-        height: 720,
-      });
-
-      await camera.current.start();
-      setCameraState("active");
-    } catch (error) {
-      console.error("Camera error:", error);
-      setCameraState("error");
-      setMessage({
-        type: "error",
-        text: "Camera initialization failed. Please check permissions.",
-      });
-    } finally {
-      setLoading(false);
+      const stream = videoRef.current?.srcObject;
+      const track = stream?.getVideoTracks?.()[0];
+      const mode = track?.getSettings?.().facingMode;
+      if (mode === "user") transforms.push("scaleX(-1)");
+    } catch (e) {
+      // skip
     }
-  };
 
-  const stopCamera = () => {
-    if (camera.current) {
-      camera.current.stop();
-      camera.current = null;
+    if (zoomLevel > 1) {
+      transforms.push(`scale(${zoomLevel})`);
+      transforms.push(
+        `translate(${cameraPosition.x * 100}%, ${cameraPosition.y * 100}%)`
+      );
     }
-    setCameraState("inactive");
-    resetVerification();
-  };
 
-  const switchCamera = () => {
-    setFacingMode((prev) => (prev === "user" ? "environment" : "user"));
-    stopCamera();
-    setTimeout(startCamera, 300);
-  };
+    return transforms.join(" ");
+  }, [zoomLevel, cameraPosition]);
 
-  const resetVerification = () => {
+  const resetVerification = useCallback(() => {
     setVerificationState({
       faceDetected: false,
       blink: { verified: false, count: 0 },
@@ -331,9 +420,200 @@ const FaceRegistration = ({
       baselineEAR: null,
       blinkStartTime: null,
     };
-  };
+  }, []);
 
-  const handleRegisterFace = async () => {
+  // Camera controls
+  const startCamera = useCallback(async () => {
+    if (!user || !modelsLoaded || cameras.length === 0) {
+      setMessage({
+        type: "error",
+        text: !user
+          ? "Select a member first"
+          : "Models not loaded or no camera found",
+      });
+      return;
+    }
+
+    try {
+      setCameraState("starting");
+      setLoading(true);
+      resetVerification();
+
+      await initializeFaceMesh(); // Always reinitialize on new stream
+
+      const selectedCamera = cameras[selectedCameraIndex];
+      const deviceId = selectedCamera.device.deviceId; // Access from metadata
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: deviceId } },
+      });
+
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+
+      // Instead of using MediaPipe's Camera
+      const processFrame = (id) => {
+        const loop = async () => {
+          try {
+            if (
+              faceMeshReady.current &&
+              faceMesh.current?.send &&
+              faceMeshId.current === id &&
+              videoRef.current &&
+              videoRef.current.readyState >= 2 &&
+              videoRef.current.videoWidth > 0
+            ) {
+              await faceMesh.current.send({ image: videoRef.current });
+            }
+          } catch (e) {
+            // Only log if not already deleted
+            if (!/already deleted/i.test(e?.message)) {
+              console.error("FaceMesh send error:", e);
+            }
+          }
+
+          if (faceMeshId.current === id) {
+            requestAnimationFrame(loop);
+          }
+        };
+
+        loop();
+      };
+
+      const id = faceMeshId.current;
+      requestAnimationFrame(() => processFrame(id));
+      setCameraState("active");
+    } catch (error) {
+      console.error("startCamera error:", error);
+      setCameraState("error");
+      setMessage({
+        type: "error",
+        text: "Camera failed to start. Check permissions and availability.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    user,
+    modelsLoaded,
+    cameras,
+    selectedCameraIndex,
+    setMessage,
+    setLoading,
+    initializeFaceMesh,
+    resetVerification,
+  ]);
+
+  const resetCameraView = useCallback(() => {
+    setZoomLevel(1);
+    setCameraPosition({ x: 0, y: 0 });
+  }, []);
+
+  const stopCamera = useCallback(() => {
+    // Stop all tracks
+    if (videoRef.current?.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+      videoRef.current.srcObject = null;
+    }
+
+    // Prevent send() from firing
+    faceMeshReady.current = false;
+
+    // Cleanup FaceMesh instance if it exists and not already deleted
+    if (faceMesh.current) {
+      try {
+        faceMesh.current.close?.();
+      } catch (err) {
+        // Already closed
+      }
+      faceMesh.current = null;
+    }
+
+    setCameraState("inactive");
+    resetVerification();
+    resetCameraView();
+  }, [resetVerification, resetCameraView]);
+
+  const switchCamera = useCallback(() => {
+    if (cameras.length <= 1) {
+      setMessage({ type: "error", text: "Only one camera detected." });
+      return;
+    }
+
+    const newIndex = (selectedCameraIndex + 1) % cameras.length;
+    setSelectedCameraIndex(newIndex);
+
+    stopCamera();
+    setTimeout(() => startCamera(), 300);
+    return newIndex;
+  }, [
+    cameras.length,
+    selectedCameraIndex,
+    setMessage,
+    stopCamera,
+    startCamera,
+  ]);
+
+  // Zoom and pan controls
+  const handleZoom = useCallback((direction) => {
+    const step = 0.1;
+    setZoomLevel((prev) => {
+      const newZoom =
+        direction === "in"
+          ? Math.min(prev + step, 2)
+          : Math.max(prev - step, 1);
+      return newZoom;
+    });
+  }, []);
+
+  const handleSliderChange = useCallback((event, newValue) => {
+    if (!sliderContainerRef.current) return;
+    setZoomLevel(newValue);
+  }, []);
+
+  const handlePanStart = useCallback(
+    (e) => {
+      if (zoomLevel <= 1 || !containerRef.current) return;
+      setIsDragging(true);
+    },
+    [zoomLevel]
+  );
+
+  const handlePanMove = useCallback(
+    (e) => {
+      if (!isDragging || zoomLevel <= 1 || !containerRef.current) return;
+
+      try {
+        const container = containerRef.current;
+        const rect = container.getBoundingClientRect();
+
+        const x = Math.max(
+          0,
+          Math.min(1, (e.clientX - rect.left) / rect.width)
+        );
+        const y = Math.max(
+          0,
+          Math.min(1, (e.clientY - rect.top) / rect.height)
+        );
+
+        const maxOffset = (zoomLevel - 1) / (2 * zoomLevel);
+        setCameraPosition({
+          x: Math.max(-maxOffset, Math.min(maxOffset, x - 0.5)),
+          y: Math.max(-maxOffset, Math.min(maxOffset, y - 0.5)),
+        });
+      } catch (error) {
+        console.error("Panning error:", error);
+      }
+    },
+    [isDragging, zoomLevel]
+  );
+
+  const handlePanEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Face registration
+  const handleRegisterFace = useCallback(async () => {
     if (!user || cameraState !== "active" || !verificationState.faceDetected) {
       setMessage({ type: "error", text: "Invalid registration conditions" });
       return;
@@ -352,33 +632,39 @@ const FaceRegistration = ({
     setMessage({ type: "", text: "" });
 
     try {
-      // Make sure video is ready for processing
-      if (videoRef.current.readyState !== 4) {
-        throw new Error(
-          "Video feed is not ready yet. Please wait a moment and try again."
-        );
-      }
-
-      console.log("Attempting face detection for registration");
-      const detections = await faceapi
-        .detectSingleFace(
-          videoRef.current,
-          new faceapi.TinyFaceDetectorOptions({
-            inputSize: 416,
-            scoreThreshold: 0.6,
-          })
-        )
-        .withFaceLandmarks()
-        .withFaceDescriptor();
-
-      if (!detections) throw new Error("Face lost during registration");
-
       const canvas = document.createElement("canvas");
       canvas.width = videoRef.current.videoWidth;
       canvas.height = videoRef.current.videoHeight;
       const ctx = canvas.getContext("2d");
+
+      if (zoomLevel > 1) {
+        ctx.translate(canvas.width * 0.5, canvas.height * 0.5);
+        ctx.scale(zoomLevel, zoomLevel);
+        ctx.translate(
+          -canvas.width * 0.5 + cameraPosition.x * canvas.width,
+          -canvas.height * 0.5 + cameraPosition.y * canvas.height
+        );
+      }
       ctx.drawImage(videoRef.current, 0, 0);
+
       const faceImage = canvas.toDataURL("image/jpeg", 0.8);
+
+      const detectionOptions = new faceapi.TinyFaceDetectorOptions({
+        inputSize: 320,
+        scoreThreshold: 0.6,
+      });
+
+      const detections = await Promise.race([
+        faceapi
+          .detectSingleFace(videoRef.current, detectionOptions)
+          .withFaceLandmarks()
+          .withFaceDescriptor(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Face detection timeout")), 3000)
+        ),
+      ]);
+
+      if (!detections) throw new Error("Face lost during registration");
 
       const response = await registerFace(
         user.voterIdNumber,
@@ -390,6 +676,9 @@ const FaceRegistration = ({
       setMessage({ type: "success", text: response.message });
       stopCamera();
       onUserUpdate({ ...user, isRegistered: true });
+
+      // Automatically clear the success message after 3 seconds
+      setTimeout(() => setMessage({ type: "", text: "" }), 3000);
     } catch (error) {
       setMessage({
         type: "error",
@@ -398,11 +687,25 @@ const FaceRegistration = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    user,
+    cameraState,
+    verificationState,
+    zoomLevel,
+    cameraPosition,
+    stopCamera,
+    onUserUpdate,
+    setMessage,
+    setLoading,
+  ]);
 
-  const passedVerificationCount = Object.values(verificationState)
-    .filter((val) => typeof val === "object")
-    .filter((check) => check.verified).length;
+  const passedVerificationCount = useMemo(
+    () =>
+      Object.values(verificationState)
+        .filter((val) => typeof val === "object")
+        .filter((check) => check.verified).length,
+    [verificationState]
+  );
 
   return (
     <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
@@ -421,6 +724,7 @@ const FaceRegistration = ({
       </Alert>
 
       <Box
+        ref={containerRef}
         sx={{
           position: "relative",
           width: "100%",
@@ -434,7 +738,13 @@ const FaceRegistration = ({
           alignItems: "center",
           border: "1px solid",
           borderColor: "divider",
+          cursor:
+            zoomLevel > 1 ? (isDragging ? "grabbing" : "grab") : "default",
         }}
+        onMouseDown={handlePanStart}
+        onMouseMove={handlePanMove}
+        onMouseUp={handlePanEnd}
+        onMouseLeave={handlePanEnd}
       >
         {cameraState === "inactive" && (
           <Box textAlign="center">
@@ -475,8 +785,10 @@ const FaceRegistration = ({
             width: "100%",
             height: "100%",
             objectFit: "cover",
-            transform: facingMode === "user" ? "scaleX(-1)" : "none",
+            transform: getVideoTransform(),
+            transformOrigin: "center center",
             display: cameraState === "active" ? "block" : "none",
+            transition: "transform 0.2s ease",
           }}
         />
         <Box
@@ -492,6 +804,100 @@ const FaceRegistration = ({
             display: cameraState === "active" ? "block" : "none",
           }}
         />
+
+        {cameraState === "active" && (
+          <>
+            <Box
+              sx={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                display: "flex",
+                flexDirection: "column",
+                gap: 1,
+              }}
+            >
+              {cameras.length > 1 && (
+                <Tooltip title="Switch Camera">
+                  <IconButton
+                    color="primary"
+                    onClick={switchCamera}
+                    sx={{
+                      bgcolor: "background.paper",
+                      "&:hover": { bgcolor: "action.hover" },
+                    }}
+                  >
+                    <SwitchCameraIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+
+              <Tooltip title="Zoom In">
+                <IconButton
+                  color="primary"
+                  onClick={() => handleZoom("in")}
+                  disabled={zoomLevel >= 2}
+                  sx={{
+                    bgcolor: "background.paper",
+                    "&:hover": { bgcolor: "action.hover" },
+                  }}
+                >
+                  <ZoomInIcon />
+                </IconButton>
+              </Tooltip>
+
+              <Tooltip title="Zoom Out">
+                <IconButton
+                  color="primary"
+                  onClick={() => handleZoom("out")}
+                  disabled={zoomLevel <= 1}
+                  sx={{
+                    bgcolor: "background.paper",
+                    "&:hover": { bgcolor: "action.hover" },
+                  }}
+                >
+                  <ZoomOutIcon />
+                </IconButton>
+              </Tooltip>
+            </Box>
+
+            {sliderReady && (
+              <Box
+                ref={sliderContainerRef}
+                sx={{
+                  position: "absolute",
+                  bottom: 8,
+                  left: 8,
+                  right: 8,
+                  px: 2,
+                }}
+              >
+                <Slider
+                  value={zoomLevel}
+                  min={1}
+                  max={2}
+                  step={0.1}
+                  onChange={handleSliderChange}
+                  componentsProps={{
+                    thumb: {
+                      onMouseDown: (e) => e.stopPropagation(),
+                    },
+                  }}
+                  sx={{
+                    color: "white",
+                    "& .MuiSlider-thumb": {
+                      width: 16,
+                      height: 16,
+                      "&:focus, &:hover, &.Mui-active": {
+                        boxShadow: "none",
+                      },
+                    },
+                  }}
+                />
+              </Box>
+            )}
+          </>
+        )}
       </Box>
 
       {cameraState === "active" && (
@@ -571,6 +977,20 @@ const FaceRegistration = ({
           </>
         )}
       </Stack>
+
+      {cameras.length > 0 && (
+        <Paper variant="outlined" sx={{ p: 2, bgcolor: "grey.50", mt: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            {videoRef.current?.srcObject?.getVideoTracks?.()[0]?.getSettings?.()
+              .facingMode === "user"
+              ? "Front-facing"
+              : "Back-facing"}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Available Cameras: {cameras.length}
+          </Typography>
+        </Paper>
+      )}
     </Paper>
   );
 };
@@ -581,7 +1001,13 @@ const VerificationChip = ({ label, verified, count, required }) => (
     color={verified ? "success" : "default"}
     variant={verified ? "filled" : "outlined"}
     icon={verified ? <CheckCircleIcon fontSize="small" /> : undefined}
-    sx={{ flex: 1, maxWidth: 150, fontWeight: verified ? 600 : 400 }}
+    sx={{
+      flex: 1,
+      maxWidth: 150,
+      fontWeight: verified ? 600 : 400,
+      backgroundColor: !verified ? "rgba(255, 255, 255, 0.3)" : undefined,
+      borderColor: !verified ? "rgba(255, 255, 255, 0.3)" : undefined,
+    }}
   />
 );
 

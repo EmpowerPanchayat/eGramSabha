@@ -281,4 +281,62 @@ export const fetchTodaysMeetings = async (panchayatId) => {
         console.error('API Error in fetchTodaysMeetings:', error);
         throw error.response?.data || { message: 'Failed to fetch today\'s meetings' };
     }
-}; 
+};
+
+/**
+ * Fetch attendance data of past Gram Sabha meeting by ID to export in a file
+ * @param {string} id - Gram Sabha meeting ID
+ * @returns {Promise} - API response
+ */
+export const fetchGramSabhaMeetingAttendanceData = async (id) => {
+    try {
+        const response = await api.get(`/gram-sabha/${id}/attendance`);
+        return response.data;
+    } catch (error) {
+        console.error('API Error in fetchGramSabhaMeetingAttendanceData:', error);
+        throw error.response?.data || { message: 'Failed to fetch attendance data of past Gram Sabha meeting to export in a file.' };
+    }
+};
+
+/**
+ * Get Attendance statistics for a meeting
+ * @param {string} meetingId - Gram Sabha meeting ID
+ * @returns {Promise<Object>} - Mapped attendance statistics
+ */
+export const getAttendanceStats = async (meetingId) => {
+  try {
+    const response = await fetch(
+      `${API_URL}/gram-sabha/${meetingId}/attendance-stats`,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch attendance statistics");
+    }
+
+    const data = await response.json();
+
+    return {
+      total: data.totalRegistered || 0,
+      totalVoters: data.totalVoters || 0,
+      present: data.present || 0,
+      quorum: data.quorumRequired || 0,
+      quorumMet: (data.present || 0) >= (data.quorumRequired || 0),
+    };
+  } catch (error) {
+    console.error("API Error in getAttendanceStats:", error);
+    // Fallback to default empty stats
+    return {
+      total: 0,
+      totalVoters: 0,
+      present: 0,
+      quorum: 0,
+      quorumMet: false,
+    };
+  }
+};

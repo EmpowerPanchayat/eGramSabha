@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   Box,
   Typography,
@@ -11,6 +17,7 @@ import {
   Alert,
   CircularProgress,
   Stack,
+  Slider,
   Divider,
   Card,
   CardHeader,
@@ -23,6 +30,7 @@ import {
   Chip,
   Snackbar,
   DialogContentText,
+  Tooltip,
 } from "@mui/material";
 import {
   Event as EventIcon,
@@ -33,14 +41,13 @@ import {
   Close as CloseIcon,
   CameraAlt as CameraAltIcon,
   HowToReg as HowToRegIcon,
+  SwitchCamera as SwitchCameraIcon,
+  ZoomIn as ZoomInIcon,
+  ZoomOut as ZoomOutIcon,
 } from "@mui/icons-material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import StopIcon from "@mui/icons-material/Stop";
-import {
-  fetchGramSabhaMeetings,
-  addAttendance,
-  fetchTodaysMeetings,
-} from "../../api/gram-sabha";
+import { fetchTodaysMeetings } from "../../api/gram-sabha";
 import { useLanguage } from "../../utils/LanguageContext";
 import GramSabhaDetails from "./GramSabhaDetails";
 import { FaceMesh } from "@mediapipe/face_mesh";
@@ -56,24 +63,39 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   const [attendanceStats, setAttendanceStats] = useState(null);
   const [showAttendanceForm, setShowAttendanceForm] = useState(false);
   const [voterIdLastFour, setVoterIdLastFour] = useState("");
-  const [isCameraActive, setIsCameraActive] = useState(false);
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
-  const [faceDetected, setFaceDetected] = useState(false);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
-  const [historyId, setHistoryId] = useState(null);
   const [showMeetingDetails, setShowMeetingDetails] = useState(false);
   const [meetingDetails, setMeetingDetails] = useState(null);
-  const [recodings, setRecordings] = useState(false);
-  const [remotePeers, setRemotePeers] = useState([]);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [selectedCameraIndex, setSelectedCameraIndex] = useState(0);
   const [attendanceMessage, setAttendanceMessage] = useState({
     type: "",
     text: "",
   });
+  const [platformConfig, setPlatformConfig] = useState({
+    liveliness: true,
+    blink_count: 2,
+    movement_count: 5,
+  });
+  const [thresholds, setThresholds] = useState({
+    blink: 2,
+    movement: 5,
+  });
+  const thresholdsRef = useRef(thresholds);
+
+  // Camera and face detection state
+  const [cameraState, setCameraState] = useState("inactive");
+  const [facingMode, setFacingMode] = useState("user");
+  const [cameras, setCameras] = useState([]);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [sliderReady, setSliderReady] = useState(false);
 
   // Liveliness verification state
   const [verificationState, setVerificationState] = useState({
@@ -81,14 +103,14 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     blink: { verified: false, count: 0 },
     movement: { verified: false, count: 0 },
   });
-  const [cameraActive, setCameraActive] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState(null);
 
-  const VERIFICATION_THRESHOLDS = { blink: 4, movement: 5 };
+  const faceMeshId = useRef(0);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
-  const faceMeshRef = useRef(null);
-  const cameraRef = useRef(null);
+  const containerRef = useRef(null);
+  const sliderContainerRef = useRef(null);
+  const faceMesh = useRef(null);
   const detectionState = useRef({
     previousLandmarks: null,
     movementHistory: [],
@@ -98,99 +120,179 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
+  // Memoized thresholds for checks
+  useEffect(() => {
+    thresholdsRef.current = thresholds;
+  }, [thresholds]);
+
+  // Delay slider initialization
+  useEffect(() => {
+    if (cameraState === "active" && zoomLevel > 1) {
+      const timer = setTimeout(() => setSliderReady(true), 100);
+      return () => clearTimeout(timer);
+    } else {
+      setSliderReady(false);
+    }
+  }, [cameraState, zoomLevel]);
+
+  // Initialize face detection models and camera devices
   useEffect(() => {
     const initializeFaceDetection = async () => {
       try {
+        setLoadingModels(true);
+
         const MODEL_URL =
           "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model";
-
         await Promise.all([
           faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
           faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
           faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
         ]);
-        faceMeshRef.current = new FaceMesh({
+
+        faceMesh.current = new FaceMesh({
           locateFile: (file) =>
             `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`,
         });
 
-        faceMeshRef.current.setOptions({
+        faceMesh.current.setOptions({
           maxNumFaces: 1,
           refineLandmarks: true,
           minDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5,
         });
 
-        faceMeshRef.current.onResults(handleFaceResults);
+        faceMesh.current.onResults(handleFaceResults);
+        setModelsLoaded(true);
       } catch (error) {
         console.error("FaceMesh initialization error:", error);
         setAttendanceMessage({
           type: "error",
           text: "Face detection failed to initialize",
         });
+      } finally {
+        setLoadingModels(false);
       }
     };
 
     initializeFaceDetection();
+    checkCameraDevices();
     return () => stopCamera();
+    // eslint-disable-next-line
   }, []);
 
-  const handleFaceResults = (results) => {
-    const ctx = canvasRef.current?.getContext("2d");
-    if (!ctx || !results.multiFaceLandmarks) {
-      setVerificationState((prev) => ({ ...prev, faceDetected: false }));
-      return;
+  // Camera device management
+  const checkCameraDevices = useCallback(async () => {
+    try {
+      const tempStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+      });
+      tempStream.getTracks().forEach((t) => t.stop());
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter((d) => d.kind === "videoinput");
+
+      const categorized = { user: null, environment: null };
+
+      for (const device of videoDevices) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: device.deviceId } },
+          });
+          const track = stream.getVideoTracks()[0];
+          const facingMode = track.getSettings().facingMode;
+
+          if (facingMode === "user" && !categorized.user) {
+            categorized.user = device;
+          } else if (
+            (facingMode === "environment" || facingMode === "back") &&
+            !categorized.environment
+          ) {
+            categorized.environment = device;
+          }
+
+          track.stop();
+          if (categorized.user && categorized.environment) break;
+        } catch (err) {
+          console.warn("Error checking facingMode for device:", device.label);
+        }
+      }
+
+      const filtered = [categorized.user, categorized.environment].filter(
+        Boolean
+      );
+      setCameras(filtered);
+      setSelectedCameraIndex(0);
+    } catch (err) {
+      console.error("Failed to enumerate cameras:", err);
+      setAttendanceMessage({
+        type: "error",
+        text: "Camera access issue. Please retry.",
+      });
     }
+  }, []);
 
-    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    const faceLandmarks = results.multiFaceLandmarks[0];
+  // Video transform
+  const getVideoTransform = useCallback(() => {
+    const transforms = [];
+    const stream = videoRef.current?.srcObject;
+    const track = stream?.getVideoTracks?.()[0];
+    const facingMode = track?.getSettings?.().facingMode;
 
-    if (faceLandmarks?.length >= 468) {
-      drawFaceOutline(faceLandmarks);
-      const livelinessChecks = {
-        blink: detectBlink(faceLandmarks),
-        movement: detectMacroMovement(faceLandmarks),
-      };
-      updateVerificationState(livelinessChecks);
-      setVerificationState((prev) => ({ ...prev, faceDetected: true }));
-    } else {
-      setVerificationState((prev) => ({ ...prev, faceDetected: false }));
+    if (facingMode === "user") transforms.push("scaleX(-1)");
+    if (zoomLevel > 1) {
+      transforms.push(`scale(${zoomLevel})`);
+      transforms.push(
+        `translate(${cameraPosition.x * 100}%, ${cameraPosition.y * 100}%)`
+      );
     }
-  };
+    return transforms.join(" ");
+  }, [zoomLevel, cameraPosition]);
 
-  const drawFaceOutline = (landmarks) => {
-    const ctx = canvasRef.current.getContext("2d");
-    const { width, height } = canvasRef.current;
+  // Face detection handlers
+  const drawFaceOutline = useCallback(
+    (landmarks) => {
+      if (!canvasRef.current || !landmarks) return;
 
-    ctx.save();
-    ctx.translate(width, 0);
-    ctx.scale(-1, 1);
-    ctx.strokeStyle = "#42A5F5";
-    ctx.lineWidth = 2;
+      const ctx = canvasRef.current.getContext("2d");
+      const { width, height } = canvasRef.current;
 
-    const minX = Math.min(...landmarks.map((l) => l.x));
-    const maxX = Math.max(...landmarks.map((l) => l.x));
-    const minY = Math.min(...landmarks.map((l) => l.y));
-    const maxY = Math.max(...landmarks.map((l) => l.y));
+      ctx.save();
+      if (facingMode === "user") {
+        ctx.translate(width, 0);
+        ctx.scale(-1, 1);
+      }
 
-    const centerX = ((minX + maxX) / 2) * width;
-    const centerY = ((minY + maxY) / 2) * height;
-    const radiusX = ((maxX - minX) / 2) * width * 1.2;
-    const radiusY = ((maxY - minY) / 2) * height * 1.4;
+      if (zoomLevel > 1) {
+        ctx.translate(width * 0.5, height * 0.5);
+        ctx.scale(zoomLevel, zoomLevel);
+        ctx.translate(
+          -width * 0.5 + cameraPosition.x * width,
+          -height * 0.5 + cameraPosition.y * height
+        );
+      }
 
-    ctx.beginPath();
-    ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
-    ctx.stroke();
-    ctx.restore();
-  };
+      ctx.strokeStyle = "#42A5F5";
+      ctx.lineWidth = 2;
 
-  useEffect(() => {
-    if (panchayatId) {
-      loadTodaysMeetings();
-    }
-  }, [panchayatId]);
+      const minX = Math.min(...landmarks.map((l) => l.x));
+      const maxX = Math.max(...landmarks.map((l) => l.x));
+      const minY = Math.min(...landmarks.map((l) => l.y));
+      const maxY = Math.max(...landmarks.map((l) => l.y));
 
-  const detectBlink = (landmarks) => {
+      const centerX = ((minX + maxX) / 2) * width;
+      const centerY = ((minY + maxY) / 2) * height;
+      const radiusX = ((maxX - minX) / 2) * width * 1.2;
+      const radiusY = ((maxY - minY) / 2) * height * 1.4;
+
+      ctx.beginPath();
+      ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.restore();
+    },
+    [facingMode, zoomLevel, cameraPosition]
+  );
+
+  const detectBlink = useCallback((landmarks) => {
     const eyeIndices = {
       left: [33, 160, 158, 133, 153, 144],
       right: [362, 385, 387, 263, 373, 380],
@@ -228,9 +330,9 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
       return duration > 50 && duration < 150;
     }
     return false;
-  };
+  }, []);
 
-  const detectMacroMovement = (currentLandmarks) => {
+  const detectMacroMovement = useCallback((currentLandmarks) => {
     const state = detectionState.current;
     if (!state.previousLandmarks) {
       state.previousLandmarks = currentLandmarks;
@@ -261,82 +363,98 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     state.previousLandmarks = currentLandmarks;
 
     return state.movementHistory.filter(Boolean).length >= 5;
-  };
+  }, []);
 
-  const updateVerificationState = ({ blink, movement }) => {
-    setVerificationState((prev) => ({
-      ...prev,
-      blink: blink
-        ? updateCheck(
-            prev.blink,
-            VERIFICATION_THRESHOLDS.blink,
-            "Blink verified"
-          )
-        : prev.blink,
-      movement: movement
-        ? updateCheck(
-            prev.movement,
-            VERIFICATION_THRESHOLDS.movement,
-            "Movement verified"
-          )
-        : prev.movement,
-    }));
-  };
-
-  const updateCheck = (check, threshold, message) => {
-    if (check.verified) return check;
-    const newCount = check.count + 1;
-    if (newCount >= threshold) {
-      showTemporaryFeedback(message);
-      return { verified: true, count: newCount };
-    }
-    return { ...check, count: newCount };
-  };
-
-  const showTemporaryFeedback = (message) => {
+  const showTemporaryFeedback = useCallback((message) => {
     setActiveFeedback(message);
     setTimeout(() => setActiveFeedback(null), 2000);
-  };
+  }, []);
 
-  const startCamera = async () => {
-    try {
-      if (!faceMeshRef.current) return;
+  const updateCheck = useCallback(
+    (check, threshold, message) => {
+      if (check.verified) return check;
+      const newCount = check.count + 1;
+      if (newCount >= threshold) {
+        if (platformConfig.liveliness) {
+          showTemporaryFeedback(message);
+        }
+        return { verified: true, count: newCount };
+      }
+      return { ...check, count: newCount };
+    },
+    [platformConfig.liveliness, showTemporaryFeedback]
+  );
 
-      stopCamera();
-      setCameraActive(true);
+  const updateVerificationState = useCallback(
+    ({ blink, movement }) => {
+      setVerificationState((prev) => ({
+        ...prev,
+        blink: blink
+          ? updateCheck(
+              prev.blink,
+              thresholdsRef.current.blink,
+              "Blink verified"
+            )
+          : prev.blink,
+        movement: movement
+          ? updateCheck(
+              prev.movement,
+              thresholdsRef.current.movement,
+              "Movement verified"
+            )
+          : prev.movement,
+      }));
+    },
+    [updateCheck]
+  );
 
-      cameraRef.current = new Camera(videoRef.current, {
-        onFrame: async () => {
-          if (faceMeshRef.current?.send) {
-            await faceMeshRef.current.send({ image: videoRef.current });
-          }
-        },
-        facingMode: "user",
-        width: 1280,
-        height: 720,
-      });
+  const handleFaceResults = useCallback(
+    (results) => {
+      if (!canvasRef.current || !results.multiFaceLandmarks) {
+        setVerificationState((prev) => ({ ...prev, faceDetected: false }));
+        return;
+      }
 
-      await cameraRef.current.start();
-    } catch (error) {
-      console.error("Camera error:", error);
-      setAttendanceMessage({
-        type: "error",
-        text: "Camera access failed. Please check permissions.",
-      });
-      setCameraActive(false);
-    }
-  };
+      const ctx = canvasRef.current.getContext("2d");
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 
-  const stopCamera = () => {
-    if (cameraRef.current) {
-      cameraRef.current.stop();
-      cameraRef.current = null;
-    }
-    setCameraActive(false);
-    resetVerification();
-  };
+      const faceLandmarks = results.multiFaceLandmarks[0];
+      if (!faceLandmarks || faceLandmarks.length < 468) {
+        setVerificationState((prev) => ({ ...prev, faceDetected: false }));
+        return;
+      }
 
-  const resetVerification = () => {
+      drawFaceOutline(faceLandmarks);
+
+      // If liveliness is false, auto-verify both checks and skip notifications
+      if (!platformConfig.liveliness) {
+        setVerificationState((prev) => ({
+          ...prev,
+          faceDetected: true,
+          blink: { verified: true, count: thresholdsRef.current.blink },
+          movement: { verified: true, count: thresholdsRef.current.movement },
+        }));
+        return;
+      }
+
+      const livelinessChecks = {
+        blink: detectBlink(faceLandmarks),
+        movement: detectMacroMovement(faceLandmarks),
+      };
+
+      updateVerificationState(livelinessChecks);
+      setVerificationState((prev) => ({ ...prev, faceDetected: true }));
+    },
+    [
+      drawFaceOutline,
+      detectBlink,
+      detectMacroMovement,
+      platformConfig.liveliness,
+      updateVerificationState,
+    ]
+  );
+
+  const resetVerification = useCallback(() => {
     setVerificationState({
       faceDetected: false,
       blink: { verified: false, count: 0 },
@@ -348,20 +466,153 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
       baselineEAR: null,
       blinkStartTime: null,
     };
-  };
+  }, []);
 
-  const loadTodaysMeetings = async () => {
+  const resetCameraView = useCallback(() => {
+    setZoomLevel(1);
+    setCameraPosition({ x: 0, y: 0 });
+  }, []);
+
+  // Camera controls
+  const startCamera = useCallback(async () => {
+    if (!user || !modelsLoaded || cameras.length === 0) {
+      setAttendanceMessage({
+        type: "error",
+        text: !user
+          ? "Select a member first"
+          : "Models not loaded or no camera found",
+      });
+      return;
+    }
+
+    try {
+      setCameraState("starting");
+      resetVerification();
+
+      const deviceId = cameras[selectedCameraIndex]?.deviceId;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: deviceId } },
+        audio: false,
+      });
+
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+
+      const processFrame = (id) => {
+        const loop = async () => {
+          try {
+            if (faceMesh.current?.send && videoRef.current?.readyState >= 2) {
+              await faceMesh.current.send({ image: videoRef.current });
+            }
+          } catch (e) {
+            console.error("FaceMesh send error:", e);
+          }
+          if (faceMeshId.current === id) requestAnimationFrame(loop);
+        };
+        loop();
+      };
+
+      const id = faceMeshId.current;
+      processFrame(id);
+      setCameraState("active");
+    } catch (error) {
+      console.error("startCamera error:", error);
+      setCameraState("error");
+      setAttendanceMessage({
+        type: "error",
+        text: "Camera failed to start. Check permissions.",
+      });
+    }
+  }, [user, modelsLoaded, cameras, selectedCameraIndex, resetVerification]);
+
+  const stopCamera = useCallback(() => {
+    if (videoRef.current?.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setCameraState("inactive");
+    resetVerification();
+    resetCameraView();
+  }, [resetVerification, resetCameraView]);
+
+  const switchCamera = useCallback(() => {
+    if (cameras.length <= 1) {
+      setAttendanceMessage({
+        type: "error",
+        text: "Only one camera detected.",
+      });
+      return;
+    }
+    const newIndex = (selectedCameraIndex + 1) % cameras.length;
+    setSelectedCameraIndex(newIndex);
+    stopCamera();
+    setTimeout(startCamera, 300);
+  }, [cameras, selectedCameraIndex, stopCamera, startCamera]);
+
+  const handleZoom = useCallback((direction) => {
+    const step = 0.1;
+    setZoomLevel((prev) => {
+      const newZoom =
+        direction === "in"
+          ? Math.min(prev + step, 2)
+          : Math.max(prev - step, 1);
+      return newZoom;
+    });
+  }, []);
+
+  const handleSliderChange = useCallback((event, newValue) => {
+    if (!sliderContainerRef.current) return;
+    setZoomLevel(newValue);
+  }, []);
+
+  const handlePanStart = useCallback(
+    (e) => {
+      if (zoomLevel <= 1 || !containerRef.current) return;
+      setIsDragging(true);
+    },
+    [zoomLevel]
+  );
+
+  const handlePanMove = useCallback(
+    (e) => {
+      if (!isDragging || zoomLevel <= 1 || !containerRef.current) return;
+
+      const container = containerRef.current;
+      const rect = container.getBoundingClientRect();
+      const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+
+      const maxOffset = (zoomLevel - 1) / (2 * zoomLevel);
+      setCameraPosition({
+        x: Math.max(-maxOffset, Math.min(maxOffset, x - 0.5)),
+        y: Math.max(-maxOffset, Math.min(maxOffset, y - 0.5)),
+      });
+    },
+    [isDragging, zoomLevel]
+  );
+
+  const handlePanEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Load today's meetings
+  useEffect(() => {
+    if (panchayatId) {
+      loadTodaysMeetings();
+    }
+    // eslint-disable-next-line
+  }, [panchayatId]);
+
+  const loadTodaysMeetings = useCallback(async () => {
     if (!panchayatId) return;
 
     try {
       setLoading(true);
       setError("");
 
-      // Fetch today's meetings directly
       const data = await fetchTodaysMeetings(panchayatId);
       setTodaysMeetings(data);
 
-      // Load attendance stats for the first meeting
       if (data.length > 0) {
         loadAttendanceStats(data[0]._id);
       }
@@ -371,67 +622,62 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [panchayatId]);
 
-  const loadAttendanceStats = async (meetingId) => {
-    try {
-      // Make API call to get attendance stats
-      const response = await fetch(
-        `${API_URL}/gram-sabha/${meetingId}/attendance-stats`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-            "Content-Type": "application/json",
-          },
+  const loadAttendanceStats = useCallback(
+    async (meetingId) => {
+      try {
+        const response = await fetch(
+          `${API_URL}/gram-sabha/${meetingId}/attendance-stats`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch attendance statistics");
         }
-      );
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch attendance statistics");
+        const data = await response.json();
+
+        setAttendanceStats({
+          total: data.totalRegistered || 0,
+          totalVoters: data.totalVoters || 0,
+          present: data.present || 0,
+          quorum: data.quorumRequired || 0,
+          quorumMet: (data.present || 0) >= (data.quorumRequired || 0),
+        });
+      } catch (error) {
+        console.error("Error loading attendance stats:", error);
+        setAttendanceStats({
+          total: 0,
+          totalVoters: 0,
+          present: 0,
+          quorum: 0,
+          quorumMet: false,
+        });
       }
+    },
+    [API_URL]
+  );
 
-      const data = await response.json();
-
-      setAttendanceStats({
-        total: data.totalRegistered || 0,
-        totalVoters: data.totalVoters || 0,
-        present: data.present || 0,
-        quorum: data.quorumRequired || 0,
-        quorumMet: (data.present || 0) >= (data.quorumRequired || 0),
+  const handleStartRecording = useCallback(
+    async (meetingId, meetingLink, roomPIN, hostToken) => {
+      setMeetingDetails({
+        meetingId,
+        meetingLink,
+        roomPIN,
+        hostToken,
       });
-    } catch (error) {
-      console.error("Error loading attendance stats:", error);
-      // Don't show error for stats loading, just initialize with zeros
-      setAttendanceStats({
-        total: 0,
-        totalVoters: 0,
-        present: 0,
-        quorum: 0,
-        quorumMet: false,
-      });
-    }
-  };
+      setShowMeetingDetails(true);
+    },
+    []
+  );
 
-  const handleStartRecording = async (
-    meetingId,
-    meetingLink,
-    roomPIN,
-    hostToken
-  ) => {
-    // Instead of navigating, show meeting details
-    // setSelectedMeeting(meetingId);
-
-    // Show meeting details dialog
-    setMeetingDetails({
-      meetingId,
-      meetingLink,
-      roomPIN,
-      hostToken,
-    });
-    setShowMeetingDetails(true);
-  };
-
-  const copyToClipboard = () => {
+  const copyToClipboard = useCallback(() => {
     const detailsText = `Meeting ID: ${meetingDetails.meetingId}
   Meeting Link: ${meetingDetails.meetingLink}
   Room PIN: ${meetingDetails.roomPIN}`;
@@ -439,25 +685,55 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     navigator.clipboard
       .writeText(detailsText)
       .then(() => {
-        // Show success message
         setSnackbarMessage("Meeting details copied to clipboard");
         setSnackbarOpen(true);
       })
       .catch((err) => {
         console.error("Failed to copy: ", err);
       });
-  };
+  }, [meetingDetails]);
 
-  const handleMarkAttendance = async (meetingId) => {
-    // Reset form and show attendance dialog
-    setVoterIdLastFour("");
-    setFaceDetected(false);
-    setAttendanceMessage({ type: "", text: "" });
-    loadAttendanceStats(meetingId);
-    setShowAttendanceForm(true);
-  };
+  // --- MODIFIED handleMarkAttendance ---
+  const handleMarkAttendance = useCallback(
+    async (meetingId) => {
+      // Fetch platform config before opening dialog
+      try {
+        const res = await fetch(`${API_URL}/platform-configurations`);
+        const data = await res.json();
+        const configObj = {};
+        (Array.isArray(data) ? data : data.config || []).forEach((item) => {
+          configObj[item.key] = item.value;
+        });
+        setPlatformConfig({
+          liveliness:
+            configObj.liveliness === "false" ? false : !!configObj.liveliness,
+          blink_count: Number(configObj.blink_count) || 2,
+          movement_count: Number(configObj.movement_count) || 5,
+        });
+        setThresholds({
+          blink: Number(configObj.blink_count) || 2,
+          movement: Number(configObj.movement_count) || 5,
+        });
+      } catch (err) {
+        setPlatformConfig({
+          liveliness: true,
+          blink_count: 2,
+          movement_count: 5,
+        });
+        setThresholds({
+          blink: 2,
+          movement: 5,
+        });
+      }
+      setVoterIdLastFour("");
+      setAttendanceMessage({ type: "", text: "" });
+      loadAttendanceStats(meetingId);
+      setShowAttendanceForm(true);
+    },
+    [API_URL, loadAttendanceStats]
+  );
 
-  const handleSubmitAttendance = async () => {
+  const handleSubmitAttendance = useCallback(async () => {
     if (!voterIdLastFour || voterIdLastFour.length !== 4) {
       setAttendanceMessage({
         type: "error",
@@ -466,14 +742,15 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
       return;
     }
 
-    const passedChecks = Object.values(verificationState)
-      .filter((val) => typeof val === "object")
-      .filter((check) => check.verified).length;
-
-    if (passedChecks < 2) {
+    // Only require checks if liveliness is true
+    if (
+      platformConfig.liveliness &&
+      (!verificationState.blink.verified ||
+        !verificationState.movement.verified)
+    ) {
       setAttendanceMessage({
         type: "error",
-        text: "No face detected. Please position your face in front of the camera.",
+        text: "Complete both verification checks (blink and movement)",
       });
       return;
     }
@@ -481,7 +758,6 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     try {
       setAttendanceLoading(true);
 
-      // Detect face and get descriptor
       const detections = await faceapi
         .detectSingleFace(
           videoRef.current,
@@ -494,34 +770,28 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
         .withFaceDescriptor();
 
       if (!detections) {
-        setAttendanceMessage({
-          type: "error",
-          text: "Face not recognized clearly. Please try again.",
-        });
-        setAttendanceLoading(false);
-        return;
+        throw new Error("Face not recognized clearly");
       }
 
-      // Get face descriptor
       const faceDescriptor = Array.from(detections.descriptor);
 
-      // Create a canvas to capture the image
-      const tempCanvas = document.createElement("canvas");
-      tempCanvas.width = videoRef.current.videoWidth;
-      tempCanvas.height = videoRef.current.videoHeight;
-      const ctx = tempCanvas.getContext("2d");
-      ctx.drawImage(
-        videoRef.current,
-        0,
-        0,
-        tempCanvas.width,
-        tempCanvas.height
-      );
+      const canvas = document.createElement("canvas");
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext("2d");
 
-      // Convert to base64
-      const imageDataURL = tempCanvas.toDataURL("image/jpeg");
+      if (zoomLevel > 1) {
+        ctx.translate(canvas.width * 0.5, canvas.height * 0.5);
+        ctx.scale(zoomLevel, zoomLevel);
+        ctx.translate(
+          -canvas.width * 0.5 + cameraPosition.x * canvas.width,
+          -canvas.height * 0.5 + cameraPosition.y * canvas.height
+        );
+      }
+      ctx.drawImage(videoRef.current, 0, 0);
 
-      // Send the attendance data to the server
+      const imageDataURL = canvas.toDataURL("image/jpeg");
+
       const response = await fetch(
         `${API_URL}/gram-sabha/${todaysMeetings[0]._id}/mark-attendance`,
         {
@@ -546,20 +816,15 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
         throw new Error(result.message || "Failed to mark attendance");
       }
 
-      // Success
       setAttendanceMessage({
         type: "success",
         text: "Attendance marked successfully!",
       });
 
-      // Reload attendance stats
       await loadAttendanceStats(todaysMeetings[0]._id);
-
-      // Reset form
       setVoterIdLastFour("");
       stopCamera();
 
-      // If this attendance marked causes quorum to be met, reload the meeting to update it
       if (
         attendanceStats.present + 1 >= attendanceStats.quorum &&
         !attendanceStats.quorumMet
@@ -575,7 +840,20 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     } finally {
       setAttendanceLoading(false);
     }
-  };
+  }, [
+    voterIdLastFour,
+    platformConfig.liveliness,
+    verificationState,
+    zoomLevel,
+    cameraPosition,
+    API_URL,
+    todaysMeetings,
+    panchayatId,
+    attendanceStats,
+    loadAttendanceStats,
+    stopCamera,
+    loadTodaysMeetings,
+  ]);
 
   if (loading && todaysMeetings.length === 0) {
     return (
@@ -615,7 +893,6 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     );
   }
 
-  // Just display the first meeting in the banner
   const meeting = todaysMeetings[0];
   const quorumMet = attendanceStats?.quorumMet;
 
@@ -633,7 +910,6 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
           flexDirection: "column",
         }}
       >
-        {/* Banner Header */}
         <CardHeader
           sx={{
             bgcolor: "primary.main",
@@ -648,7 +924,6 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
           disableTypography
         />
 
-        {/* Meeting Content */}
         <CardContent sx={{ px: 3, py: 2 }}>
           <Typography
             variant="h6"
@@ -681,7 +956,6 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
             </Box>
           </Stack>
 
-          {/* Action Buttons */}
           <Box display="flex" justifyContent="flex-end" gap={2} sx={{ mt: 1 }}>
             <Button
               variant="contained"
@@ -711,58 +985,57 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                 {isStarting ? "Starting..." : "Show Meeting Details"}
               </Button>
             )}
-            {showMeetingDetails && meetingDetails && (
-              <Dialog
-                open={showMeetingDetails}
-                onClose={() => setShowMeetingDetails(false)}
-                aria-labelledby="meeting-details-dialog-title"
-              >
-                <DialogTitle id="meeting-details-dialog-title">
-                  Meeting Details
-                  <IconButton
-                    aria-label="copy"
-                    onClick={copyToClipboard}
-                    sx={{ ml: 1 }}
-                    title="Copy to clipboard"
-                  >
-                    <ContentCopyIcon />
-                  </IconButton>
-                </DialogTitle>
-                <DialogContent>
-                  <DialogContentText>
-                    <Typography variant="body1">
-                      <strong>Meeting ID:</strong> {meetingDetails.meetingId}
-                    </Typography>
-                    <Typography variant="body1">
-                      <strong>Meeting Link:</strong>{" "}
-                      {meetingDetails.meetingLink}
-                    </Typography>
-                    <Typography variant="body1">
-                      <strong>Room PIN:</strong> {meetingDetails.roomPIN}
-                    </Typography>
-                  </DialogContentText>
-                </DialogContent>
-                <DialogActions>
-                  <Button onClick={() => setShowMeetingDetails(false)}>
-                    Close
-                  </Button>
-                  {meetingDetails.meetingLink && (
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      onClick={() =>
-                        window.open(meetingDetails.meetingLink, "_blank")
-                      }
-                    >
-                      Join Meeting
-                    </Button>
-                  )}
-                </DialogActions>
-              </Dialog>
-            )}
           </Box>
         </CardContent>
       </Card>
+
+      {/* Meeting Details Dialog */}
+      {showMeetingDetails && meetingDetails && (
+        <Dialog
+          open={showMeetingDetails}
+          onClose={() => setShowMeetingDetails(false)}
+          aria-labelledby="meeting-details-dialog-title"
+        >
+          <DialogTitle id="meeting-details-dialog-title">
+            Meeting Details
+            <IconButton
+              aria-label="copy"
+              onClick={copyToClipboard}
+              sx={{ ml: 1 }}
+              title="Copy to clipboard"
+            >
+              <ContentCopyIcon />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              <Typography variant="body1">
+                <strong>Meeting ID:</strong> {meetingDetails.meetingId}
+              </Typography>
+              <Typography variant="body1">
+                <strong>Meeting Link:</strong> {meetingDetails.meetingLink}
+              </Typography>
+              <Typography variant="body1">
+                <strong>Room PIN:</strong> {meetingDetails.roomPIN}
+              </Typography>
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setShowMeetingDetails(false)}>Close</Button>
+            {meetingDetails.meetingLink && (
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() =>
+                  window.open(meetingDetails.meetingLink, "_blank")
+                }
+              >
+                Join Meeting
+              </Button>
+            )}
+          </DialogActions>
+        </Dialog>
+      )}
 
       {/* Attendance Dialog */}
       <Dialog
@@ -773,8 +1046,6 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
         }}
         maxWidth="sm"
         fullWidth
-        disableBackdropClick
-        disableEscapeKeyDown
       >
         <DialogTitle
           sx={{
@@ -795,7 +1066,6 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
         </DialogTitle>
 
         <DialogContent>
-          {/* Attendance Stats */}
           {attendanceStats && (
             <Box sx={{ mb: 4, mt: 2 }}>
               <Typography variant="h6" gutterBottom>
@@ -991,7 +1261,6 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
 
           <Divider sx={{ my: 3 }} />
 
-          {/* Attendance Form */}
           <Box sx={{ mt: 2 }}>
             <Typography variant="h6" gutterBottom>
               {strings.verifyAttendee}
@@ -1011,7 +1280,6 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
               label={strings.voterIdLastFour}
               value={voterIdLastFour}
               onChange={(e) => {
-                // Only allow digits and max 4 characters
                 const value = e.target.value.replace(/\D/g, "").slice(0, 4);
                 setVoterIdLastFour(value);
               }}
@@ -1021,6 +1289,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
               inputProps={{ inputMode: "numeric", pattern: "[0-9]*" }}
               helperText={strings.enterLastFourDigits}
             />
+
             <Box sx={{ mt: 3, mb: 2 }}>
               <Typography variant="subtitle1" gutterBottom>
                 {strings.faceVerification}
@@ -1041,7 +1310,22 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                 }}
               >
                 <Box
-                  sx={{ position: "relative", width: "100%", height: "100%" }}
+                  ref={containerRef}
+                  sx={{
+                    position: "relative",
+                    width: "100%",
+                    height: "100%",
+                    cursor:
+                      zoomLevel > 1
+                        ? isDragging
+                          ? "grabbing"
+                          : "grab"
+                        : "default",
+                  }}
+                  onMouseDown={handlePanStart}
+                  onMouseMove={handlePanMove}
+                  onMouseUp={handlePanEnd}
+                  onMouseLeave={handlePanEnd}
                 >
                   <video
                     ref={videoRef}
@@ -1052,8 +1336,10 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                       width: "100%",
                       height: "100%",
                       objectFit: "cover",
-                      transform: "scaleX(-1)",
-                      display: cameraActive ? "block" : "none",
+                      transform: getVideoTransform(),
+                      transformOrigin: "center center",
+                      display: cameraState === "active" ? "block" : "none",
+                      transition: "transform 0.2s ease",
                     }}
                   />
                   <canvas
@@ -1068,7 +1354,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                     }}
                   />
 
-                  {!cameraActive && (
+                  {cameraState !== "active" && (
                     <Box
                       sx={{
                         position: "absolute",
@@ -1086,6 +1372,29 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                       <CameraAltIcon
                         sx={{ fontSize: 60, color: "text.disabled", mb: 2 }}
                       />
+                      {cameraState === "active" && (
+                        <Box
+                          sx={{
+                            position: "absolute",
+                            bottom: 8,
+                            left: 8,
+                            right: 8,
+                            textAlign: "center",
+                            bgcolor: "rgba(255, 255, 255, 0.7)",
+                            borderRadius: 1,
+                            p: 0.5,
+                          }}
+                        >
+                          <Typography variant="body2" color="text.secondary">
+                            {`Using: ${
+                              facingMode === "user"
+                                ? "Front-facing"
+                                : "Back-facing"
+                            } camera (${cameras.length} available)`}
+                          </Typography>
+                        </Box>
+                      )}
+
                       <Button
                         variant="contained"
                         onClick={startCamera}
@@ -1098,12 +1407,100 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                     </Box>
                   )}
 
-                  {cameraActive && (
+                  {cameraState === "active" && (
+                    <>
+                      <Box
+                        sx={{
+                          position: "absolute",
+                          top: 8,
+                          right: 8,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 1,
+                          zIndex: 1,
+                        }}
+                      >
+                        {cameras.length > 1 && (
+                          <Tooltip title="Switch Camera">
+                            <IconButton
+                              color="primary"
+                              onClick={switchCamera}
+                              sx={{
+                                bgcolor: "background.paper",
+                                "&:hover": { bgcolor: "action.hover" },
+                              }}
+                            >
+                              <SwitchCameraIcon />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+
+                        <Tooltip title="Zoom In">
+                          <IconButton
+                            color="primary"
+                            onClick={() => handleZoom("in")}
+                            disabled={zoomLevel >= 2}
+                            sx={{
+                              bgcolor: "background.paper",
+                              "&:hover": { bgcolor: "action.hover" },
+                            }}
+                          >
+                            <ZoomInIcon />
+                          </IconButton>
+                        </Tooltip>
+
+                        <Tooltip title="Zoom Out">
+                          <IconButton
+                            color="primary"
+                            onClick={() => handleZoom("out")}
+                            disabled={zoomLevel <= 1}
+                            sx={{
+                              bgcolor: "background.paper",
+                              "&:hover": { bgcolor: "action.hover" },
+                            }}
+                          >
+                            <ZoomOutIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+
+                      {sliderReady && (
+                        <Box
+                          ref={sliderContainerRef}
+                          sx={{
+                            position: "absolute",
+                            bottom: 8,
+                            left: 8,
+                            right: 8,
+                            px: 2,
+                            zIndex: 1,
+                          }}
+                        >
+                          <Slider
+                            value={zoomLevel}
+                            min={1}
+                            max={2}
+                            step={0.1}
+                            onChange={handleSliderChange}
+                            sx={{
+                              color: "white",
+                              "& .MuiSlider-thumb": {
+                                width: 16,
+                                height: 16,
+                              },
+                            }}
+                          />
+                        </Box>
+                      )}
+                    </>
+                  )}
+
+                  {cameraState === "active" && platformConfig.liveliness && (
                     <Box
                       sx={{
                         position: "absolute",
-                        top: 16,
-                        left: 16,
+                        top: 8,
+                        left: 8,
                         zIndex: 1,
                       }}
                     >
@@ -1112,19 +1509,19 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                           label="Blink"
                           verified={verificationState.blink.verified}
                           count={verificationState.blink.count}
-                          required={VERIFICATION_THRESHOLDS.blink}
+                          required={thresholds.blink}
                         />
                         <VerificationChip
                           label="Movement"
                           verified={verificationState.movement.verified}
                           count={verificationState.movement.count}
-                          required={VERIFICATION_THRESHOLDS.movement}
+                          required={thresholds.movement}
                         />
                       </Stack>
                     </Box>
                   )}
 
-                  {activeFeedback && (
+                  {activeFeedback && platformConfig.liveliness && (
                     <Alert
                       severity="success"
                       sx={{
@@ -1133,6 +1530,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                         left: "50%",
                         transform: "translateX(-50%)",
                         width: "auto",
+                        zIndex: 1,
                       }}
                     >
                       {activeFeedback}
@@ -1169,19 +1567,33 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                 </Box>
               </Paper>
             </Box>
-
+            {cameras.length > 0 && (
+              <Paper
+                variant="outlined"
+                sx={{ p: 2, bgcolor: "grey.50", mt: 2 }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Current Camera:{" "}
+                  {selectedCameraIndex === 0 ? "Front-facing" : "Back-facing"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Available Cameras: {cameras.length}
+                </Typography>
+              </Paper>
+            )}
             <Box
               sx={{ display: "flex", justifyContent: "space-between", mt: 3 }}
             >
-              {cameraActive ? (
+              {cameraState === "active" && (
                 <>
                   <Button
                     variant="outlined"
                     color="error"
                     onClick={stopCamera}
                     disabled={attendanceLoading}
+                    startIcon={<StopIcon />}
                   >
-                    {strings.stopCamera}
+                    Stop Camera
                   </Button>
 
                   <Button
@@ -1190,17 +1602,16 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                     onClick={handleSubmitAttendance}
                     disabled={
                       attendanceLoading ||
-                      !verificationState.blink.verified ||
-                      !verificationState.movement.verified ||
-                      voterIdLastFour.length !== 4
+                      voterIdLastFour.length !== 4 ||
+                      (platformConfig.liveliness &&
+                        (!verificationState.blink.verified ||
+                          !verificationState.movement.verified))
                     }
                     startIcon={<HowToRegIcon />}
                   >
                     {strings.verifyAttendance}
                   </Button>
                 </>
-              ) : (
-                <></>
               )}
             </Box>
           </Box>
@@ -1242,6 +1653,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
       <Snackbar
         open={snackbarOpen}
         autoHideDuration={3000}
@@ -1252,14 +1664,20 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   );
 };
 
-const VerificationChip = ({ label, verified, count, required }) => (
+const VerificationChip = React.memo(({ label, verified, count, required }) => (
   <Chip
     label={`${label}: ${count}/${required}`}
     color={verified ? "success" : "default"}
     variant={verified ? "filled" : "outlined"}
     icon={verified ? <CheckCircleIcon fontSize="small" /> : undefined}
-    sx={{ flex: 1, maxWidth: 150, fontWeight: verified ? 600 : 400 }}
+    sx={{
+      flex: 1,
+      maxWidth: 150,
+      fontWeight: verified ? 600 : 400,
+      backgroundColor: !verified ? "rgba(255, 255, 255, 0.3)" : undefined,
+      borderColor: !verified ? "rgba(255, 255, 255, 0.3)" : undefined,
+    }}
   />
-);
+));
 
 export default TodaysMeetingsBanner;
