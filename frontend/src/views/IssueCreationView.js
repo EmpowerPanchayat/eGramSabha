@@ -31,6 +31,7 @@ import AudioRecorder from '../components/AudioRecorder';
 import FileUploader from '../components/FileUploader';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useLanguage } from '../utils/LanguageContext';
+import { getCategories, getSubcategories } from '../utils/categoryUtils';
 
 const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
     const { strings } = useLanguage();
@@ -81,67 +82,6 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
 
         fetchUsers();
     }, [user.role, user.panchayatId]);
-
-    const categoryOptions = [
-        { value: 'CULTURE_AND_NATURE', label: strings.categoryCultureAndNature },
-        { value: 'INFRASTRUCTURE', label: strings.categoryInfrastructure },
-        { value: 'EARNING_OPPORTUNITIES', label: strings.categoryEarningOpportunities },
-        { value: 'BASIC_AMENITIES', label: strings.categoryBasicAmenities },
-        { value: 'SOCIAL_WELFARE_SCHEMES', label: strings.categorySocialWelfareSchemes },
-        { value: 'OTHER', label: strings.categoryOther }
-    ];
-
-    const getSubcategoryOptions = (category) => {
-        switch (category) {
-            case 'CULTURE_AND_NATURE':
-                return [
-                    { value: 'FESTIVALS', label: strings.subcategoryFestivals },
-                    { value: 'TREES_AND_FORESTS', label: strings.subcategoryTreesAndForests },
-                    { value: 'SOIL', label: strings.subcategorySoil },
-                    { value: 'NATURAL_WATER_RESOURCES', label: strings.subcategoryNaturalWaterResources },
-                    { value: 'RELIGIOUS_PLACES', label: strings.subcategoryReligiousPlaces }
-                ];
-            case 'INFRASTRUCTURE':
-                return [
-                    { value: 'LAND', label: strings.subcategoryLand },
-                    { value: 'WATER', label: strings.subcategoryWater },
-                    { value: 'ENERGY', label: strings.subcategoryEnergy },
-                    { value: 'TRANSPORTATION', label: strings.subcategoryTransportation },
-                    { value: 'COMMUNICATION', label: strings.subcategoryCommunication }
-                ];
-            case 'EARNING_OPPORTUNITIES':
-                return [
-                    { value: 'AGRICULTURE', label: strings.subcategoryAgriculture },
-                    { value: 'ANIMAL_HUSBANDRY', label: strings.subcategoryAnimalHusbandry },
-                    { value: 'FISHERIES', label: strings.subcategoryFisheries },
-                    { value: 'SMALL_SCALE_INDUSTRIES', label: strings.subcategorySmallScaleIndustries },
-                    { value: 'MINOR_FOREST_PRODUCE', label: strings.subcategoryMinorForestProduce },
-                    { value: 'KHADI_AND_VILLAGE_INDUSTRIES', label: strings.subcategoryKhadiAndVillageIndustries }
-                ];
-            case 'BASIC_AMENITIES':
-                return [
-                    { value: 'HEALTH', label: strings.subcategoryHealth },
-                    { value: 'EDUCATION', label: strings.subcategoryEducation },
-                    { value: 'HOUSING_AND_SANITATION', label: strings.subcategoryHousingAndSanitation },
-                    { value: 'SPORTS_AND_ENTERTAINMENT', label: strings.subcategorySportsAndEntertainment },
-                    { value: 'FOOD', label: strings.subcategoryFood }
-                ];
-            case 'SOCIAL_WELFARE_SCHEMES':
-                return [
-                    { value: 'WEAKER_SECTIONS', label: strings.subcategoryWeakerSections },
-                    { value: 'HANDICAPPED_WELFARE', label: strings.subcategoryHandicappedWelfare },
-                    { value: 'FAMILY_WELFARE', label: strings.subcategoryFamilyWelfare },
-                    { value: 'WOMEN_AND_CHILD_DEVELOPMENT', label: strings.subcategoryWomenAndChildDevelopment },
-                    { value: 'POVERTY_ALLEVIATION', label: strings.subcategoryPovertyAlleviation }
-                ];
-            case 'OTHER':
-                return [
-                    { value: 'OTHER', label: strings.subcategoryOther }
-                ];
-            default:
-                return [];
-        }
-    };
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -377,9 +317,9 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                                         <MenuItem value="" disabled>
                                             <Typography color="text.secondary">{strings.selectCategory}</Typography>
                                         </MenuItem>
-                                        {categoryOptions.map(option => (
+                                        {getCategories().map(option => (
                                             <MenuItem key={option.value} value={option.value}>
-                                                {option.label}
+                                                {strings[option.labelKey]}
                                             </MenuItem>
                                         ))}
                                     </Select>
@@ -403,9 +343,9 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                                             <MenuItem value="" disabled>
                                                 <Typography color="text.secondary">{strings.selectSubcategory}</Typography>
                                             </MenuItem>
-                                            {getSubcategoryOptions(issueData.category).map(option => (
+                                            {getSubcategories(issueData.category).map(option => (
                                                 <MenuItem key={option.value} value={option.value}>
-                                                    {option.label}
+                                                    {strings[option.labelKey]}
                                                 </MenuItem>
                                             ))}
                                         </Select>

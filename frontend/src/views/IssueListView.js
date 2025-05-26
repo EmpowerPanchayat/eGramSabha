@@ -57,6 +57,7 @@ import { useAuth } from '../utils/authContext';
 import IssueStatusDropdown from '../components/IssueStatusDropdown';
 import CategorySubcategorySelector from '../components/IssueCategorySubcategorySelector';
 import filterIssues from '../utils/filterIssues';
+import { getLabelKeyFromValue } from '../utils/categoryUtils';
 
 const IssueListView = ({ user, onBack, onViewIssue }) => {
     const { strings } = useLanguage();
@@ -201,61 +202,6 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                 variant="outlined"
             />
         );
-    };
-
-    // Get category name
-    const getCategoryName = (category) => {
-        const categoryMap = {
-            'CULTURE_AND_NATURE': strings.categoryCultureAndNature,
-            'INFRASTRUCTURE': strings.categoryInfrastructure,
-            'EARNING_OPPORTUNITIES': strings.categoryEarningOpportunities,
-            'BASIC_AMENITIES': strings.categoryBasicAmenities,
-            'SOCIAL_WELFARE_SCHEMES': strings.categorySocialWelfareSchemes,
-            'OTHER': strings.categoryOther
-        };
-
-        return categoryMap[category] || category;
-    };
-
-    // Get subcategory name
-    const getSubcategoryName = (subcategory) => {
-        const subcategoryMap = {
-            // Culture and Nature
-            'FESTIVALS': strings.subcategoryFestivals,
-            'TREES_AND_FORESTS': strings.subcategoryTreesAndForests,
-            'SOIL': strings.subcategorySoil,
-            'NATURAL_WATER_RESOURCES': strings.subcategoryNaturalWaterResources,
-            'RELIGIOUS_PLACES': strings.subcategoryReligiousPlaces,
-            // Infrastructure
-            'LAND': strings.subcategoryLand,
-            'WATER': strings.subcategoryWater,
-            'ENERGY': strings.subcategoryEnergy,
-            'TRANSPORTATION': strings.subcategoryTransportation,
-            'COMMUNICATION': strings.subcategoryCommunication,
-            // Earning Opportunities
-            'AGRICULTURE': strings.subcategoryAgriculture,
-            'ANIMAL_HUSBANDRY': strings.subcategoryAnimalHusbandry,
-            'FISHERIES': strings.subcategoryFisheries,
-            'SMALL_SCALE_INDUSTRIES': strings.subcategorySmallScaleIndustries,
-            'MINOR_FOREST_PRODUCE': strings.subcategoryMinorForestProduce,
-            'KHADI_AND_VILLAGE_INDUSTRIES': strings.subcategoryKhadiAndVillageIndustries,
-            // Basic Amenities
-            'HEALTH': strings.subcategoryHealth,
-            'EDUCATION': strings.subcategoryEducation,
-            'HOUSING_AND_SANITATION': strings.subcategoryHousingAndSanitation,
-            'SPORTS_AND_ENTERTAINMENT': strings.subcategorySportsAndEntertainment,
-            'FOOD': strings.subcategoryFood,
-            // Social Welfare Schemes
-            'WEAKER_SECTIONS': strings.subcategoryWeakerSections,
-            'HANDICAPPED_WELFARE': strings.subcategoryHandicappedWelfare,
-            'FAMILY_WELFARE': strings.subcategoryFamilyWelfare,
-            'WOMEN_AND_CHILD_DEVELOPMENT': strings.subcategoryWomenAndChildDevelopment,
-            'POVERTY_ALLEVIATION': strings.subcategoryPovertyAlleviation,
-            // Other
-            'OTHER': strings.subcategoryOther
-        };
-
-        return subcategoryMap[subcategory] || subcategory;
     };
 
     // Get priority badge
@@ -473,11 +419,11 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                                     <Typography variant="body2" sx={{ mr: 1 }}>
                                                                         {getCategoryIcon(issue.category)}
                                                                     </Typography>
-                                                                    {getCategoryName(issue.category)}
+                                                                    {strings[getLabelKeyFromValue(issue.category)]}
                                                                 </Box>
                                                             </TableCell>
                                                             <TableCell>
-                                                                {getSubcategoryName(issue.subcategory)}
+                                                                {strings[getLabelKeyFromValue(issue.subcategory)]}
                                                             </TableCell>
                                                             <TableCell>{getStatusChip(issue.status)}</TableCell>
                                                             <TableCell>{formatDate(issue.createdAt)}</TableCell>
@@ -554,7 +500,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                                 {getCategoryIcon(issue.category)}
                                                             </Typography>
                                                             <Typography variant="subtitle1" noWrap sx={{ maxWidth: 150 }}>
-                                                                {getCategoryName(issue.category)}
+                                                                {strings[getLabelKeyFromValue(issue.category)]}
                                                             </Typography>
                                                         </Box>
                                                         {getStatusChip(issue.status)}
@@ -563,7 +509,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                                                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                                             <Typography variant="subtitle1" noWrap sx={{ maxWidth: 150 }}>
-                                                                {getSubcategoryName(issue.subcategory)}
+                                                                {strings[getLabelKeyFromValue(issue.subcategory)]}
                                                             </Typography>
                                                         </Box>
                                                     </Box>
@@ -685,7 +631,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                 </Typography>
                                             </Box>
                                             <Typography variant="body1">
-                                                {getCategoryName(selectedIssue.category)}
+                                                {strings[getLabelKeyFromValue(selectedIssue.category)]}
                                             </Typography>
                                         </Grid>
 
@@ -697,7 +643,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                 </Typography>
                                             </Box>
                                             <Typography variant="body1">
-                                                {getSubcategoryName(selectedIssue.subcategory)}
+                                                {strings[getLabelKeyFromValue(selectedIssue.subcategory)]}
                                             </Typography>
                                         </Grid>
 
