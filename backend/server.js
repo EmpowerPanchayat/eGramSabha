@@ -196,6 +196,7 @@ app.post('/api/import-csv', upload.single('file'), async (req, res) => {
 
     // First, log the column headers to identify any issues
     let columnNames = [];
+    let skippedDueToMissingVoterID = 0;
 
     fs.createReadStream(req.file.path)
       .pipe(csv())
@@ -230,6 +231,7 @@ app.post('/api/import-csv', upload.single('file'), async (req, res) => {
         }
 
         if (!voterIdValue) {
+          skippedDueToMissingVoterID++;
           console.log('Row missing voter ID:', data);
           return; // Skip this row
         }
@@ -253,38 +255,53 @@ app.post('/api/import-csv', upload.single('file'), async (req, res) => {
       })
       .on('end', async () => {
         try {
-          console.log(`Processed ${results.length} rows from CSV for panchayat ${panchayatId}`);
+          console.log(`Processed ${results.length} rows from CSV for panchayat ${panchayatId}. Skipped ${skippedDueToMissingVoterID} rows.`);
 
           if (results.length === 0) {
             return res.status(400).json({
               success: false,
-              message: 'No valid data found in CSV. Column headers: ' + columnNames.join(', ')
+              message: `No valid data found in CSV. Skipped ${skippedDueToMissingVoterID} rows. Headers: ${columnNames.join(', ')}`
             });
           }
 
-          // Only remove existing users for this panchayat
-          await User.deleteMany({ panchayatId });
+          if (results.length > 10000) {
+            return res.status(400).json({
+              success: false,
+              message: 'CSV import limit exceeded. Maximum allowed is 10,000 records.'
+            });
+          }
 
-          // Import new data
-          await User.insertMany(results);
+          // Create bulk operations
+          const bulkOps = results.map(user => ({
+            updateOne: {
+              filter: { voterIdNumber: user.voterIdNumber, panchayatId },
+              update: { $set: user },
+              upsert: true
+            }
+          }));
+
+          const bulkResult = await User.bulkWrite(bulkOps);
+
+          const created = bulkResult.upsertedCount || 0;
+          const updated = bulkResult.modifiedCount || 0;
+          const matched = bulkResult.matchedCount || 0;
+          const unchanged = matched - updated;
 
           fs.unlinkSync(req.file.path); // Delete temp file
 
           res.json({
             success: true,
-            message: `Successfully imported ${results.length} voters to ${panchayat.name} panchayat.`
+            message: `Import complete: ${created} added, ${updated} updated, ${unchanged} unchanged, ${skippedDueToMissingVoterID} skipped due to missing voter ID.`,
+            skippedDueToMissingVoterID
           });
         } catch (err) {
-          console.error('Error saving to database:', err);
-          res.status(500).json({
-            success: false,
-            message: 'Error saving to database: ' + err.message
-          });
+          console.error('Import error:', err);
+          res.status(500).json({ success: false, message: 'Error saving data: ' + err.message });
         }
       });
   } catch (error) {
-    console.error('Error importing CSV:', error);
-    res.status(500).json({ success: false, message: 'Error importing CSV' });
+    console.error('CSV import error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error.' });
   }
 });
 
