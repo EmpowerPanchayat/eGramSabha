@@ -8,10 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Multilingual file generation with proper Hindi text rendering and word wrapping.([#57])(https://github.com/EmpowerPanchayat/eGramSabha/issues/57)
+
+- Multilingual file generation with proper Hindi text rendering and word wrapping.([#57](https://github.com/EmpowerPanchayat/eGramSabha/issues/57))
+- Centralized all category and subcategory configurations into a single category.js source file to avoid duplication and improve maintainability. ([#42](https://github.com/EmpowerPanchayat/eGramSabha/issues/42))
 
 ### Removed
-- Removed check-in time from PDF and CSV reports.([#57])(https://github.com/EmpowerPanchayat/eGramSabha/issues/57)
+
+- Removed check-in time from PDF and CSV reports.([#57](https://github.com/EmpowerPanchayat/eGramSabha/issues/57))
 
 ## [0.2.0] - 2025-05-27
 
