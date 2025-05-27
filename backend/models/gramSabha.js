@@ -49,7 +49,6 @@ const gramSabhaSchema = new mongoose.Schema(
     },
     recordingLink: {
       type: String,
-      maxLength: 255,
     },
     actualDurationMinutes: {
       type: Number,
@@ -60,7 +59,7 @@ const gramSabhaSchema = new mongoose.Schema(
     conclusion: {
       type: String,
     },
-    jioMeetData: {
+    meetData: {
       type: mongoose.Schema.Types.Mixed,
       required: false,
     },

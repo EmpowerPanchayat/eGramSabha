@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import {
   Box,
   Card,
@@ -18,31 +18,32 @@ import {
   Menu,
   MenuItem,
   Grid,
-  Tooltip
-} from '@mui/material';
+  Tooltip,
+} from "@mui/material";
 import {
   Download as DownloadIcon,
   Add as AddIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   Help as HelpIcon,
-  People as PeopleIcon
-} from '@mui/icons-material';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+  People as PeopleIcon,
+} from "@mui/icons-material";
+import { jsPDF } from "jspdf";
+import "jspdf-autotable";
 import {
   fetchGramSabhaMeeting,
   addAttachment,
   submitRSVP,
   getRSVPStatus,
-  getRSVPStats
-} from '../../api/gram-sabha';
-import { useLanguage } from '../../utils/LanguageContext';
+  getRSVPStats,
+} from "../../api/gram-sabha";
+import { useLanguage } from "../../utils/LanguageContext";
 
 const GramSabhaDetails = ({ meetingId, user }) => {
   const [meeting, setMeeting] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [concluded, setConcluded] = useState(false);
+  const [error, setError] = useState("");
   const [rsvpStatus, setRsvpStatus] = useState(null);
   const [rsvpLoading, setRsvpLoading] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
@@ -50,8 +51,10 @@ const GramSabhaDetails = ({ meetingId, user }) => {
   const { strings } = useLanguage();
   const dataFetched = useRef(false);
 
-  const isPresident = user?.role === 'PRESIDENT' || user?.role === 'PRESIDENT_PANCHAYAT';
-  const canRSVP = !isPresident && meeting && new Date(meeting.dateTime) > new Date();
+  const isPresident =
+    user?.role === "PRESIDENT" || user?.role === "PRESIDENT_PANCHAYAT";
+  const canRSVP =
+    !isPresident && meeting && new Date(meeting.dateTime) > new Date();
 
   // Consolidated data fetching in a single useEffect
   useEffect(() => {
@@ -59,12 +62,16 @@ const GramSabhaDetails = ({ meetingId, user }) => {
       if (!meetingId || dataFetched.current) return;
 
       setLoading(true);
-      setError('');
+      setError("");
 
       try {
         // Fetch meeting details
         const meetingData = await fetchGramSabhaMeeting(meetingId);
         setMeeting(meetingData);
+        const status = meetingData.status;
+        if (status === "CONCLUDED") {
+          setConcluded(true);
+        }
 
         // Fetch RSVP status if user is logged in
         if (user?._id) {
@@ -80,8 +87,8 @@ const GramSabhaDetails = ({ meetingId, user }) => {
 
         dataFetched.current = true;
       } catch (err) {
-        setError(err.message || 'Failed to load meeting data');
-        console.error('Error loading meeting data:', err);
+        setError(err.message || "Failed to load meeting data");
+        console.error("Error loading meeting data:", err);
       } finally {
         setLoading(false);
       }
@@ -92,7 +99,7 @@ const GramSabhaDetails = ({ meetingId, user }) => {
 
   const handleRSVP = async (status) => {
     if (!user?._id) {
-      setError('Please login to RSVP');
+      setError("Please login to RSVP");
       return;
     }
 
@@ -109,7 +116,7 @@ const GramSabhaDetails = ({ meetingId, user }) => {
         setRsvpStats(statsResponse.data);
       }
     } catch (err) {
-      setError(err.message || 'Failed to submit RSVP');
+      setError(err.message || "Failed to submit RSVP");
     } finally {
       setRsvpLoading(false);
       handleMenuClose();
@@ -119,28 +126,28 @@ const GramSabhaDetails = ({ meetingId, user }) => {
   const handleAddAttachment = async (e) => {
     const file = e.target.files[0];
     if (!file) {
-      setError('Please select a file to upload');
+      setError("Please select a file to upload");
       return;
     }
 
     try {
       setLoading(true);
-      setError('');
+      setError("");
 
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append("file", file);
 
       const response = await addAttachment(meetingId, formData);
 
       // Update the local state with the new attachment
       if (response.success && response.data) {
-        setMeeting(prev => ({
+        setMeeting((prev) => ({
           ...prev,
-          attachments: [...(prev.attachments || []), response.data]
+          attachments: [...(prev.attachments || []), response.data],
         }));
       }
     } catch (err) {
-      setError(err.message || 'Failed to add attachment');
+      setError(err.message || "Failed to add attachment");
     } finally {
       setLoading(false);
     }
@@ -150,9 +157,9 @@ const GramSabhaDetails = ({ meetingId, user }) => {
     try {
       // Check if the attachment data is a data URL or just a base64 string
       let base64Data;
-      if (attachment.attachment.includes(',')) {
+      if (attachment.attachment.includes(",")) {
         // It's a data URL, extract the base64 part
-        base64Data = attachment.attachment.split(',')[1];
+        base64Data = attachment.attachment.split(",")[1];
       } else {
         // It's already a base64 string
         base64Data = attachment.attachment;
@@ -167,7 +174,7 @@ const GramSabhaDetails = ({ meetingId, user }) => {
 
       // Create and trigger download
       const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = url;
       link.download = attachment.filename;
       document.body.appendChild(link);
@@ -177,8 +184,17 @@ const GramSabhaDetails = ({ meetingId, user }) => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Error downloading file:', err);
-      setError('Failed to download file. Please try again.');
+      console.error("Error downloading file:", err);
+      setError("Failed to download file. Please try again.");
+    }
+  };
+
+  const handleDownloadRecording = async (meeting) => {
+    try {
+      window.open(meeting.recordingLink, "_blank");
+    } catch (error) {
+      console.error("Error downloading recording:", error);
+      alert("Failed to download recording.");
     }
   };
 
@@ -192,36 +208,41 @@ const GramSabhaDetails = ({ meetingId, user }) => {
 
   const getRSVPButtonProps = () => {
     switch (rsvpStatus) {
-      case 'CONFIRMED':
+      case "CONFIRMED":
         return {
-          color: 'success',
+          color: "success",
           icon: <CheckCircleIcon />,
-          text: strings.attending
+          text: strings.attending,
         };
-      case 'DECLINED':
+      case "DECLINED":
         return {
-          color: 'error',
+          color: "error",
           icon: <CancelIcon />,
-          text: strings.notAttending
+          text: strings.notAttending,
         };
-      case 'MAYBE':
+      case "MAYBE":
         return {
-          color: 'warning',
+          color: "warning",
           icon: <HelpIcon />,
-          text: strings.mayAttend
+          text: strings.mayAttend,
         };
       default:
         return {
-          color: 'primary',
+          color: "primary",
           icon: <CheckCircleIcon />,
-          text: strings.rsvp
+          text: strings.rsvp,
         };
     }
   };
 
   if (loading && !meeting) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" height="300px">
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        height="300px"
+      >
         <CircularProgress />
       </Box>
     );
@@ -246,7 +267,12 @@ const GramSabhaDetails = ({ meetingId, user }) => {
       <Card variant="outlined" sx={{ mb: 3, boxShadow: 1 }}>
         <CardContent>
           {/* Meeting Title and Action Buttons */}
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+          <Box
+            display="flex"
+            justifyContent="space-between"
+            alignItems="center"
+            mb={3}
+          >
             <Typography variant="h5" fontWeight="500">
               {meeting.title}
             </Typography>
@@ -258,7 +284,13 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                     color={getRSVPButtonProps().color}
                     onClick={handleMenuOpen}
                     disabled={rsvpLoading || loading}
-                    startIcon={rsvpLoading ? <CircularProgress size={20} color="inherit" /> : getRSVPButtonProps().icon}
+                    startIcon={
+                      rsvpLoading ? (
+                        <CircularProgress size={20} color="inherit" />
+                      ) : (
+                        getRSVPButtonProps().icon
+                      )
+                    }
                     size="medium"
                   >
                     {rsvpLoading ? strings.loading : getRSVPButtonProps().text}
@@ -269,24 +301,24 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                     onClose={handleMenuClose}
                   >
                     <MenuItem
-                      onClick={() => handleRSVP('CONFIRMED')}
-                      disabled={rsvpStatus === 'CONFIRMED'}
+                      onClick={() => handleRSVP("CONFIRMED")}
+                      disabled={rsvpStatus === "CONFIRMED"}
                     >
-                      <CheckCircleIcon sx={{ mr: 1, color: 'success.main' }} />
+                      <CheckCircleIcon sx={{ mr: 1, color: "success.main" }} />
                       {strings.attending}
                     </MenuItem>
                     <MenuItem
-                      onClick={() => handleRSVP('DECLINED')}
-                      disabled={rsvpStatus === 'DECLINED'}
+                      onClick={() => handleRSVP("DECLINED")}
+                      disabled={rsvpStatus === "DECLINED"}
                     >
-                      <CancelIcon sx={{ mr: 1, color: 'error.main' }} />
+                      <CancelIcon sx={{ mr: 1, color: "error.main" }} />
                       {strings.notAttending}
                     </MenuItem>
                     <MenuItem
-                      onClick={() => handleRSVP('MAYBE')}
-                      disabled={rsvpStatus === 'MAYBE'}
+                      onClick={() => handleRSVP("MAYBE")}
+                      disabled={rsvpStatus === "MAYBE"}
                     >
-                      <HelpIcon sx={{ mr: 1, color: 'warning.main' }} />
+                      <HelpIcon sx={{ mr: 1, color: "warning.main" }} />
                       {strings.mayAttend}
                     </MenuItem>
                   </Menu>
@@ -316,49 +348,65 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                     component="label"
                   >
                     {strings.uploadFile}
-                    <input
-                      type="file"
-                      hidden
-                      onChange={handleAddAttachment}
-                    />
+                    <input type="file" hidden onChange={handleAddAttachment} />
                   </Button>
                 </Tooltip>
+              )}
+              {isPresident && concluded && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  component="label"
+                  onClick={() => handleDownloadRecording(meeting)}
+                >
+                  Download Recording
+                </Button>
               )}
             </Box>
           </Box>
 
           {/* Meeting Details */}
-          <Paper variant="outlined" sx={{ p: 3, mb: 3, bgcolor: 'background.default' }}>
+          <Paper
+            variant="outlined"
+            sx={{ p: 3, mb: 3, bgcolor: "background.default" }}
+          >
             <Grid container spacing={2}>
               <Grid item xs={12} md={6}>
                 <Box display="flex" sx={{ mb: 2 }}>
-                  <Typography variant="body1" sx={{ width: 120, fontWeight: 500 }}>
+                  <Typography
+                    variant="body1"
+                    sx={{ width: 120, fontWeight: 500 }}
+                  >
                     {strings.date} & {strings.time}:
                   </Typography>
                   <Typography variant="body1">
-                    {new Date(meeting.dateTime).toLocaleString('en-IN', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                      hour: 'numeric',
-                      minute: 'numeric',
-                      hour12: true
+                    {new Date(meeting.dateTime).toLocaleString("en-IN", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                      hour: "numeric",
+                      minute: "numeric",
+                      hour12: true,
                     })}
                   </Typography>
                 </Box>
 
                 <Box display="flex" sx={{ mb: 2 }}>
-                  <Typography variant="body1" sx={{ width: 120, fontWeight: 500 }}>
+                  <Typography
+                    variant="body1"
+                    sx={{ width: 120, fontWeight: 500 }}
+                  >
                     {strings.location}:
                   </Typography>
-                  <Typography variant="body1">
-                    {meeting.location}
-                  </Typography>
+                  <Typography variant="body1">{meeting.location}</Typography>
                 </Box>
               </Grid>
               <Grid item xs={12} md={6}>
                 <Box display="flex" sx={{ mb: 2 }}>
-                  <Typography variant="body1" sx={{ width: 120, fontWeight: 500 }}>
+                  <Typography
+                    variant="body1"
+                    sx={{ width: 120, fontWeight: 500 }}
+                  >
                     {strings.duration}:
                   </Typography>
                   <Typography variant="body1">
@@ -367,16 +415,24 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                 </Box>
 
                 <Box display="flex">
-                  <Typography variant="body1" sx={{ width: 120, fontWeight: 500 }}>
+                  <Typography
+                    variant="body1"
+                    sx={{ width: 120, fontWeight: 500 }}
+                  >
                     {strings.status}:
                   </Typography>
                   <Typography
                     variant="body1"
                     sx={{
-                      color: meeting.status === 'SCHEDULED' ? 'primary.main' :
-                        meeting.status === 'COMPLETED' ? 'success.main' :
-                          meeting.status === 'CANCELLED' ? 'error.main' : 'text.primary',
-                      fontWeight: 500
+                      color:
+                        meeting.status === "SCHEDULED"
+                          ? "primary.main"
+                          : meeting.status === "COMPLETED"
+                          ? "success.main"
+                          : meeting.status === "CANCELLED"
+                          ? "error.main"
+                          : "text.primary",
+                      fontWeight: 500,
                     }}
                   >
                     {strings[`status${meeting.status}`] || meeting.status}
@@ -394,16 +450,18 @@ const GramSabhaDetails = ({ meetingId, user }) => {
               </Typography>
 
               <Grid container spacing={2} justifyContent="center">
-                <Grid item xs={6} sm={3} sx={{ maxWidth: '250px' }}>
-                  <Card sx={{
-                    height: '100%',
-                    boxShadow: 1,
-                    position: 'relative',
-                    overflow: 'hidden',
-                    borderTop: '4px solid',
-                    borderColor: 'success.main',
-                    bgcolor: 'background.paper'
-                  }}>
+                <Grid item xs={6} sm={3} sx={{ maxWidth: "250px" }}>
+                  <Card
+                    sx={{
+                      height: "100%",
+                      boxShadow: 1,
+                      position: "relative",
+                      overflow: "hidden",
+                      borderTop: "4px solid",
+                      borderColor: "success.main",
+                      bgcolor: "background.paper",
+                    }}
+                  >
                     <CardContent sx={{ p: 2 }}>
                       <Box display="flex" alignItems="center" gap={1} mb={1}>
                         <CheckCircleIcon color="success" />
@@ -411,23 +469,29 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                           {strings.attending}
                         </Typography>
                       </Box>
-                      <Typography variant="h4" color="success.main" fontWeight="bold">
+                      <Typography
+                        variant="h4"
+                        color="success.main"
+                        fontWeight="bold"
+                      >
                         {rsvpStats.CONFIRMED}
                       </Typography>
                     </CardContent>
                   </Card>
                 </Grid>
 
-                <Grid item xs={6} sm={3} sx={{ maxWidth: '250px' }}>
-                  <Card sx={{
-                    height: '100%',
-                    boxShadow: 1,
-                    position: 'relative',
-                    overflow: 'hidden',
-                    borderTop: '4px solid',
-                    borderColor: 'error.main',
-                    bgcolor: 'background.paper'
-                  }}>
+                <Grid item xs={6} sm={3} sx={{ maxWidth: "250px" }}>
+                  <Card
+                    sx={{
+                      height: "100%",
+                      boxShadow: 1,
+                      position: "relative",
+                      overflow: "hidden",
+                      borderTop: "4px solid",
+                      borderColor: "error.main",
+                      bgcolor: "background.paper",
+                    }}
+                  >
                     <CardContent sx={{ p: 2 }}>
                       <Box display="flex" alignItems="center" gap={1} mb={1}>
                         <CancelIcon color="error" />
@@ -435,23 +499,29 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                           {strings.notAttending}
                         </Typography>
                       </Box>
-                      <Typography variant="h4" color="error.main" fontWeight="bold">
+                      <Typography
+                        variant="h4"
+                        color="error.main"
+                        fontWeight="bold"
+                      >
                         {rsvpStats.DECLINED}
                       </Typography>
                     </CardContent>
                   </Card>
                 </Grid>
 
-                <Grid item xs={6} sm={3} sx={{ maxWidth: '250px' }}>
-                  <Card sx={{
-                    height: '100%',
-                    boxShadow: 1,
-                    position: 'relative',
-                    overflow: 'hidden',
-                    borderTop: '4px solid',
-                    borderColor: 'warning.main',
-                    bgcolor: 'background.paper'
-                  }}>
+                <Grid item xs={6} sm={3} sx={{ maxWidth: "250px" }}>
+                  <Card
+                    sx={{
+                      height: "100%",
+                      boxShadow: 1,
+                      position: "relative",
+                      overflow: "hidden",
+                      borderTop: "4px solid",
+                      borderColor: "warning.main",
+                      bgcolor: "background.paper",
+                    }}
+                  >
                     <CardContent sx={{ p: 2 }}>
                       <Box display="flex" alignItems="center" gap={1} mb={1}>
                         <HelpIcon color="warning" />
@@ -459,23 +529,29 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                           {strings.mayAttend}
                         </Typography>
                       </Box>
-                      <Typography variant="h4" color="warning.main" fontWeight="bold">
+                      <Typography
+                        variant="h4"
+                        color="warning.main"
+                        fontWeight="bold"
+                      >
                         {rsvpStats.MAYBE}
                       </Typography>
                     </CardContent>
                   </Card>
                 </Grid>
 
-                <Grid item xs={6} sm={3} sx={{ maxWidth: '250px' }}>
-                  <Card sx={{
-                    height: '100%',
-                    boxShadow: 1,
-                    position: 'relative',
-                    overflow: 'hidden',
-                    borderTop: '4px solid',
-                    borderColor: 'grey.500',
-                    bgcolor: 'background.paper'
-                  }}>
+                <Grid item xs={6} sm={3} sx={{ maxWidth: "250px" }}>
+                  <Card
+                    sx={{
+                      height: "100%",
+                      boxShadow: 1,
+                      position: "relative",
+                      overflow: "hidden",
+                      borderTop: "4px solid",
+                      borderColor: "grey.500",
+                      bgcolor: "background.paper",
+                    }}
+                  >
                     <CardContent sx={{ p: 2 }}>
                       <Box display="flex" alignItems="center" gap={1} mb={1}>
                         <PeopleIcon color="action" />
@@ -483,7 +559,11 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                           {strings.noResponse}
                         </Typography>
                       </Box>
-                      <Typography variant="h4" color="text.secondary" fontWeight="bold">
+                      <Typography
+                        variant="h4"
+                        color="text.secondary"
+                        fontWeight="bold"
+                      >
                         {rsvpStats.NO_RESPONSE}
                       </Typography>
                     </CardContent>
@@ -491,8 +571,13 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                 </Grid>
               </Grid>
 
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 3, textAlign: 'center' }}>
-                {strings.totalRegisteredUsers}: <strong>{rsvpStats.TOTAL}</strong>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 3, textAlign: "center" }}
+              >
+                {strings.totalRegisteredUsers}:{" "}
+                <strong>{rsvpStats.TOTAL}</strong>
               </Typography>
             </Box>
           )}
@@ -504,8 +589,11 @@ const GramSabhaDetails = ({ meetingId, user }) => {
             <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
               {strings.agenda}
             </Typography>
-            <Paper variant="outlined" sx={{ p: 3, bgcolor: 'background.default' }}>
-              <Typography variant="body1" sx={{ whiteSpace: 'pre-line' }}>
+            <Paper
+              variant="outlined"
+              sx={{ p: 3, bgcolor: "background.default" }}
+            >
+              <Typography variant="body1" sx={{ whiteSpace: "pre-line" }}>
                 {meeting.agenda || strings.noAgenda}
               </Typography>
             </Paper>
@@ -521,11 +609,19 @@ const GramSabhaDetails = ({ meetingId, user }) => {
               <TableContainer component={Paper} variant="outlined">
                 <Table>
                   <TableHead>
-                    <TableRow sx={{ bgcolor: 'background.default' }}>
-                      <TableCell sx={{ fontWeight: 'bold' }}>{strings.fileName}</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>{strings.fileType}</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>{strings.uploadedAt}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 'bold' }}>{strings.actions}</TableCell>
+                    <TableRow sx={{ bgcolor: "background.default" }}>
+                      <TableCell sx={{ fontWeight: "bold" }}>
+                        {strings.fileName}
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: "bold" }}>
+                        {strings.fileType}
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: "bold" }}>
+                        {strings.uploadedAt}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                        {strings.actions}
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -534,14 +630,17 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                         <TableCell>{attachment.filename}</TableCell>
                         <TableCell>{attachment.mimeType}</TableCell>
                         <TableCell>
-                          {new Date(attachment.uploadedAt).toLocaleString('en-IN', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                            hour: 'numeric',
-                            minute: 'numeric',
-                            hour12: true
-                          })}
+                          {new Date(attachment.uploadedAt).toLocaleString(
+                            "en-IN",
+                            {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                              hour: "numeric",
+                              minute: "numeric",
+                              hour12: true,
+                            }
+                          )}
                         </TableCell>
                         <TableCell align="right">
                           <Button
@@ -560,7 +659,14 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                 </Table>
               </TableContainer>
             ) : (
-              <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', bgcolor: 'background.default' }}>
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 3,
+                  textAlign: "center",
+                  bgcolor: "background.default",
+                }}
+              >
                 <Typography variant="body2" color="text.secondary">
                   {strings.noAttachments}
                 </Typography>

@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
+var uuid4 = require("uuid4");
 const axios = require("axios");
 const fs = require("fs");
 const GramSabha = require("../models/gramSabha");
@@ -12,9 +13,11 @@ const multer = require("multer");
 const mongoose = require("mongoose");
 const User = require("../models/User");
 
-const { JIOMEET_APP_ID, JIOMEET_API, BACKEND_URL } = process.env;
-const privateKey = fs.readFileSync(process.env.PRIVATE_KEY_PATH, "utf8");
-const publicKey = fs.readFileSync(process.env.PUBLIC_KEY_PATH, "utf8");
+const { HMS_ACCESS_KEY, HMS_SECRET, HMS_TEMPLATE_ID, HMS_BASE_URL } =
+  process.env;
+// const privateKey = fs.readFileSync(process.env.PRIVATE_KEY_PATH, "utf8");
+// const publicKey = fs.readFileSync(process.env.PUBLIC_KEY_PATH, "utf8");
+
 // Configure multer for memory storage
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -24,6 +27,70 @@ const upload = multer({
   },
 });
 
+function generateManagementToken() {
+  const payload = {
+    access_key: HMS_ACCESS_KEY,
+    type: "management",
+    version: 2,
+    iat: Math.floor(Date.now() / 1000),
+    nbf: Math.floor(Date.now() / 1000),
+  };
+
+  const token = jwt.sign(payload, HMS_SECRET, {
+    algorithm: "HS256",
+    expiresIn: "24h",
+    jwtid: uuid4(),
+  });
+
+  return token;
+}
+
+async function createRoomViaAPI(roomOptions, managementToken) {
+  const url = `${HMS_BASE_URL}/rooms`;
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${managementToken}`,
+  };
+  const response = await axios.post(url, roomOptions, { headers });
+  return response.data;
+}
+
+async function generateRoomViaAPI(roomId, managementToken) {
+  const url = `${HMS_BASE_URL}/room-codes/room/${roomId}`;
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${managementToken}`,
+  };
+  const response = await axios.post(url, {}, { headers });
+  return response;
+}
+async function createRTMPStreamKeyViaAPI(room_id, token) {
+  const url = `https://api.100ms.live/v2/stream-keys/room/${room_id}`;
+
+  try {
+    const response = await axios.post(
+      url,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    console.log("Stream key created:", response.data);
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Error creating stream key:",
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+}
+function sanitizeRoomName(name) {
+  return name.trim().replace(/[^a-zA-Z0-9.\-:_]/g, "_"); // Replace disallowed characters with _
+}
 // Helper function for face comparison
 function calculateFaceDistance(descriptor1, descriptor2) {
   if (
@@ -99,35 +166,33 @@ router.post(
           }))
         : [];
 
-      // Calculate end time based on dateTime and duration
-      const startTime = new Date(dateTime);
-      const endTime = new Date(startTime);
-      endTime.setMinutes(
-        endTime.getMinutes() + parseInt(scheduledDurationHours * 60)
-      );
-
-      const jioMeetRequestBody = {
-        topic: generatedTitle,
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString(),
-        // isAutoRecordingEnabled: true,
-      };
-      const payload = { app: JIOMEET_APP_ID, timestamp: Date.now() };
-      const jioMeetToken = jwt.sign(payload, privateKey, {
-        algorithm: "RS256",
-      });
-      // Adding JioMeet API call
-      const response = await axios.post(
-        `${JIOMEET_API}/schedule/meeting`,
-        jioMeetRequestBody,
+      const managementToken = generateManagementToken();
+      const roomName = sanitizeRoomName(generatedTitle);
+      // Step 1: Create 100ms Room
+      const room = await createRoomViaAPI(
         {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${jioMeetToken}`,
-          },
-        }
+          name: roomName,
+          description: agenda,
+          template_id: HMS_TEMPLATE_ID,
+          region: "in",
+          recording_info: { enabled: true },
+          max_duration_seconds: scheduledDurationHours * 3600,
+        },
+        managementToken
       );
 
+      // Step 2: Generate Join Info (room code/preview URL)
+      const response = await generateRoomViaAPI(room.id, managementToken);
+      const roomData = response.data;
+
+      // 🆕 Step 3: Create RTMP Stream Key
+      const rtmpKeyResponse = await createRTMPStreamKeyViaAPI(
+        room.id,
+        managementToken
+      );
+      const rtmpKey = rtmpKeyResponse;
+
+      // Step 4: Save to DB
       const gramSabha = new GramSabha({
         panchayatId,
         title: generatedTitle,
@@ -137,19 +202,24 @@ router.post(
         description,
         scheduledById: req.official.id,
         scheduledDurationHours,
-        jioMeetData: response.data,
-        meetingLink: response.data.hostUrl,
+        meetData: {
+          room,
+          roomData,
+          rtmpKey, // Save RTMP key and RTMP URL
+        },
+        meetingLink: `https://app.100ms.live/preview/${roomData.room_code}`,
         attachments,
       });
 
       await gramSabha.save();
+
       res.status(201).json({
         success: true,
         data: {
           ...gramSabha.toObject(),
           attachments: gramSabha.attachments.map((att) => ({
             ...att,
-            attachment: `data:${att.mimeType};base64,${att.attachment}`, // Convert to data URL for frontend
+            attachment: `data:${att.mimeType};base64,${att.attachment}`,
           })),
         },
       });
@@ -244,7 +314,7 @@ router.patch(
         "minutes",
         "meetingNotes",
         "recordingLink",
-        "jioMeetData",
+        "meetData",
         "panchayatId",
         "actualDurationMinutes",
         "transcript",
@@ -281,74 +351,6 @@ router.patch(
 
         gramSabha.attachments = [...gramSabha.attachments, ...newAttachments];
       }
-      if (
-        updates.includes("title") ||
-        updates.includes("dateTime") ||
-        updates.includes("date") ||
-        updates.includes("time") ||
-        updates.includes("scheduledDurationHours")
-      ) {
-        // Calculate end time based on dateTime and duration
-        const startTime = new Date(req.body.dateTime || gramSabha.dateTime);
-        const endTime = new Date(startTime);
-        const duration =
-          req.body.scheduledDurationHours || gramSabha.scheduledDurationHours;
-        endTime.setMinutes(endTime.getMinutes() + parseInt(duration * 60));
-
-        // Prepare JioMeet API request body
-        const jioMeetRequestBody = {
-          // meetingId: gramSabha.jioMeetData?.meetingId,
-          topic: req.body.title || gramSabha.title,
-          startTime: startTime.toISOString(),
-          endTime: endTime.toISOString(),
-          // isAutoRecordingEnabled: true,
-        };
-
-        // if (!gramSabha.jioMeetData?.meetingId) {
-        //   delete jioMeetRequestBody.meetingId;
-        // }
-
-        const payload = { app: JIOMEET_APP_ID, timestamp: Date.now() };
-        const jioMeetToken = jwt.sign(payload, privateKey, {
-          algorithm: "RS256",
-        });
-        // Update the meeting in JioMeet
-        try {
-          // let response = {};
-          // if(gramSabha.jioMeetData?.meetingId)
-          //   response = await axios.put(
-          //     `${JIOMEET_API}/schedule/meeting`,
-          //     jioMeetRequestBody,
-          //     {
-          //       headers: {
-          //         "Content-Type": "application/json",
-          //         Authorization: `Bearer ${jioMeetToken}`,
-          //       },
-          //     }
-          //   );
-          // else
-          response = await axios.post(
-            `${JIOMEET_API}/schedule/meeting`,
-            jioMeetRequestBody,
-            {
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${jioMeetToken}`,
-              },
-            }
-          );
-          // Update JioMeet data in the database
-          gramSabha.jioMeetData = response.data;
-          gramSabha.meetingLink = response.data.hostUrl;
-          gramSabha.meetingId = response.data.meetingId;
-        } catch (error) {
-          console.error(
-            "JioMeet API Error:",
-            error.response?.data || error.message
-          );
-        }
-      }
-
       // Save the updated gram sabha
       await gramSabha.save();
 
@@ -883,172 +885,59 @@ router.get("/panchayat/:panchayatId/today", async (req, res) => {
       .json({ success: false, message: "Failed to fetch today's meetings" });
   }
 });
-
-//Not needed now --------------------------------------------------------------------------------
-router.post("/recording/start", async (req, res) => {
-  const { jiomeetId, roomPIN } = req.body;
+//get recording webhook
+router.post("/webhook", async (req, res) => {
+  const event = req.body;
   try {
-    const payload = { app: JIOMEET_APP_ID, timestamp: Date.now() };
-    const token = jwt.sign(payload, privateKey, {
-      algorithm: "RS256",
-    });
-    // Call JioMeet API to start recording
-    const response = await axios.post(
-      `${JIOMEET_API}/recordings/start`,
-      req.body,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+    if (event?.type === "recording.success") {
+      console.log("Webhook Event:", event);
+      console.log("Body:", JSON.stringify(req.body, null, 2));
+      const room_id = event.room_id;
+      const recording_presigned_url = event.data.recording_presigned_url;
+
+      if (!room_id || !recording_presigned_url) {
+        return res.status(400).json({ error: "Invalid data" });
       }
-    );
-    res.status(200).json({ success: true, data: response.data });
-  } catch (error) {
-    console.error("Error fetching today's meetings:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch today's meetings" });
-  }
-});
-
-router.post("/recordings/stop", async (req, res) => {
-  const { jiomeetId, roomPIN } = req.body;
-
-  if (!jiomeetId || !roomPIN) {
-    return res.status(412).json({
-      success: false,
-      message: "Validation Error",
-      error: {
-        customCode: 412,
-        message: "Validation Error",
-        errorsArray: [
-          !jiomeetId && {
-            property: "jiomeetId",
-            message: "should have required property 'jiomeetId'",
-          },
-          !roomPIN && {
-            property: "roomPIN",
-            message: "should have required property 'roomPIN'",
-          },
-        ].filter(Boolean),
-      },
-    });
-  }
-
-  try {
-    const payload = {
-      app: JIOMEET_APP_ID,
-      timestamp: Date.now(),
-    };
-
-    const token = jwt.sign(payload, privateKey, {
-      algorithm: "RS256",
-    });
-
-    const stopRes = await axios.post(
-      `${JIOMEET_API}/recordings/stop`,
-      { jiomeetId, roomPIN },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-    const { historyId } = stopRes.data;
-
-    if (!historyId) {
-      return res.status(400).json({
-        success: false,
-        message: "Recording stopped but historyId not returned",
+      const gramSabha = await GramSabha.findOne({
+        "meetData.room.id": room_id,
       });
+
+      if (!gramSabha) {
+        return res.status(404).json({ error: "Meeting not found" });
+      }
+      // Update recording link
+      gramSabha.recordingLink = recording_presigned_url;
+      await gramSabha.save();
+      console.log("Recording saved:---------------------------------");
+      return res.status(200).json({ success: true });
     }
 
-    return res.status(200).json({
-      success: true,
-      message: "Recording stopped successfully",
-      historyId,
-    });
+    // if (event === "transcription.success") {
+    //   const room_id = event.room_id;
+    //   const recording_presigned_url = event.data.chat_recording_presigned_url;
+
+    //   if (!room_id || !transcript_txt_presigned_url) {
+    //     return res.status(400).json({ error: "Invalid data" });
+    //   }
+    //   const gramSabha = await GramSabha.findOne({
+    //     "meetData.room.id": room_id,
+    //   });
+
+    //   if (!gramSabha) {
+    //     return res.status(404).json({ error: "Meeting not found" });
+    //   }
+    //   // Update recording link
+    //   gramSabha.transcript = transcript_txt_presigned_url;
+    //   await gramSabha.save();
+    //   console.log("Trasncript saved:---------------------------------");
+    //   return res.status(200).json({ success: true });
+    // }
+
+    res.status(200).json({ success: true });
   } catch (error) {
-    console.error(
-      "Error stopping recording:",
-      error?.response?.data || error.message
-    );
-    res.status(500).json({
-      success: false,
-      message: "Failed to stop recording",
-      error: error?.response?.data || error.message,
-    });
+    console.error("Error in webhook:", error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.post("/recordings/list", async (req, res) => {
-  const { jiomeetId, roomPIN, historyId } = req.body;
-
-  if (!jiomeetId || !roomPIN || !historyId) {
-    return res.status(412).json({
-      success: false,
-      message: "Validation Error",
-      error: {
-        customCode: 412,
-        message: "Validation Error",
-        errorsArray: [
-          !jiomeetId && {
-            property: "jiomeetId",
-            message: "should have required property 'jiomeetId'",
-          },
-          !roomPIN && {
-            property: "roomPIN",
-            message: "should have required property 'roomPIN'",
-          },
-          !historyId && {
-            property: "historyId",
-            message: "should have required property 'historyId'",
-          },
-        ].filter(Boolean),
-      },
-    });
-  }
-
-  try {
-    const payload = {
-      app: JIOMEET_APP_ID,
-      timestamp: Date.now(),
-    };
-
-    const token = jwt.sign(payload, privateKey, {
-      algorithm: "RS256",
-    });
-
-    const listRes = await axios.post(
-      `${JIOMEET_API}/recordings/list`,
-      { jiomeetId, roomPIN, historyId },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-    return res.status(200).json({
-      success: true,
-      message: "Recording details fetched successfully",
-      recordingData: listRes.data,
-    });
-  } catch (error) {
-    console.error(
-      "Error fetching recording details:",
-      error?.response?.data || error.message
-    );
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch recording details",
-      error: error?.response?.data || error.message,
-    });
-  }
-});
-//----------------------------------------------------------------------------------------------------
 module.exports = router;

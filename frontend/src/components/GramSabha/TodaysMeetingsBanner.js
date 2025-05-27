@@ -41,9 +41,11 @@ import {
   addAttendance,
   fetchTodaysMeetings,
 } from "../../api/gram-sabha";
+import { HMSPrebuilt } from "@100mslive/roomkit-react";
 import { useLanguage } from "../../utils/LanguageContext";
 import GramSabhaDetails from "./GramSabhaDetails";
 import * as faceapi from "face-api.js";
+import { useNavigate } from "react-router-dom";
 
 const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   const { strings } = useLanguage();
@@ -65,14 +67,14 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   const [showMeetingDetails, setShowMeetingDetails] = useState(false);
   const [meetingDetails, setMeetingDetails] = useState(null);
   const [recodings, setRecordings] = useState(false);
-  const [remotePeers, setRemotePeers] = useState([]);
+  const [streamData, setStreamData] = useState([]);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [attendanceMessage, setAttendanceMessage] = useState({
     type: "",
     text: "",
   });
-
+  const navigate = useNavigate();
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
@@ -204,34 +206,49 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     }
   };
 
-  const handleStartRecording = async (
-    meetingId,
-    meetingLink,
-    roomPIN,
-    hostToken
-  ) => {
+  const handleStartRecording = async (meetData) => {
     // Instead of navigating, show meeting details
     // setSelectedMeeting(meetingId);
-
+    const roomData = meetData.roomData;
     // Show meeting details dialog
-    setMeetingDetails({
-      meetingId,
-      meetingLink,
-      roomPIN,
-      hostToken,
-    });
+    const guestCode =
+      roomData?.data.find((item) => item.role === "guest")?.code || "N/A";
+    const hostCode =
+      roomData?.data.find((item) => item.role === "host")?.code || "N/A";
+    const memberCode =
+      roomData?.data.find((item) => item.role === "member")?.code || "N/A";
+    const publicCode =
+      roomData?.data.find((item) => item.role === "public")?.code || "N/A";
+    setMeetingDetails({ guestCode, hostCode, memberCode, publicCode });
+    const url = meetData?.rtmpKey?.url;
+    const streamKey = meetData?.rtmpKey?.key;
+    setStreamData({ url, streamKey });
     setShowMeetingDetails(true);
+  };
+  const handleJoinMeeting = () => {
+    navigate(`/meeting/${meetingDetails}`);
   };
 
   const copyToClipboard = () => {
-    const detailsText = `Meeting ID: ${meetingDetails.meetingId}
-  Meeting Link: ${meetingDetails.meetingLink}
-  Room PIN: ${meetingDetails.roomPIN}`;
+    if (!meetingDetails || !streamData) return;
+
+    const detailsText = `
+  Meeting Details:
+  ----------------
+  Guest Link: ${baseUrl}/${meetingDetails.guestCode}
+  Host Link: ${baseUrl}/${meetingDetails.hostCode}
+  Member Link: ${baseUrl}/${meetingDetails.memberCode}
+  Public Link: ${baseUrl}/${meetingDetails.publicCode}
+  
+  Stream Details:
+  ---------------
+  Stream URL: ${streamData.url}
+  Stream Key: ${streamData.streamKey}
+  `;
 
     navigator.clipboard
       .writeText(detailsText)
       .then(() => {
-        // Show success message
         setSnackbarMessage("Meeting details copied to clipboard");
         setSnackbarOpen(true);
       })
@@ -574,6 +591,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   // Just display the first meeting in the banner
   const meeting = todaysMeetings[0];
   const quorumMet = attendanceStats?.quorumMet;
+  const baseUrl = "https://shreyash-videoconf-1914.app.100ms.live/meeting";
 
   return (
     <Box sx={{ mb: 3, width: "100%", display: "flex" }}>
@@ -652,14 +670,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
               <Button
                 variant="contained"
                 color="success"
-                onClick={() =>
-                  handleStartRecording(
-                    meeting.jioMeetData.jiomeetId,
-                    meeting.meetingLink,
-                    meeting.jioMeetData.roomPIN,
-                    meeting.jioMeetData.hostToken
-                  )
-                }
+                onClick={() => handleStartRecording(meeting?.meetData)}
                 startIcon={<VideocamIcon />}
                 disabled={!quorumMet}
                 sx={{ px: 3 }}
@@ -687,14 +698,53 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                 <DialogContent>
                   <DialogContentText>
                     <Typography variant="body1">
-                      <strong>Meeting ID:</strong> {meetingDetails.meetingId}
+                      <strong>Guest Link:</strong>{" "}
+                      <a
+                        href={`${baseUrl}/${meetingDetails.guestCode}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {`${baseUrl}/${meetingDetails.guestCode}`}
+                      </a>
+                    </Typography>
+
+                    <Typography variant="body1">
+                      <strong>Host Link:</strong>{" "}
+                      <a
+                        href={`${baseUrl}/${meetingDetails.hostCode}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {`${baseUrl}/${meetingDetails.hostCode}`}
+                      </a>
+                    </Typography>
+
+                    <Typography variant="body1">
+                      <strong>Member Link:</strong>{" "}
+                      <a
+                        href={`${baseUrl}/${meetingDetails.memberCode}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {`${baseUrl}/${meetingDetails.memberCode}`}
+                      </a>
                     </Typography>
                     <Typography variant="body1">
-                      <strong>Meeting Link:</strong>{" "}
-                      {meetingDetails.meetingLink}
+                      <strong>Public Link:</strong>{" "}
+                      <a
+                        href={`${baseUrl}/${meetingDetails?.publicCode}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {`${baseUrl}/${meetingDetails?.publicCode}`}
+                      </a>
                     </Typography>
                     <Typography variant="body1">
-                      <strong>Room PIN:</strong> {meetingDetails.roomPIN}
+                      <strong>Stream Details</strong>
+                      <br />
+                      <strong>Stream URL:</strong> {streamData.url}
+                      <br />
+                      <strong>Stream Key:</strong> {streamData.streamKey}
                     </Typography>
                   </DialogContentText>
                 </DialogContent>
@@ -702,13 +752,11 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                   <Button onClick={() => setShowMeetingDetails(false)}>
                     Close
                   </Button>
-                  {meetingDetails.meetingLink && (
+                  {meetingDetails && (
                     <Button
                       variant="contained"
                       color="primary"
-                      onClick={() =>
-                        window.open(meetingDetails.meetingLink, "_blank")
-                      }
+                      onClick={handleJoinMeeting}
                     >
                       Join Meeting
                     </Button>
