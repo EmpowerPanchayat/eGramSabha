@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Multilingual file generation with proper Hindi text rendering and word wrapping.([#57])(https://github.com/EmpowerPanchayat/eGramSabha/issues/57)
+
+### Removed
+- Removed check-in time from PDF and CSV reports.([#57])(https://github.com/EmpowerPanchayat/eGramSabha/issues/57)
+
 ## [0.2.0] - 2025-05-27
 
 ### Added
