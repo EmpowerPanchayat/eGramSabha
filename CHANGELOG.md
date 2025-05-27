@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Backend API for filteration with pagination in issues([#19])(https://github.com/EmpowerPanchayat/eGramSabha/issues/19)
+
+## [0.2.0] - 2025-05-27
+
+### Added
 
 - Liveliness checks ([#12](https://github.com/EmpowerPanchayat/eGramSabha/issues/12))
 - Caste feature implementation ([#5](https://github.com/EmpowerPanchayat/eGramSabha/issues/5))
@@ -16,7 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Attendance Statistics Display and Export feature implementation([#13](https://github.com/EmpowerPanchayat/eGramSabha/issues/13))
 - Filters for category, subcategory, and status in issue list ([#18](https://github.com/EmpowerPanchayat/eGramSabha/issues/18))
 - Platform level configurations([#27])(https://github.com/EmpowerPanchayat/eGramSabha/issues/27)
-- Backend API for filteration with pagination in issues([#19])(https://github.com/EmpowerPanchayat/eGramSabha/issues/19)
 
 ### Changed
 
@@ -48,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.1.0...HEAD
+[Unreleased]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.0.1...0.1.0
 [0.0.1]: https://github.com/EmpowerPanchayat/eGramSabha/releases/tag/0.0.1
