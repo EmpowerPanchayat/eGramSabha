@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-05-27
+
 ### Added
 
 - Liveliness checks ([#12](https://github.com/EmpowerPanchayat/eGramSabha/issues/12))
@@ -47,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.1.0...HEAD
+[Unreleased]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.0.1...0.1.0
 [0.0.1]: https://github.com/EmpowerPanchayat/eGramSabha/releases/tag/0.0.1
