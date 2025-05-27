@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Removed check-in time from PDF and CSV reports.([#57](https://github.com/EmpowerPanchayat/eGramSabha/issues/57))
 
+### Fixed
+
+- CSV import to upsert users by voter ID instead of deleting existing records.([#31](https://github.com/EmpowerPanchayat/eGramSabha/issues/31))
+
 ## [0.2.0] - 2025-05-27
 
 ### Added
