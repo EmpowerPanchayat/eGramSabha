@@ -58,6 +58,18 @@ const FaceRegistration = ({
   const [activeFeedback, setActiveFeedback] = useState(null);
   const [sliderReady, setSliderReady] = useState(false);
 
+  // Platform configuration state
+  const [platformConfig, setPlatformConfig] = useState({
+    liveliness: true,
+    blink_count: 2,
+    movement_count: 5,
+  });
+  const [thresholds, setThresholds] = useState({
+    blink: 2,
+    movement: 5,
+  });
+  const thresholdsRef = useRef(thresholds);
+
   // Refs
   const faceMeshId = useRef(0);
   const faceMeshReady = useRef(false);
@@ -73,13 +85,10 @@ const FaceRegistration = ({
     blinkStartTime: null,
   });
 
-  const VERIFICATION_THRESHOLDS = useMemo(
-    () => ({
-      blink: 4,
-      movement: 5,
-    }),
-    []
-  );
+  // Update thresholdsRef when thresholds change
+  useEffect(() => {
+    thresholdsRef.current = thresholds;
+  }, [thresholds]);
 
   // Initialize component
   useEffect(() => {
@@ -114,6 +123,45 @@ const FaceRegistration = ({
       setSliderReady(false);
     }
   }, [cameraState, zoomLevel]);
+
+  // Fetch platform config on mount
+  useEffect(() => {
+    const fetchPlatformConfig = async () => {
+      try {
+        const res = await fetch(
+          `${
+            process.env.REACT_APP_API_URL || "http://localhost:5000/api"
+          }/platform-configurations`
+        );
+        const data = await res.json();
+        const configObj = {};
+        (Array.isArray(data) ? data : data.config || []).forEach((item) => {
+          configObj[item.key] = item.value;
+        });
+        setPlatformConfig({
+          liveliness:
+            configObj.liveliness === "false" ? false : !!configObj.liveliness,
+          blink_count: Number(configObj.blink_count) || 2,
+          movement_count: Number(configObj.movement_count) || 5,
+        });
+        setThresholds({
+          blink: Number(configObj.blink_count) || 2,
+          movement: Number(configObj.movement_count) || 5,
+        });
+      } catch (err) {
+        setPlatformConfig({
+          liveliness: true,
+          blink_count: 2,
+          movement_count: 5,
+        });
+        setThresholds({
+          blink: 2,
+          movement: 5,
+        });
+      }
+    };
+    fetchPlatformConfig();
+  }, []);
 
   const checkCameraDevices = useCallback(async () => {
     try {
@@ -308,20 +356,20 @@ const FaceRegistration = ({
         blink: blink
           ? updateCheck(
               prev.blink,
-              VERIFICATION_THRESHOLDS.blink,
+              thresholdsRef.current.blink, // was VERIFICATION_THRESHOLDS.blink
               "Blink verified"
             )
           : prev.blink,
         movement: movement
           ? updateCheck(
               prev.movement,
-              VERIFICATION_THRESHOLDS.movement,
+              thresholdsRef.current.movement, // was VERIFICATION_THRESHOLDS.movement
               "Movement verified"
             )
           : prev.movement,
       }));
     },
-    [updateCheck, VERIFICATION_THRESHOLDS]
+    [updateCheck, thresholdsRef.current]
   );
 
   const handleFaceResults = useCallback(
@@ -342,6 +390,18 @@ const FaceRegistration = ({
 
       drawFaceOutline(faceLandmarks);
 
+      // --- ADD THIS LOGIC ---
+      if (!platformConfig.liveliness) {
+        setVerificationState((prev) => ({
+          ...prev,
+          faceDetected: true,
+          blink: { verified: true, count: thresholdsRef.current.blink },
+          movement: { verified: true, count: thresholdsRef.current.movement },
+        }));
+        return;
+      }
+      // ----------------------
+
       const livelinessChecks = {
         blink: detectBlink(faceLandmarks),
         movement: detectMacroMovement(faceLandmarks),
@@ -350,7 +410,13 @@ const FaceRegistration = ({
       updateVerificationState(livelinessChecks);
       setVerificationState((prev) => ({ ...prev, faceDetected: true }));
     },
-    [drawFaceOutline, detectBlink, detectMacroMovement, updateVerificationState]
+    [
+      drawFaceOutline,
+      detectBlink,
+      detectMacroMovement,
+      platformConfig.liveliness,
+      updateVerificationState,
+    ]
   );
 
   const initializeFaceMesh = useCallback(async () => {
@@ -660,7 +726,7 @@ const FaceRegistration = ({
           .withFaceLandmarks()
           .withFaceDescriptor(),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Face detection timeout")), 3000)
+          setTimeout(() => reject(new Error("Face detection timeout")), 5000)
         ),
       ]);
 
@@ -900,7 +966,7 @@ const FaceRegistration = ({
         )}
       </Box>
 
-      {cameraState === "active" && (
+      {cameraState === "active" && platformConfig.liveliness && (
         <Box sx={{ mb: 3 }}>
           <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 500 }}>
             Liveliness Verification (Need 2 checks)
@@ -911,13 +977,13 @@ const FaceRegistration = ({
               label="Blink"
               verified={verificationState.blink.verified}
               count={verificationState.blink.count}
-              required={VERIFICATION_THRESHOLDS.blink}
+              required={thresholds.blink}
             />
             <VerificationChip
               label="Movement"
               verified={verificationState.movement.verified}
               count={verificationState.movement.count}
-              required={VERIFICATION_THRESHOLDS.movement}
+              required={thresholds.movement}
             />
           </Stack>
 
