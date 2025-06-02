@@ -693,44 +693,47 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
       });
   }, [meetingDetails]);
 
+  // Fetch only settings.camera for config before opening attendance dialog
+  const fetchPlatformConfig = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/platform-configurations/camera`);
+      const cameraSettings = await res.json();
+      setPlatformConfig({
+        liveliness:
+          cameraSettings?.value?.liveliness?.todaysMeetingsBanner ?? true,
+        blink_count:
+          cameraSettings?.value?.blink_count?.todaysMeetingsBanner ?? 2,
+        movement_count:
+          cameraSettings?.value?.movement_count?.todaysMeetingsBanner ?? 5,
+      });
+      setThresholds({
+        blink: cameraSettings?.value?.blink_count?.todaysMeetingsBanner ?? 2,
+        movement:
+          cameraSettings?.value?.movement_count?.todaysMeetingsBanner ?? 5,
+      });
+    } catch (err) {
+      setPlatformConfig({
+        liveliness: true,
+        blink_count: 2,
+        movement_count: 5,
+      });
+      setThresholds({
+        blink: 2,
+        movement: 5,
+      });
+    }
+  }, [API_URL]);
+
   // --- MODIFIED handleMarkAttendance ---
   const handleMarkAttendance = useCallback(
     async (meetingId) => {
-      // Fetch platform config before opening dialog
-      try {
-        const res = await fetch(`${API_URL}/platform-configurations`);
-        const data = await res.json();
-        const configObj = {};
-        (Array.isArray(data) ? data : data.config || []).forEach((item) => {
-          configObj[item.key] = item.value;
-        });
-        setPlatformConfig({
-          liveliness:
-            configObj.liveliness === "false" ? false : !!configObj.liveliness,
-          blink_count: Number(configObj.blink_count) || 2,
-          movement_count: Number(configObj.movement_count) || 5,
-        });
-        setThresholds({
-          blink: Number(configObj.blink_count) || 2,
-          movement: Number(configObj.movement_count) || 5,
-        });
-      } catch (err) {
-        setPlatformConfig({
-          liveliness: true,
-          blink_count: 2,
-          movement_count: 5,
-        });
-        setThresholds({
-          blink: 2,
-          movement: 5,
-        });
-      }
+      await fetchPlatformConfig();
       setVoterIdLastFour("");
       setAttendanceMessage({ type: "", text: "" });
       loadAttendanceStats(meetingId);
       setShowAttendanceForm(true);
     },
-    [API_URL, loadAttendanceStats]
+    [fetchPlatformConfig, loadAttendanceStats]
   );
 
   const handleSubmitAttendance = useCallback(async () => {
