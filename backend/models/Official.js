@@ -1,8 +1,9 @@
-// File: backend/models/Official.js (Enhanced with citizen linking)
+// File: backend/models/Official.js (Enhanced with linked citizen support)
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const { generateToken, generateRefreshToken } = require('../config/jwt');
 
 const officialSchema = new mongoose.Schema({
     username: {
@@ -104,39 +105,48 @@ officialSchema.methods.comparePassword = async function (candidatePassword) {
 // Method to generate JWT token
 officialSchema.methods.generateAuthToken = async function () {
     let linkedUser = null;
-    
+
     // If there's a linked citizen, fetch their data
     if (this.linkedCitizenId) {
-        linkedUser = await mongoose.model('User').findById(this.linkedCitizenId)
-            .select('_id name voterIdNumber panchayatId');
+        try {
+            linkedUser = await mongoose.model('User').findById(this.linkedCitizenId)
+                .select('_id name voterIdNumber panchayatId');
+
+            // If linked user exists, format the data
+            if (linkedUser) {
+                linkedUser = {
+                    id: linkedUser._id,
+                    name: linkedUser.name,
+                    voterIdNumber: linkedUser.voterIdNumber,
+                    panchayatId: linkedUser.panchayatId
+                };
+            }
+        } catch (error) {
+            console.error('Error fetching linked user:', error);
+            // Continue without linked user data
+        }
     }
 
-    return jwt.sign(
-        {
-            id: this._id,
-            username: this.username,
-            role: this.role,
-            panchayatId: this.panchayatId,
-            linkedCitizenId: this.linkedCitizenId,
-            linkedUser: linkedUser ? {
-                id: linkedUser._id,
-                name: linkedUser.name,
-                voterIdNumber: linkedUser.voterIdNumber,
-                panchayatId: linkedUser.panchayatId
-            } : null
-        },
-        process.env.JWT_SECRET || 'your-secret-key',
-        { expiresIn: '24h' }
-    );
+    const payload = {
+        id: this._id,
+        username: this.username,
+        role: this.role,
+        panchayatId: this.panchayatId,
+        linkedCitizenId: this.linkedCitizenId,
+        linkedUser: linkedUser,
+        userType: this.role === 'ADMIN' ? 'ADMIN' : 'OFFICIAL',
+        wardId: this.wardId
+    };
+
+    return generateToken(payload, this.role === 'ADMIN' ? 'ADMIN' : 'OFFICIAL');
 };
 
 // Method to generate refresh token
 officialSchema.methods.generateRefreshToken = function () {
-    return jwt.sign(
-        { id: this._id },
-        process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key',
-        { expiresIn: '7d' }
-    );
+    return generateRefreshToken({
+        id: this._id,
+        userType: this.role === 'ADMIN' ? 'ADMIN' : 'OFFICIAL'
+    });
 };
 
 // Create password reset token

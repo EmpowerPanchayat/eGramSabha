@@ -44,7 +44,7 @@ function calculateFaceDistance(descriptor1, descriptor2) {
 // Create a new Gram Sabha meeting with attachments
 router.post(
   "/",
-  auth.isAuthenticated,
+  auth.isOfficial,
   isPanchayatPresident,
   upload.array("attachments"),
   async (req, res) => {
@@ -127,7 +127,7 @@ router.post(
           },
         }
       );
-
+      console.log("request body", req);
       const gramSabha = new GramSabha({
         panchayatId,
         title: generatedTitle,
@@ -157,7 +157,7 @@ router.post(
       console.error("Error creating Gram Sabha:", error);
       res
         .status(500)
-        .json({ success: false, message: "Error creating Gram Sabha" });
+        .json({ success: false, message: "Error creating Gram Sabha", error });
     }
   }
 );
@@ -210,11 +210,12 @@ router.get("/:id", async (req, res) => {
 // Update a Gram Sabha meeting
 router.patch(
   "/:id",
-  auth.isAuthenticated,
+  auth.isOfficial,
   isPanchayatPresident,
   upload.array("attachments"),
   async (req, res) => {
     try {
+      console.log("Request body:", req.body);
       // Find the existing gram sabha first to verify it exists
       const gramSabha = await GramSabha.findOne({
         _id: req.params.id,
@@ -376,7 +377,7 @@ router.patch(
 // Delete a Gram Sabha meeting
 router.delete(
   "/:id",
-  auth.isAuthenticated,
+  auth.isOfficial,
   isPanchayatPresident,
   async (req, res) => {
     try {
@@ -396,7 +397,7 @@ router.delete(
 );
 
 // Add attendance to a Gram Sabha meeting
-router.post("/:id/attendance", auth.isAuthenticated, async (req, res) => {
+router.post("/:id/attendance", auth.isOfficial, async (req, res) => {
   try {
     const gramSabha = await GramSabha.findById(req.params.id);
     if (!gramSabha) {
@@ -436,7 +437,7 @@ router.get("/:id/attendance", auth.isAuthenticated, async (req, res) => {
 // Add attachment to a Gram Sabha meeting
 router.post(
   "/:id/attachments",
-  auth.isAuthenticated,
+  auth.isOfficial,
   upload.single("file"),
   async (req, res) => {
     try {
@@ -663,7 +664,7 @@ router.get("/:id/rsvp-stats", async (req, res) => {
  * @desc    Mark attendance for a meeting using face recognition
  * @access  Private (Officials only)
  */
-router.post("/:id/mark-attendance", auth.isAuthenticated, async (req, res) => {
+router.post("/:id/mark-attendance", auth.isOfficial, async (req, res) => {
   try {
     const { id } = req.params;
     const { faceDescriptor, voterIdLastFour, panchayatId, verificationMethod } =

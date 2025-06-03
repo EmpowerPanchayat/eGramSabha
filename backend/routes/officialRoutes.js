@@ -207,9 +207,9 @@ router.post('/', isAuthenticated, hasRole(['ADMIN']), async (req, res) => {
 router.get('/:id', isAuthenticated, async (req, res) => {
     try {
         const { id } = req.params;
-        console.log({ official: req.official })
+        console.log({ official: req.user })
         // Admin can view any official, others can only view their own profile
-        if (req.official.role !== 'ADMIN' && req.official.id !== id) {
+        if (req.user.role !== 'ADMIN' && req.user.id !== id) {
             return res.status(403).json({
                 success: false,
                 message: 'Access denied: You can only view your own profile'
@@ -247,7 +247,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
         const updates = req.body;
 
         // Only admin can update other officials
-        if (req.official.role !== 'ADMIN' && req.official.id !== id) {
+        if (req.user.role !== 'ADMIN' && req.user.id !== id) {
             return res.status(403).json({
                 success: false,
                 message: 'Access denied: You can only update your own profile'
@@ -265,7 +265,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
         }
 
         // If not admin, restrict which fields can be updated
-        if (req.official.role !== 'ADMIN') {
+        if (req.user.role !== 'ADMIN') {
             // Regular users can only update their name, phone, and email
             const allowedUpdates = ['name', 'phone', 'email'];
             Object.keys(updates).forEach(key => {
@@ -332,7 +332,7 @@ router.post('/change-password', isAuthenticated, async (req, res) => {
         }
 
         // Find the official
-        const official = await Official.findById(req.official.id);
+        const official = await Official.findById(req.user.id);
 
         // Check current password
         const isPasswordValid = await official.comparePassword(currentPassword);
@@ -544,7 +544,7 @@ router.get('/:id/issues', isAuthenticated, async (req, res) => {
         }
 
         // Only admin or the official themselves can view issues
-        if (req.official.role !== 'ADMIN' && req.official.id !== id) {
+        if (req.user.role !== 'ADMIN' && req.user.id !== id) {
             return res.status(403).json({
                 success: false,
                 message: 'Access denied'
@@ -576,9 +576,9 @@ router.get('/:id/issues', isAuthenticated, async (req, res) => {
 router.get('/profile/:id', isAuthenticated, async (req, res) => {
     try {
         const { id } = req.params;
-
+        console.log({ user: req.user })
         // Admin can view any official, others can only view their own profile
-        if (req.official.role !== 'ADMIN' && req.official.id.toString() !== id) {
+        if (req.user.role !== 'ADMIN' && req.user.id.toString() !== id) {
             return res.status(403).json({
                 success: false,
                 message: 'Access denied: You can only view your own profile'

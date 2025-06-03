@@ -5,7 +5,7 @@ import PauseIcon from '@mui/icons-material/Pause';
 import MicIcon from '@mui/icons-material/Mic';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 
-const AudioPlayer = ({ audioUrl }) => {
+const AudioPlayer = ({ audioUrl, authToken }) => {
     const [isPlaying, setIsPlaying] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -28,7 +28,9 @@ const AudioPlayer = ({ audioUrl }) => {
         if (!audioRef.current) {
             setLoading(true);
             try {
-                const response = await fetch(audioUrl);
+                const response = await fetch(audioUrl, {
+                    headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : undefined
+                });
                 if (!response.ok) throw new Error('Failed to fetch audio');
                 const data = await response.json();
 

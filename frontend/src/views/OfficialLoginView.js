@@ -1,6 +1,6 @@
-// File: frontend/src/views/AdminLoginView.js (Updated)
+// File: frontend/src/views/OfficialLoginView.js
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import {
     Box,
     Container,
@@ -16,13 +16,15 @@ import {
     Link as MuiLink
 } from '@mui/material';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
-import GroupIcon from '@mui/icons-material/Group';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import PersonIcon from '@mui/icons-material/Person';
 import { useAuth } from '../utils/authContext';
-import { Link } from 'react-router-dom';
+import { useLanguage } from '../utils/LanguageContext';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 
-const AdminLoginView = () => {
+const OfficialLoginView = () => {
     const { login, user, error: authError } = useAuth();
+    const { strings } = useLanguage();
     const navigate = useNavigate();
     const location = useLocation();
     const theme = useTheme();
@@ -44,7 +46,7 @@ const AdminLoginView = () => {
             } else {
                 // Navigate based on role
                 if (user.role === 'ADMIN') {
-                    navigate('/admin', { replace: true });
+                    navigate('/admin/dashboard', { replace: true });
                 } else {
                     navigate('/official/dashboard', { replace: true });
                 }
@@ -68,18 +70,21 @@ const AdminLoginView = () => {
         setLoading(true);
 
         if (!formData.username || !formData.password) {
-            setError('Please enter both username and password');
+            setError(strings.pleaseEnterBoth || 'Please enter both username and password');
             setLoading(false);
             return;
         }
 
         try {
-            // Use the adminLogin function from your updated auth context
-            await login(formData.username, formData.password, 'ADMIN');
+            // Use the official-specific login function
+            const success = await login(formData.username, formData.password, 'OFFICIAL');
 
+            if (!success) {
+                setError(strings.loginFailed || 'Login failed. Please try again.');
+            }
             // Navigation will be handled by the useEffect hook when user state updates
         } catch (err) {
-            setError(err.message || 'Login failed. Please try again.');
+            setError(err.message || strings.loginFailed || 'Login failed. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -99,7 +104,7 @@ const AdminLoginView = () => {
             {/* Header */}
             <Box
                 sx={{
-                    bgcolor: 'primary.dark',
+                    bgcolor: 'primary.main',
                     color: 'white',
                     py: 1,
                     px: 3,
@@ -111,17 +116,17 @@ const AdminLoginView = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     <AccountBalanceIcon sx={{ mr: 1 }} />
                     <Typography variant="h6" component="div">
-                        Gram Sabha Management
+                        {strings.gramSabhaManagement || 'Gram Sabha Management'}
                     </Typography>
                 </Box>
-                <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     <Button
-                        component={Link}
-                        to="/login/official"
+                        component={RouterLink}
+                        to="/admin/login"
                         variant="outlined"
                         color="inherit"
                         size="small"
-                        startIcon={<GroupIcon />}
+                        startIcon={<AdminPanelSettingsIcon />}
                         sx={{
                             mr: 1,
                             borderColor: 'rgba(255,255,255,0.5)',
@@ -131,10 +136,10 @@ const AdminLoginView = () => {
                             }
                         }}
                     >
-                        Official Portal
+                        {strings.adminPortal || 'Admin Portal'}
                     </Button>
                     <Button
-                        component={Link}
+                        component={RouterLink}
                         to="/"
                         variant="outlined"
                         color="inherit"
@@ -148,8 +153,11 @@ const AdminLoginView = () => {
                             }
                         }}
                     >
-                        Citizen Portal
+                        {strings.citizenPortal || 'Citizen Portal'}
                     </Button>
+                    <Box sx={{ ml: 2 }}>
+                        <LanguageSwitcher />
+                    </Box>
                 </Box>
             </Box>
 
@@ -163,28 +171,28 @@ const AdminLoginView = () => {
                                 sx={{
                                     p: 4,
                                     height: '100%',
-                                    bgcolor: 'primary.dark',
+                                    bgcolor: 'primary.main',
                                     color: 'white'
                                 }}
                             >
                                 <Typography variant="h4" component="h1" gutterBottom>
-                                    System Administration
+                                    {strings.officialPortal || 'Official Portal'}
                                 </Typography>
                                 <Typography variant="body1" paragraph>
-                                    This secure portal is designed for system administrators to manage the entire Gram Sabha Management platform.
+                                    {strings.officialPortalDesc || 'This secure portal is designed for Panchayat officials to manage day-to-day operations.'}
                                 </Typography>
                                 <Typography variant="body1" paragraph>
-                                    Use your admin credentials to access system-wide configurations and management tools.
+                                    {strings.useOfficialCredentials || 'Use your official credentials to access the system and manage your panchayat activities.'}
                                 </Typography>
                                 <Box sx={{ mt: 4 }}>
                                     <Typography variant="subtitle1" gutterBottom fontWeight="bold">
-                                        Admin Features:
+                                        {strings.officialFeatures || 'Official Features:'}
                                     </Typography>
                                     <ul>
-                                        <li>Manage panchayats and officials</li>
-                                        <li>System-wide configurations and settings</li>
-                                        <li>User management and security controls</li>
-                                        <li>Advanced analytics and reporting</li>
+                                        <li>{strings.managePanchayatDetails || 'Manage panchayat details and ward information'}</li>
+                                        <li>{strings.trackCitizenIssues || 'Track and respond to citizen issues'}</li>
+                                        <li>{strings.organizeGramSabha || 'Organize Gram Sabha meetings'}</li>
+                                        <li>{strings.generateReports || 'Generate reports and analytics'}</li>
                                     </ul>
                                 </Box>
                             </Paper>
@@ -196,10 +204,10 @@ const AdminLoginView = () => {
                         <Paper elevation={3} sx={{ p: 4, borderRadius: 2 }}>
                             <Box sx={{ textAlign: 'center', mb: 3 }}>
                                 <Typography variant="h5" component="h2" gutterBottom>
-                                    Administrator Login
+                                    {strings.officialLogin || 'Official Login'}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary">
-                                    Login with your admin credentials
+                                    {strings.loginWithCredentials || 'Login with your official credentials'}
                                 </Typography>
                             </Box>
 
@@ -215,7 +223,7 @@ const AdminLoginView = () => {
                                     required
                                     fullWidth
                                     id="username"
-                                    label="Username"
+                                    label={strings.username || 'Username'}
                                     name="username"
                                     autoComplete="username"
                                     autoFocus
@@ -228,7 +236,7 @@ const AdminLoginView = () => {
                                     required
                                     fullWidth
                                     name="password"
-                                    label="Password"
+                                    label={strings.password || 'Password'}
                                     type="password"
                                     id="password"
                                     autoComplete="current-password"
@@ -241,26 +249,25 @@ const AdminLoginView = () => {
                                     type="submit"
                                     fullWidth
                                     variant="contained"
-                                    color="primary"
-                                    sx={{ mt: 3, mb: 2, bgcolor: 'primary.dark' }}
+                                    sx={{ mt: 3, mb: 2 }}
                                     disabled={loading}
                                 >
                                     {loading ? (
                                         <CircularProgress size={24} color="inherit" />
                                     ) : (
-                                        'Sign In'
+                                        strings.signIn || 'Sign In'
                                     )}
                                 </Button>
 
                                 <Grid container justifyContent="center">
                                     <Grid item>
                                         <MuiLink
-                                            component={Link}
-                                            to="/forgot-password"
+                                            component={RouterLink}
+                                            to="/official/forgot-password"
                                             variant="body2"
                                             underline="hover"
                                         >
-                                            Forgot password?
+                                            {strings.forgotPassword || 'Forgot password?'}
                                         </MuiLink>
                                     </Grid>
                                 </Grid>
@@ -282,11 +289,11 @@ const AdminLoginView = () => {
                 }}
             >
                 <Typography variant="body2" color="text.secondary">
-                    &copy; {new Date().getFullYear()} Gram Sabha Management System
+                    &copy; {new Date().getFullYear()} {strings.gramSabhaManagementSystem || 'Gram Sabha Management System'}
                 </Typography>
             </Box>
         </Box>
     );
 };
 
-export default AdminLoginView;
+export default OfficialLoginView;

@@ -6,9 +6,10 @@ const path = require('path');
 const Issue = require('../models/Issue');
 const User = require('../models/User');
 const Panchayat = require('../models/Panchayat');
+const { anyAuthenticated } = require('../middleware/auth');
 
 // Create a new issue
-router.post('/', async (req, res) => {
+router.post('/', anyAuthenticated, async (req, res) => {
     try {
         const {
             text,
@@ -20,18 +21,15 @@ router.post('/', async (req, res) => {
             remark,
             panchayatId,
             gramSabhaId,
-            creatorId,
             attachments
         } = req.body;
-
         // Validate required fields
-        if (!category || !panchayatId || !creatorId || !subcategory) {
+        if (!category || !panchayatId || !subcategory) {
             return res.status(400).json({
                 success: false,
                 message: 'Missing required fields'
             });
         }
-
         // Verify if panchayat exists
         const panchayat = await Panchayat.findById(panchayatId);
         if (!panchayat) {
@@ -40,7 +38,8 @@ router.post('/', async (req, res) => {
                 message: 'Panchayat not found'
             });
         }
-
+        const user = req.user;
+        const creatorId = user?.linkedCitizenId || user?.id;
         // Verify if creator exists
         const creator = await User.findById(creatorId);
         if (!creator) {
@@ -49,7 +48,6 @@ router.post('/', async (req, res) => {
                 message: 'Creator not found'
             });
         }
-
         // Create issue instance
         const issue = new Issue({
             text,
@@ -65,7 +63,6 @@ router.post('/', async (req, res) => {
             gramSabhaId,
             creatorId
         });
-
         // Save issue to database
         await issue.save();
 
@@ -91,7 +88,7 @@ router.post('/', async (req, res) => {
 });
 
 // Get all issues/suggestions for a panchayat
-router.get('/panchayat/:panchayatId', async (req, res) => {
+router.get('/panchayat/:panchayatId', anyAuthenticated, async (req, res) => {
     try {
         const { panchayatId } = req.params;
 
@@ -135,9 +132,10 @@ router.get('/panchayat/:panchayatId', async (req, res) => {
 });
 
 // Get issues/suggestions created by a specific user
-router.get('/user/:userId', async (req, res) => {
+router.get('/user/:userId', anyAuthenticated, async (req, res) => {
     try {
         const { userId } = req.params;
+        console.log('Fetching issues/suggestions for user:', userId);
 
         // Verify if user exists
         const user = await User.findById(userId);
@@ -179,7 +177,7 @@ router.get('/user/:userId', async (req, res) => {
 });
 
 // Get a specific issue/suggestion by ID
-router.get('/:issueId', async (req, res) => {
+router.get('/:issueId', anyAuthenticated, async (req, res) => {
     try {
         const { issueId } = req.params;
 
@@ -218,7 +216,7 @@ router.get('/:issueId', async (req, res) => {
 });
 
 // Get attachment by issue/suggestion ID and attachment ID
-router.get('/:issueId/attachment/:attachmentId', async (req, res) => {
+router.get('/:issueId/attachment/:attachmentId', anyAuthenticated, async (req, res) => {
     try {
         const { issueId, attachmentId } = req.params;
 
@@ -254,7 +252,7 @@ router.get('/:issueId/attachment/:attachmentId', async (req, res) => {
 });
 
 // Route to upload attachments for an issue/suggestion
-router.post('/upload-attachment', async (req, res) => {
+router.post('/upload-attachment', anyAuthenticated, async (req, res) => {
     try {
         const { issueId, attachmentData, filename, mimeType } = req.body;
 

@@ -9,11 +9,19 @@ import {
 } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import FileOpenIcon from '@mui/icons-material/FileOpen';
+import tokenManager from '../utils/tokenManager';
 
 const AttachmentViewer = ({ attachmentUrl, filename, mimeType }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [attachmentData, setAttachmentData] = useState(null);
+
+      // Helper to get Authorization header for issues endpoints
+    const getAuthHeaders = () => {
+        const token = tokenManager.getToken();
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
+    };
+    
 
     useEffect(() => {
         const fetchAttachment = async () => {
@@ -23,19 +31,27 @@ const AttachmentViewer = ({ attachmentUrl, filename, mimeType }) => {
             setError(null);
 
             try {
-                const response = await fetch(attachmentUrl);
+              // Add Authorization header if token exists
+              const headers = {
+                "Content-Type": "application/json",
+                ...getAuthHeaders(),
+              };
+              const response = await fetch(attachmentUrl, {
+                method: "GET",
+                headers: headers,
+              });
 
-                if (!response.ok) {
-                    throw new Error('Failed to fetch attachment');
-                }
+              if (!response.ok) {
+                throw new Error("Failed to fetch attachment");
+              }
 
-                const data = await response.json();
+              const data = await response.json();
 
-                if (data.success && data.attachment) {
-                    setAttachmentData(data.attachment);
-                } else {
-                    throw new Error('Invalid attachment data');
-                }
+              if (data.success && data.attachment) {
+                setAttachmentData(data.attachment);
+              } else {
+                throw new Error("Invalid attachment data");
+              }
             } catch (error) {
                 console.error('Error fetching attachment:', error);
                 setError(error.message || 'Error loading attachment');
