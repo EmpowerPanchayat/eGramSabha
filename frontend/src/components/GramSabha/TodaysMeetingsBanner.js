@@ -699,17 +699,13 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
       const res = await fetch(`${API_URL}/platform-configurations/camera`);
       const cameraSettings = await res.json();
       setPlatformConfig({
-        liveliness:
-          cameraSettings?.value?.liveliness?.todaysMeetingsBanner ?? true,
-        blink_count:
-          cameraSettings?.value?.blink_count?.todaysMeetingsBanner ?? 2,
-        movement_count:
-          cameraSettings?.value?.movement_count?.todaysMeetingsBanner ?? 5,
+        liveliness: cameraSettings?.value?.liveliness?.attendance ?? true,
+        blink_count: cameraSettings?.value?.blink_count?.attendance ?? 2,
+        movement_count: cameraSettings?.value?.movement_count?.attendance ?? 5,
       });
       setThresholds({
-        blink: cameraSettings?.value?.blink_count?.todaysMeetingsBanner ?? 2,
-        movement:
-          cameraSettings?.value?.movement_count?.todaysMeetingsBanner ?? 5,
+        blink: cameraSettings?.value?.blink_count?.attendance ?? 2,
+        movement: cameraSettings?.value?.movement_count?.attendance ?? 5,
       });
     } catch (err) {
       setPlatformConfig({
