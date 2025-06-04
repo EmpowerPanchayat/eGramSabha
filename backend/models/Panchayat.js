@@ -40,21 +40,24 @@ const panchayatSchema = new mongoose.Schema({
         type: String,
         maxlength: 10
     },
-    officials: [{
-        officialId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Official'
-        },
-        role: {
-            type: String,
-            enum: ['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY', 'GUEST']
-        },
-        wardId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Ward',
-            // Only required for WARD_MEMBER role
-        }
-    }],
+    officials: {
+        type: [{
+            officialId: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'Official'
+            },
+            role: {
+                type: String,
+                enum: ['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY', 'GUEST']
+            },
+            wardId: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'Ward',
+                // Only required for WARD_MEMBER role
+            }
+        }],
+        default: []
+    },
     createdAt: {
         type: Date,
         default: Date.now
