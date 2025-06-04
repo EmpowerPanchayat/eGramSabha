@@ -97,7 +97,10 @@ const issueSchema = new mongoose.Schema({
     remark: {
         type: String
     },
-    attachments: [attachmentSchema],
+    attachments: {
+        type: [attachmentSchema],
+        default: []
+    },
     panchayatId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Panchayat',
