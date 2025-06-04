@@ -24,6 +24,10 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:5000';
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3001';
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
+// Import Swagger setup
+const swaggerUi = require('swagger-ui-express');
+const swaggerDocument = require('./swagger-output.json');
+
 // Import security middleware
 const configureSecurityMiddleware = require('./middleware/securityMiddleware');
 
@@ -43,6 +47,23 @@ const Panchayat = require('./models/Panchayat');
 const Issue = require('./models/Issue');
 const Ward = require('./models/Ward');
 const { createDefaultRoles } = require('./models/Role');
+
+// Swagger documentation setup
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
+  customCss: `
+    .swagger-ui .topbar { display: none }
+    .swagger-ui .info .title { color: #2E7D32; }
+    .swagger-ui .scheme-container { background: #E8F5E8; }
+  `,
+  customSiteTitle: "Gram Sabha API Documentation",
+  swaggerOptions: {
+    persistAuthorization: true,
+    displayRequestDuration: true,
+    docExpansion: 'list',
+    filter: true,
+    showRequestHeaders: true,
+  }
+}));
 
 // Basic security middlewares
 app.use(helmet({
@@ -534,4 +555,5 @@ app.listen(PORT, () => {
   console.log(`Backend URL: ${BACKEND_URL}`);
   console.log(`CORS Origin: ${CORS_ORIGIN}`);
   console.log(`Environment: ${NODE_ENV}`);
+  console.log(`Swagger docs at ${BACKEND_URL}/api-docs`);
 });
