@@ -70,72 +70,81 @@ const gramSabhaSchema = new mongoose.Schema(
         ref: "Issue",
       },
     ],
-    attendances: [
-      {
-        checkInTime: {
-          type: Date,
-          required: true,
+    attendances: {
+      type: [
+        {
+          checkInTime: {
+            type: Date,
+            required: true,
+          },
+          verificationMethod: {
+            type: String,
+            required: true,
+            maxLength: 50,
+          },
+          status: {
+            type: String,
+            enum: ["PRESENT", "ABSENT", "LATE"],
+            required: true,
+          },
+          remarks: String,
+          userId: {
+            type: mongoose.Schema.Types.ObjectId,
+            required: true,
+            ref: "User",
+          },
         },
-        verificationMethod: {
-          type: String,
-          required: true,
-          maxLength: 50,
+      ],
+      default: [],
+    },
+    guests: {
+      type: [
+        {
+          name: {
+            type: String,
+            required: true,
+            maxLength: 255,
+          },
+          phoneNumber: {
+            type: String,
+            required: true,
+            maxLength: 20,
+          },
+          email: {
+            type: String,
+            maxLength: 255,
+          },
+          designation: {
+            type: String,
+            maxLength: 255,
+          },
         },
-        status: {
-          type: String,
-          enum: ["PRESENT", "ABSENT", "LATE"],
-          required: true,
+      ],
+      default: [],
+    },
+    attachments: {
+      type: [
+        {
+          attachment: {
+            type: String, // Base64 encoded data
+          },
+          filename: {
+            type: String,
+            maxLength: 255,
+          },
+          mimeType: {
+            type: String,
+            maxLength: 100,
+          },
+          uploadedAt: {
+            type: Date,
+            required: true,
+            default: Date.now,
+          },
         },
-        remarks: String,
-        userId: {
-          type: mongoose.Schema.Types.ObjectId,
-          required: true,
-          ref: "User",
-        },
-      },
-    ],
-    guests: [
-      {
-        name: {
-          type: String,
-          required: true,
-          maxLength: 255,
-        },
-        phoneNumber: {
-          type: String,
-          required: true,
-          maxLength: 20,
-        },
-        email: {
-          type: String,
-          maxLength: 255,
-        },
-        designation: {
-          type: String,
-          maxLength: 255,
-        },
-      },
-    ],
-    attachments: [
-      {
-        attachment: {
-          type: String, // Base64 encoded data
-        },
-        filename: {
-          type: String,
-          maxLength: 255,
-        },
-        mimeType: {
-          type: String,
-          maxLength: 100,
-        },
-        uploadedAt: {
-          type: Date,
-          required: true,
-          default: Date.now,
-        },
-      },
-    ],
+      ],
+      default: [],
+    },
     panchayatId: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,

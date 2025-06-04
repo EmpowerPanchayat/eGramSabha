@@ -21,7 +21,10 @@ const userSchema = new mongoose.Schema({
       default: ''
     }
   },
-  faceDescriptor: Array,
+  faceDescriptor: {
+    type: [Number],
+    default: []
+  },
   faceImagePath: String,
   isRegistered: {
     type: Boolean,
