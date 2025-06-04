@@ -5,55 +5,7 @@ import {
     Select,
 } from '@mui/material';
 import { useLanguage } from '../utils/LanguageContext';
-
-const CATEGORY_OPTIONS = [
-    'categoryCultureAndNature',
-    'categoryInfrastructure',
-    'categoryEarningOpportunities',
-    'categoryBasicAmenities',
-    'categorySocialWelfareSchemes',
-    'categoryOther',
-];
-
-const SUBCATEGORY_OPTIONS = {
-    categoryCultureAndNature: [
-        'subcategoryFestivals',
-        'subcategoryTreesAndForests',
-        'subcategorySoil',
-        'subcategoryNaturalWaterResources',
-        'subcategoryReligiousPlaces',
-    ],
-    categoryInfrastructure: [
-        'subcategoryLand',
-        'subcategoryWater',
-        'subcategoryEnergy',
-        'subcategoryTransportation',
-        'subcategoryCommunication',
-    ],
-    categoryEarningOpportunities: [
-        'subcategoryAgriculture',
-        'subcategoryAnimalHusbandry',
-        'subcategoryFisheries',
-        'subcategorySmallScaleIndustries',
-        'subcategoryMinorForestProduce',
-        'subcategoryKhadiAndVillageIndustries',
-    ],
-    categoryBasicAmenities: [
-        'subcategoryHealth',
-        'subcategoryEducation',
-        'subcategoryHousingAndSanitation',
-        'subcategorySportsAndEntertainment',
-        'subcategoryFood',
-    ],
-    categorySocialWelfareSchemes: [
-        'subcategoryWeakerSections',
-        'subcategoryHandicappedWelfare',
-        'subcategoryFamilyWelfare',
-        'subcategoryWomenAndChildDevelopment',
-        'subcategoryPovertyAlleviation',
-    ],
-    categoryOther: ['subcategoryOther'],
-};
+import { getCategories, getSubcategories } from '../utils/categoryUtils';
 
 const CategorySubcategorySelector = ({ category, subcategory, setCategory, setSubcategory }) => {
     const { strings } = useLanguage();
@@ -68,6 +20,9 @@ const CategorySubcategorySelector = ({ category, subcategory, setCategory, setSu
         setSubcategory(event.target.value);
     };
 
+    const categories = getCategories();
+    const subcategories = getSubcategories(category);
+
     return (
         <>
             <FormControl size="small">
@@ -80,9 +35,9 @@ const CategorySubcategorySelector = ({ category, subcategory, setCategory, setSu
                     <MenuItem value="" disabled>
                         {strings.issueCategory}
                     </MenuItem>
-                    {CATEGORY_OPTIONS.map((cat) => (
-                        <MenuItem key={cat} value={cat}>
-                            {strings[cat]}
+                    {categories.map((cat) => (
+                        <MenuItem key={cat.value} value={cat.value}>
+                            {strings[cat.labelKey]}
                         </MenuItem>
                     ))}
                 </Select>
@@ -98,9 +53,9 @@ const CategorySubcategorySelector = ({ category, subcategory, setCategory, setSu
                     <MenuItem value="" disabled>
                         {strings.issueSubcategory}
                     </MenuItem>
-                    {(SUBCATEGORY_OPTIONS[category] || []).map((subcat) => (
-                        <MenuItem key={subcat} value={subcat}>
-                            {strings[subcat]}
+                    {subcategories.map((subcat) => (
+                        <MenuItem key={subcat.value} value={subcat.value}>
+                            {strings[subcat.labelKey]}
                         </MenuItem>
                     ))}
                 </Select>

@@ -59,7 +59,53 @@ const CitizenLoginView = ({ onLogin }) => {
     movement: { verified: false, count: 0 },
   });
 
+  // --- Platform config and thresholds state ---
+  const [platformConfig, setPlatformConfig] = useState({
+    liveliness: true,
+    blink_count: 4,
+    movement_count: 5,
+  });
+  const [thresholds, setThresholds] = useState({
+    blink: 4,
+    movement: 5,
+  });
+  const thresholdsRef = useRef(thresholds);
+
+  // Keep thresholdsRef in sync
+  useEffect(() => {
+    thresholdsRef.current = thresholds;
+  }, [thresholds]);
+
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+
+  // Fetch only settings.camera for config
+  const fetchPlatformConfig = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/platform-configurations/camera`);
+      const cameraSettings = await res.json();
+
+      setPlatformConfig({
+        liveliness: cameraSettings?.value?.liveliness?.citizenLogin ?? true,
+        blink_count: cameraSettings?.value?.blink_count?.citizenLogin ?? 4,
+        movement_count:
+          cameraSettings?.value?.movement_count?.citizenLogin ?? 5,
+      });
+      setThresholds({
+        blink: cameraSettings?.value?.blink_count?.citizenLogin ?? 4,
+        movement: cameraSettings?.value?.movement_count?.citizenLogin ?? 5,
+      });
+    } catch (err) {
+      setPlatformConfig({
+        liveliness: true,
+        blink_count: 4,
+        movement_count: 5,
+      });
+      setThresholds({
+        blink: 4,
+        movement: 5,
+      });
+    }
+  }, [API_URL]);
 
   // Refs
   const videoRef = useRef(null);
@@ -273,36 +319,6 @@ const CitizenLoginView = ({ onLogin }) => {
     return transforms.join(" ");
   }, [zoomLevel, cameraPosition]);
 
-  const handleFaceResults = useCallback((results) => {
-    if (
-      !isMountedRef.current ||
-      !canvasRef.current ||
-      !results.multiFaceLandmarks
-    ) {
-      setVerificationState((prev) => ({ ...prev, faceDetected: false }));
-      return;
-    }
-
-    const ctx = canvasRef.current.getContext("2d");
-    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-
-    const faceLandmarks = results.multiFaceLandmarks[0];
-    if (!faceLandmarks || faceLandmarks.length < 468) {
-      setVerificationState((prev) => ({ ...prev, faceDetected: false }));
-      return;
-    }
-
-    drawFaceOutline(faceLandmarks);
-
-    const livelinessChecks = {
-      blink: detectBlink(faceLandmarks),
-      movement: detectMacroMovement(faceLandmarks),
-    };
-
-    updateVerificationState(livelinessChecks);
-    setVerificationState((prev) => ({ ...prev, faceDetected: true }));
-  }, []);
-
   const drawFaceOutline = useCallback(
     (landmarks) => {
       if (!canvasRef.current || !landmarks) return;
@@ -430,21 +446,68 @@ const CitizenLoginView = ({ onLogin }) => {
     setVerificationState((prev) => ({
       ...prev,
       blink: blink
-        ? updateCheck(
-            prev.blink,
-            VERIFICATION_THRESHOLDS.blink,
-            "Blink verified"
-          )
+        ? updateCheck(prev.blink, thresholdsRef.current.blink, "Blink verified")
         : prev.blink,
       movement: movement
         ? updateCheck(
             prev.movement,
-            VERIFICATION_THRESHOLDS.movement,
+            thresholdsRef.current.movement,
             "Movement verified"
           )
         : prev.movement,
     }));
   }, []);
+
+  const handleFaceResults = useCallback(
+    (results) => {
+      if (
+        !isMountedRef.current ||
+        !canvasRef.current ||
+        !results.multiFaceLandmarks
+      ) {
+        setVerificationState((prev) => ({ ...prev, faceDetected: false }));
+        return;
+      }
+
+      const ctx = canvasRef.current.getContext("2d");
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+
+      const faceLandmarks = results.multiFaceLandmarks[0];
+      if (!faceLandmarks || faceLandmarks.length < 468) {
+        setVerificationState((prev) => ({ ...prev, faceDetected: false }));
+        return;
+      }
+
+      drawFaceOutline(faceLandmarks);
+
+      // --- Auto-verify if liveliness is false ---
+      if (!platformConfig.liveliness) {
+        setVerificationState((prev) => ({
+          ...prev,
+          faceDetected: true,
+          blink: { verified: true, count: thresholdsRef.current.blink },
+          movement: { verified: true, count: thresholdsRef.current.movement },
+        }));
+        return;
+      }
+      // ------------------------------------------
+
+      const livelinessChecks = {
+        blink: detectBlink(faceLandmarks),
+        movement: detectMacroMovement(faceLandmarks),
+      };
+
+      updateVerificationState(livelinessChecks);
+      setVerificationState((prev) => ({ ...prev, faceDetected: true }));
+    },
+    [
+      drawFaceOutline,
+      detectBlink,
+      detectMacroMovement,
+      platformConfig.liveliness,
+      updateVerificationState,
+    ]
+  );
 
   const updateCheck = useCallback((check, threshold, message) => {
     if (check.verified) return check;
@@ -467,6 +530,8 @@ const CitizenLoginView = ({ onLogin }) => {
     setCameraPermissionDenied(false);
 
     try {
+      await fetchPlatformConfig(); // <-- fetch config before camera
+
       if (
         !selectedPanchayat ||
         !voterIdLastFour ||
@@ -496,7 +561,13 @@ const CitizenLoginView = ({ onLogin }) => {
     } finally {
       setLoading(false);
     }
-  }, [selectedPanchayat, voterIdLastFour, modelsLoaded, strings]);
+  }, [
+    selectedPanchayat,
+    voterIdLastFour,
+    modelsLoaded,
+    strings,
+    fetchPlatformConfig,
+  ]);
 
   const stopCamera = useCallback(() => {
     if (videoRef.current?.srcObject) {
@@ -609,9 +680,11 @@ const CitizenLoginView = ({ onLogin }) => {
     try {
       setLoading(true);
 
+      // Only require checks if liveliness is true
       if (
-        !verificationState.blink.verified ||
-        !verificationState.movement.verified
+        platformConfig.liveliness &&
+        (!verificationState.blink.verified ||
+          !verificationState.movement.verified)
       ) {
         setError(strings.completeLivelinessChecks);
         setLoading(false);
@@ -683,6 +756,7 @@ const CitizenLoginView = ({ onLogin }) => {
     API_URL,
     onLogin,
     stopCamera,
+    platformConfig.liveliness, // add this dependency
   ]);
 
   const retakePhoto = useCallback(() => {
@@ -964,29 +1038,31 @@ const CitizenLoginView = ({ onLogin }) => {
                         </Box>
                       )}
 
-                      <Box
-                        sx={{
-                          position: "absolute",
-                          bottom: sliderReady ? 48 : 8,
-                          left: "50%",
-                          transform: "translateX(-50%)",
-                        }}
-                      >
-                        <Stack direction="row" spacing={1}>
-                          <VerificationChip
-                            label="Blink"
-                            verified={verificationState.blink.verified}
-                            count={verificationState.blink.count}
-                            required={VERIFICATION_THRESHOLDS.blink}
-                          />
-                          <VerificationChip
-                            label="Movement"
-                            verified={verificationState.movement.verified}
-                            count={verificationState.movement.count}
-                            required={VERIFICATION_THRESHOLDS.movement}
-                          />
-                        </Stack>
-                      </Box>
+                      {isCameraActive && platformConfig.liveliness && (
+                        <Box
+                          sx={{
+                            position: "absolute",
+                            bottom: sliderReady ? 48 : 8,
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                          }}
+                        >
+                          <Stack direction="row" spacing={1}>
+                            <VerificationChip
+                              label="Blink"
+                              verified={verificationState.blink.verified}
+                              count={verificationState.blink.count}
+                              required={thresholds.blink}
+                            />
+                            <VerificationChip
+                              label="Movement"
+                              verified={verificationState.movement.verified}
+                              count={verificationState.movement.count}
+                              required={thresholds.movement}
+                            />
+                          </Stack>
+                        </Box>
+                      )}
                     </>
                   )}
 
@@ -1105,8 +1181,10 @@ const CitizenLoginView = ({ onLogin }) => {
                         startIcon={<PhotoCameraIcon />}
                         onClick={captureImage}
                         disabled={
-                          !verificationState.blink.verified ||
-                          !verificationState.movement.verified
+                          platformConfig.liveliness
+                            ? !verificationState.blink.verified ||
+                              !verificationState.movement.verified
+                            : false
                         }
                         size="large"
                         sx={{ flex: 2 }}

@@ -28,8 +28,8 @@ import {
   Help as HelpIcon,
   People as PeopleIcon
 } from '@mui/icons-material';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import html2pdf from 'html2pdf.js';
+import '../../fonts/NotoSansDevanagari-Regular-normal';
 import {
   fetchGramSabhaMeeting,
   addAttachment,
@@ -256,160 +256,155 @@ const GramSabhaDetails = ({ meetingId, user }) => {
   const handleDownloadAttendanceReportPDF = () => {
     if (!attendanceStats || !meeting || !attendance) return;
 
-    const doc = new jsPDF();
-    const pageHeight = doc.internal.pageSize.height;
-    let y = 20;
-    const lineHeight = 6;
-    const margin = 20;
+  const panchayat = attendance.panchayatId || {};
 
-    const addLine = (text, indent = 0) => {
-      if (y + lineHeight > pageHeight - margin) {
-        doc.addPage();
-        y = margin;
-      }
-      doc.text(text, margin + indent, y);
-      y += lineHeight;
-    };
+  const genderCount = {};
+  const casteCount = {};
 
-    doc.setFontSize(16);
-    addLine("Gram Sabha Attendance Report");
-    addLine("");
-    doc.setFontSize(10);
-
-    doc.setFontSize(12);
-    addLine("Panchayat Details");
-    doc.setFontSize(10);
-    const panchayat = attendance.panchayatId || {};
-    addLine(`Panchayat: ${panchayat.name || "-"}`, 5);
-    addLine(`Block: ${panchayat.block || "-"}`, 5);
-    addLine(`District: ${panchayat.district || "-"}`, 5);
-    addLine(`State: ${panchayat.state || "-"}`, 5);
-    addLine(""); // extra space
-
-    doc.setFontSize(12);
-    addLine("Gram Sabha Details");
-    doc.setFontSize(10);
-    addLine(`Title: ${meeting.title || "-"}`, 5);
-    addLine(`Date: ${new Date(meeting.dateTime).toLocaleDateString("en-IN")}`, 5);
-    addLine(`Location: ${meeting.location || "-"}`, 5);
-    addLine(`Agenda: ${meeting.agenda || "-"}`, 5);
-    addLine(`Duration: ${meeting.scheduledDurationHours || "-"} hour(s)`, 5);
-    addLine(`Status: ${meeting.status || "-"}`, 5);
-    addLine(""); // extra space
-
-    doc.setFontSize(12);
-    addLine("Attendance Statistics");
-    doc.setFontSize(10);
-    addLine(`Total Voters: ${attendanceStats.totalVoters ?? "-"}`, 5);
-    addLine(`Total Registered: ${attendanceStats.total ?? "-"}`, 5);
-    addLine(`Present: ${attendanceStats.present ?? "-"}`, 5);
-    addLine(`Quorum Required: ${attendanceStats.quorum ?? "-"}`, 5);
-    addLine("");
-
-    // Gender & Caste breakdown
-    const genderCount = {};
-    const casteCount = {};
-
-    if(Array.isArray(attendance.attendances)) {
-      attendance.attendances.forEach((att) => {
-        const gender = att.userId?.gender || "N/A";
-        const caste = att.userId?.caste?.category || "N/A";
-
-        genderCount[gender] = (genderCount[gender] || 0) + 1;
-        casteCount[caste] = (casteCount[caste] || 0) + 1;
-      });
-    }
-
-    doc.setFontSize(12);
-    addLine("Gender Statistics");
-    doc.setFontSize(10);
-    Object.entries(genderCount).forEach(([gender, count]) => {
-      addLine(`${gender}: ${count}`, 5);
+  if (Array.isArray(attendance.attendances)) {
+    attendance.attendances.forEach((att) => {
+      const gender = att.userId?.gender || "N/A";
+      const caste = att.userId?.caste?.category || "N/A";
+      genderCount[gender] = (genderCount[gender] || 0) + 1;
+      casteCount[caste] = (casteCount[caste] || 0) + 1;
     });
-    addLine("");
+  }
 
-    doc.setFontSize(12);
-    addLine("Caste Category Statistics");
-    doc.setFontSize(10);
-    Object.entries(casteCount).forEach(([caste, count]) => {
-      addLine(`${caste}: ${count}`, 5);
-    });
+  const container = document.createElement('div');
+  container.innerHTML = `
+    <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-size: 12px; padding: 20px; line-height: 1.6;">
+      <h2 style="text-align: center;">${strings.attendanceReportTitle}</h2>
 
-    addLine(""); // space before attendance list
-    doc.setFontSize(12);
-    addLine("Attendance List");
-    doc.setFontSize(8);
+      <h3>${strings.panchayatDetails}</h3>
+      <p><strong>${strings.panchayat}:</strong> ${panchayat.name || "-"}</p>
+      <p><strong>${strings.block}:</strong> ${panchayat.block || "-"}</p>
+      <p><strong>${strings.district}:</strong> ${panchayat.district || "-"}</p>
+      <p><strong>${strings.state}:</strong> ${panchayat.state || "-"}</p>
 
-    if(Array.isArray(attendance.attendances)) {
-      attendance.attendances.forEach((att, index) => {
-        const time = new Date(att.checkInTime).toLocaleTimeString("en-IN", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        });
-        const user = att.userId || {};
-        const line = `${index + 1}. Name: ${user.name || "-"} | Gender: ${user.gender || "N/A"} | Caste: ${user.caste?.category || "N/A"} | Status: ${att.status} | Check-in: ${time} | Method: ${att.verificationMethod}`;
-        const wrapped = doc.splitTextToSize(line, 170);
+      <h3>${strings.gramSabhaDetails}</h3>
+      <p><strong>${strings.title}:</strong> ${meeting.title || "-"}</p>
+      <p><strong>${strings.date}:</strong> ${new Date(meeting.dateTime).toLocaleDateString("hi-IN")}</p>
+      <p><strong>${strings.location}:</strong> ${meeting.location || "-"}</p>
+      <p><strong>${strings.agenda}:</strong> ${meeting.agenda || "-"}</p>
+      <p><strong>${strings.duration}:</strong> ${meeting.scheduledDurationHours || "-"} ${strings.hours}</p>
+      <p><strong>${strings.status}:</strong> ${meeting.status || "-"}</p>
 
-        wrapped.forEach(wLine => addLine(wLine));
-        y += 2; // slight spacing after each entry
-      });
-    }
+      <h3>${strings.attendanceStats}</h3>
+      <p><strong>${strings.totalVoters}:</strong> ${attendanceStats.totalVoters ?? "-"}</p>
+      <p><strong>${strings.totalRegistered}:</strong> ${attendanceStats.total ?? "-"}</p>
+      <p><strong>${strings.present}:</strong> ${attendanceStats.present ?? "-"}</p>
+      <p><strong>${strings.quorumRequired}:</strong> ${attendanceStats.quorum ?? "-"}</p>
 
-    doc.save(`attendance_report_${Date.now()}.pdf`);
-  };
+      <h3>${strings.genderStats}</h3>
+      <ul>
+        ${Object.entries(genderCount).map(([g, c]) => `<li>${g}: ${c}</li>`).join("")}
+      </ul>
+
+      <h3>${strings.casteStats}</h3>
+      <ul>
+        ${Object.entries(casteCount).map(([c, count]) => `<li>${c}: ${count}</li>`).join("")}
+      </ul>
+
+      <h3>${strings.attendanceList}</h3>
+      <table border="1" cellspacing="0" cellpadding="4" style="border-collapse: collapse; width: 100%; font-size: 10px;">
+        <thead>
+          <tr>
+            <th>${strings.sNo}</th>
+            <th>${strings.name}</th>
+            <th>${strings.gender}</th>
+            <th>${strings.casteCategory}</th>
+            <th>${strings.status}</th>
+            <th>${strings.verificationMethod}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${
+            Array.isArray(attendance.attendances)
+              ? attendance.attendances.map((att, i) => {
+                  const user = att.userId || {};
+                  return `
+                    <tr style="page-break-inside: avoid;">
+                      <td>${i + 1}</td>
+                      <td>${user.name || "-"}</td>
+                      <td>${user.gender || "N/A"}</td>
+                      <td>${user.caste?.category || "N/A"}</td>
+                      <td>${att.status}</td>
+                      <td>${att.verificationMethod}</td>
+                    </tr>`;
+                }).join("")
+              : `<tr><td colspan="6">${strings.noData}</td></tr>`
+          }
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+
+  html2pdf()
+    .from(container)
+    .set({
+      margin: 0.5,
+      filename: `attendance_report_${Date.now()}.pdf`,
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+    })
+    .save()
+    .then(() => document.body.removeChild(container));
+};
+
 
   const handleDownloadAttendanceReportCSV = () => {
     if (!attendanceStats || !meeting || !attendance) return;
 
     const rows = [];
 
-    // Header metadata
-    rows.push(["Gram Sabha Attendance Report"]);
-    rows.push([]);
-    rows.push(["Title", meeting.title || "-"]);
-    rows.push(["Date", new Date(meeting.dateTime).toLocaleDateString("en-IN")]);
-    rows.push(["Location", meeting.location || "-"]);
-    rows.push(["Agenda", meeting.agenda || "-"]);
-    rows.push(["Duration (hours)", meeting.scheduledDurationHours || "-"]);
-    rows.push(["Status", meeting.status || "-"]);
+    const panchayat = attendance.panchayatId || {};
 
-    const panchayat = meeting.panchayatId || {};
-    rows.push(["Panchayat", panchayat.name || "-"]);
-    rows.push(["Block", panchayat.block || "-"]);
-    rows.push(["District", panchayat.district || "-"]);
-    rows.push(["State", panchayat.state || "-"]);
+    // Header metadata
+    rows.push([strings.attendanceReportTitle]);
+    rows.push([]);
+    rows.push([strings.title, meeting.title || "-"]);
+    rows.push([strings.date, new Date(meeting.dateTime).toLocaleDateString("hi-IN")]);
+    rows.push([strings.location, meeting.location || "-"]);
+    rows.push([strings.agenda, meeting.agenda || "-"]);
+    rows.push([strings.duration, `${meeting.scheduledDurationHours || "-"} ${strings.hours}`]);
+    rows.push([strings.status, meeting.status || "-"]);
+
+    rows.push([strings.panchayat, panchayat.name || "-"]);
+    rows.push([strings.block, panchayat.block || "-"]);
+    rows.push([strings.district, panchayat.district || "-"]);
+    rows.push([strings.state, panchayat.state || "-"]);
     rows.push([]);
 
     // Attendance summary
-    rows.push(["Attendance Summary"]);
-    rows.push(["Total Voters", attendanceStats.totalVoters ?? "-"]);
-    rows.push(["Total Registered", attendanceStats.total ?? "-"]);
-    rows.push(["Present", attendanceStats.present ?? "-"]);
-    rows.push(["Quorum Required", attendanceStats.quorum ?? "-"]);
+    rows.push([strings.attendanceStats]);
+    rows.push([strings.totalVoters, attendanceStats.totalVoters ?? "-"]);
+    rows.push([strings.totalRegistered, attendanceStats.total ?? "-"]);
+    rows.push([strings.present, attendanceStats.present ?? "-"]);
+    rows.push([strings.quorumRequired, attendanceStats.quorum ?? "-"]);
     rows.push([]);
 
     // Count by Gender and Caste
     const genderCount = {};
     const casteCount = {};
 
-    if(Array.isArray(attendance.attendances)) {
+    if (Array.isArray(attendance.attendances)) {
       attendance.attendances.forEach((att) => {
         const gender = att.userId?.gender || "N/A";
         const caste = att.userId?.caste?.category || "N/A";
-
         genderCount[gender] = (genderCount[gender] || 0) + 1;
         casteCount[caste] = (casteCount[caste] || 0) + 1;
       });
     }
 
-    rows.push(["Gender Count"]);
+    rows.push([strings.genderStats]);
     Object.entries(genderCount).forEach(([gender, count]) => {
       rows.push([gender, count]);
     });
 
     rows.push([]);
-    rows.push(["Caste Category Count"]);
+    rows.push([strings.casteStats]);
     Object.entries(casteCount).forEach(([caste, count]) => {
       rows.push([caste || "N/A", count]);
     });
@@ -418,47 +413,40 @@ const GramSabhaDetails = ({ meetingId, user }) => {
 
     // Attendance Table Header
     rows.push([
-      "S.No",
-      "Name",
-      "Gender",
-      "Caste Category",
-      "Status",
-      "Check-in Time",
-      "Verification Method",
+      strings.sNo,
+      strings.name,
+      strings.gender,
+      strings.casteCategory,
+      strings.status,
+      strings.verificationMethod,
     ]);
 
     // Attendance rows
-    if(Array.isArray(attendance.attendances)) {
+    if (Array.isArray(attendance.attendances)) {
       attendance.attendances.forEach((att, index) => {
         const user = att.userId || {};
-        const checkInTime = new Date(att.checkInTime).toLocaleString("en-IN", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-        });
-
         rows.push([
           index + 1,
           user.name || "-",
           user.gender || "N/A",
           user.caste?.category || "N/A",
           att.status,
-          checkInTime,
           att.verificationMethod,
         ]);
       });
     }
 
-    // Convert to CSV string
+    // Convert to CSV with proper escaping and BOM for Hindi support
     const csvContent = rows
-      .map((row) => row.map((item) => `"${item}"`).join(","))
+      .map((row) =>
+        row.map((item) =>
+          `"${String(item).replace(/"/g, '""')}"`
+        ).join(",")
+      )
       .join("\n");
 
-    // Trigger file download
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    // Create a Blob and trigger file download
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement("a");

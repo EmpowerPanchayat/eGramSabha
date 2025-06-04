@@ -1,4 +1,3 @@
-import CATEGORY_SUBCATEGORY_KEY_VALUE_MAP from "../constants/issueCategorySubcategory";
 import STATUS_KEY_VALUE_MAP from "../constants/issueStatus";
 
 function filterIssues(issues, filters) {
@@ -13,10 +12,10 @@ function filterIssues(issues, filters) {
             issue.createdFor?.toLowerCase().includes(searchLower);
 
         // Match category
-        const matchesCategory = !category || issue.category === CATEGORY_SUBCATEGORY_KEY_VALUE_MAP[category];
+        const matchesCategory = !category || issue.category === category;
 
         // Match subcategory
-        const matchesSubcategory = !subcategory || issue.subcategory === CATEGORY_SUBCATEGORY_KEY_VALUE_MAP[subcategory];
+        const matchesSubcategory = !subcategory || issue.subcategory === subcategory;
 
         // Match status
         const matchesStatus = !status || issue.status === STATUS_KEY_VALUE_MAP[status];

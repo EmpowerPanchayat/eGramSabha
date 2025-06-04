@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Multilingual file generation with proper Hindi text rendering and word wrapping.([#57](https://github.com/EmpowerPanchayat/eGramSabha/issues/57))
+- Centralized all category and subcategory configurations into a single category.js source file to avoid duplication and improve maintainability. ([#42](https://github.com/EmpowerPanchayat/eGramSabha/issues/42))
+-  Enhancements to platform configutation. ([#47](https://github.com/EmpowerPanchayat/eGramSabha/issues/47)) 
+- Custom Swagger/OpenAPI documentation generator: Automatically scans Express route files using AST parsing, generates accurate API docs with full endpoint URLs and correct tags. ([#32](https://github.com/EmpowerPanchayat/eGramSabha/issues/32))
+
+### Removed
+
+- Removed check-in time from PDF and CSV reports.([#57](https://github.com/EmpowerPanchayat/eGramSabha/issues/57))
+
+### Fixed
+
+- CSV import to upsert users by voter ID instead of deleting existing records.([#31](https://github.com/EmpowerPanchayat/eGramSabha/issues/31))
+
+## [0.2.0] - 2025-05-27
+
+### Added
+
 - Liveliness checks ([#12](https://github.com/EmpowerPanchayat/eGramSabha/issues/12))
 - Caste feature implementation ([#5](https://github.com/EmpowerPanchayat/eGramSabha/issues/5))
 - Facial Recognition Enhancements ([#10](https://github.com/EmpowerPanchayat/eGramSabha/issues/10))
@@ -48,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.1.0...HEAD
+[Unreleased]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.0.1...0.1.0
 [0.0.1]: https://github.com/EmpowerPanchayat/eGramSabha/releases/tag/0.0.1
