@@ -124,29 +124,29 @@ const FaceRegistration = ({
     }
   }, [cameraState, zoomLevel]);
 
-  // Fetch platform config on mount
+  // Fetch platform config on mount (fetch only settings.camera)
   useEffect(() => {
     const fetchPlatformConfig = async () => {
       try {
         const res = await fetch(
           `${
             process.env.REACT_APP_API_URL || "http://localhost:5000/api"
-          }/platform-configurations`
+          }/platform-configurations/camera`
         );
-        const data = await res.json();
-        const configObj = {};
-        (Array.isArray(data) ? data : data.config || []).forEach((item) => {
-          configObj[item.key] = item.value;
-        });
+        const cameraSettings = await res.json();
+
         setPlatformConfig({
           liveliness:
-            configObj.liveliness === "false" ? false : !!configObj.liveliness,
-          blink_count: Number(configObj.blink_count) || 2,
-          movement_count: Number(configObj.movement_count) || 5,
+            cameraSettings?.value?.liveliness?.faceRegistration ?? true,
+          blink_count:
+            cameraSettings?.value?.blink_count?.faceRegistration ?? 2,
+          movement_count:
+            cameraSettings?.value?.movement_count?.faceRegistration ?? 5,
         });
         setThresholds({
-          blink: Number(configObj.blink_count) || 2,
-          movement: Number(configObj.movement_count) || 5,
+          blink: cameraSettings?.value?.blink_count?.faceRegistration ?? 2,
+          movement:
+            cameraSettings?.value?.movement_count?.faceRegistration ?? 5,
         });
       } catch (err) {
         setPlatformConfig({

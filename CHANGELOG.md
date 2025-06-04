@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Multilingual file generation with proper Hindi text rendering and word wrapping.([#57](https://github.com/EmpowerPanchayat/eGramSabha/issues/57))
 - Centralized all category and subcategory configurations into a single category.js source file to avoid duplication and improve maintainability. ([#42](https://github.com/EmpowerPanchayat/eGramSabha/issues/42))
+-  Enhancements to platform configutation. ([#47](https://github.com/EmpowerPanchayat/eGramSabha/issues/47)) 
 
 ### Removed
 

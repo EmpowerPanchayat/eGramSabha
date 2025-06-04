@@ -78,6 +78,35 @@ const CitizenLoginView = ({ onLogin }) => {
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
+  // Fetch only settings.camera for config
+  const fetchPlatformConfig = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/platform-configurations/camera`);
+      const cameraSettings = await res.json();
+
+      setPlatformConfig({
+        liveliness: cameraSettings?.value?.liveliness?.citizenLogin ?? true,
+        blink_count: cameraSettings?.value?.blink_count?.citizenLogin ?? 4,
+        movement_count:
+          cameraSettings?.value?.movement_count?.citizenLogin ?? 5,
+      });
+      setThresholds({
+        blink: cameraSettings?.value?.blink_count?.citizenLogin ?? 4,
+        movement: cameraSettings?.value?.movement_count?.citizenLogin ?? 5,
+      });
+    } catch (err) {
+      setPlatformConfig({
+        liveliness: true,
+        blink_count: 4,
+        movement_count: 5,
+      });
+      setThresholds({
+        blink: 4,
+        movement: 5,
+      });
+    }
+  }, [API_URL]);
+
   // Refs
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -494,37 +523,6 @@ const CitizenLoginView = ({ onLogin }) => {
     setActiveFeedback(message);
     setTimeout(() => setActiveFeedback(null), 2000);
   }, []);
-
-  const fetchPlatformConfig = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_URL}/platform-configurations`);
-      const data = await res.json();
-      const configObj = {};
-      (Array.isArray(data) ? data : data.config || []).forEach((item) => {
-        configObj[item.key] = item.value;
-      });
-      setPlatformConfig({
-        liveliness:
-          configObj.liveliness === "false" ? false : !!configObj.liveliness,
-        blink_count: Number(configObj.blink_count) || 4,
-        movement_count: Number(configObj.movement_count) || 5,
-      });
-      setThresholds({
-        blink: Number(configObj.blink_count) || 4,
-        movement: Number(configObj.movement_count) || 5,
-      });
-    } catch (err) {
-      setPlatformConfig({
-        liveliness: true,
-        blink_count: 4,
-        movement_count: 5,
-      });
-      setThresholds({
-        blink: 4,
-        movement: 5,
-      });
-    }
-  }, [API_URL]);
 
   const startCamera = useCallback(async () => {
     setError("");

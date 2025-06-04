@@ -1,115 +1,114 @@
 // backend/server.js (Enhanced with security and authentication)
-const express = require('express');
-const multer = require('multer');
-const csv = require('csv-parser');
-const fs = require('fs');
-const cors = require('cors');
-const mongoose = require('mongoose');
-const PlatformConfiguration = require('./models/PlatformConfiguration');
-const path = require('path');
+const express = require("express");
+const multer = require("multer");
+const csv = require("csv-parser");
+const fs = require("fs");
+const cors = require("cors");
+const mongoose = require("mongoose");
+const PlatformConfiguration = require("./models/PlatformConfiguration");
+const defaultSettings = require("./defaults/defaultPlatformSettings");
+const path = require("path");
 
-const dotenv = require('dotenv');
-const helmet = require('helmet');
-const xss = require('xss-clean');
-const hpp = require('hpp');
-const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
+const dotenv = require("dotenv");
+const helmet = require("helmet");
+const xss = require("xss-clean");
+const hpp = require("hpp");
+const morgan = require("morgan");
+const rateLimit = require("express-rate-limit");
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:5000';
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3001';
-const NODE_ENV = process.env.NODE_ENV || 'development';
+const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:5000";
+const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3001";
+const NODE_ENV = process.env.NODE_ENV || "development";
 
 // Import security middleware
-const configureSecurityMiddleware = require('./middleware/securityMiddleware');
+const configureSecurityMiddleware = require("./middleware/securityMiddleware");
 
 // Import routes
-const panchayatRoutes = require('./routes/panchayatRoutes');
-const userRoutes = require('./routes/userRoutes');
-const issueRoutes = require('./routes/issueRoutes');
-const citizenRoutes = require('./routes/citizenRoutes');
-const authRoutes = require('./routes/authRoutes');
-const officialRoutes = require('./routes/officialRoutes');
-const gramSabhaRoutes = require('./routes/gramSabhaRoutes');
-const platformConfigRoutes = require('./routes/platformConfigRoutes');
+const panchayatRoutes = require("./routes/panchayatRoutes");
+const userRoutes = require("./routes/userRoutes");
+const issueRoutes = require("./routes/issueRoutes");
+const citizenRoutes = require("./routes/citizenRoutes");
+const authRoutes = require("./routes/authRoutes");
+const officialRoutes = require("./routes/officialRoutes");
+const gramSabhaRoutes = require("./routes/gramSabhaRoutes");
+const platformConfigRoutes = require("./routes/platformConfigRoutes");
 
 // Import models
-const User = require('./models/User');
-const Panchayat = require('./models/Panchayat');
-const Issue = require('./models/Issue');
-const Ward = require('./models/Ward');
-const { createDefaultRoles } = require('./models/Role');
+const User = require("./models/User");
+const Panchayat = require("./models/Panchayat");
+const Issue = require("./models/Issue");
+const Ward = require("./models/Ward");
+const { createDefaultRoles } = require("./models/Role");
 
 // Basic security middlewares
-app.use(helmet({
-  crossOriginResourcePolicy: false,
-  crossOriginEmbedderPolicy: false
-}));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
 app.use(xss()); // Prevent XSS attacks
 app.use(hpp()); // Prevent HTTP Parameter Pollution
 
 // Request logging for development
-if (NODE_ENV === 'development') {
-  app.use(morgan('dev'));
+if (NODE_ENV === "development") {
+  app.use(morgan("dev"));
 }
 
 // CORS configuration
-app.use(cors({
-  origin: CORS_ORIGIN,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: CORS_ORIGIN,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    credentials: true,
+  })
+);
 
 // Body parsers
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, 'uploads');
+const uploadsDir = path.join(__dirname, "uploads");
 
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
 
 // Serve static files from the uploads directory
-app.use('/uploads', (req, res, next) => {
-  res.header('Access-Control-Allow-Origin', CORS_ORIGIN);
-  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-}, express.static(uploadsDir));
-app.use('/static', express.static(path.join(__dirname, 'public')));
+app.use(
+  "/uploads",
+  (req, res, next) => {
+    res.header("Access-Control-Allow-Origin", CORS_ORIGIN);
+    res.header("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Origin, X-Requested-With, Content-Type, Accept"
+    );
+    res.header("Access-Control-Allow-Credentials", "true");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  },
+  express.static(uploadsDir)
+);
+app.use("/static", express.static(path.join(__dirname, "public")));
 
 // MongoDB Connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/voter_registration';
+const MONGODB_URI =
+  process.env.MONGODB_URI || "mongodb://localhost:27017/voter_registration";
 
-mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(async () => {
-    // Initialize default configs if not present
-    const initialConfigs = [
-      { key: 'liveliness', value: true },
-      { key: 'blink_count', value: 2 },
-      { key: 'movement_count', value: 5 }
-    ];
-    for (const config of initialConfigs) {
-      await PlatformConfiguration.updateOne(
-        { key: config.key },
-        { $setOnInsert: config },
-        { upsert: true }
-      );
-    }
-    console.log('Platform configurations checked/initialized.');
-  })
-  .catch(err => {
-    console.error('Database connection error:', err);
+mongoose
+  .connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(async () => {})
+  .catch((err) => {
+    console.error("Database connection error:", err);
   });
 
 // File upload configuration
@@ -118,8 +117,8 @@ const storage = multer.diskStorage({
     cb(null, uploadsDir);
   },
   filename: function (req, file, cb) {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
+    cb(null, Date.now() + "-" + file.originalname);
+  },
 });
 
 const upload = multer({
@@ -129,49 +128,57 @@ const upload = multer({
   },
   fileFilter: (req, file, cb) => {
     // Define allowed file types
-    const allowedTypes = /jpeg|jpg|png|gif|csv|pdf|doc|docx|xls|xlsx|application\/vnd.ms-excel/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const allowedTypes =
+      /jpeg|jpg|png|gif|csv|pdf|doc|docx|xls|xlsx|application\/vnd.ms-excel/;
+    const extname = allowedTypes.test(
+      path.extname(file.originalname).toLowerCase()
+    );
     const mimetype = allowedTypes.test(file.mimetype);
 
     if (mimetype && extname) {
       return cb(null, true);
     } else {
-      cb(new Error('Only specific file types are allowed (images, documents, spreadsheets)'));
+      cb(
+        new Error(
+          "Only specific file types are allowed (images, documents, spreadsheets)"
+        )
+      );
     }
-  }
+  },
 });
 
 // Rate limiting for API routes
 const apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 15 minutes
   max: 10000, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later',
+  message: "Too many requests from this IP, please try again later",
   standardHeaders: true, // Return rate limit info in the RateLimit-* headers
-  legacyHeaders: false // Disable the X-RateLimit-* headers
+  legacyHeaders: false, // Disable the X-RateLimit-* headers
 });
 
 // Apply more strict rate limit for sensitive routes
 const authLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour window
   max: 100000, // start blocking after 10 requests
-  message: 'Too many authentication attempts from this IP, please try again after an hour',
+  message:
+    "Too many authentication attempts from this IP, please try again after an hour",
   standardHeaders: true,
   legacyHeaders: false,
 });
 
 // Apply rate limiting to all API routes
-app.use('/api/', apiLimiter);
+app.use("/api/", apiLimiter);
 // Apply stricter limiting to auth endpoints
-app.use('/api/auth/login', authLimiter);
-app.use('/api/citizens/face-login', authLimiter);
+app.use("/api/auth/login", authLimiter);
+app.use("/api/citizens/face-login", authLimiter);
 
 //Check liveness
-app.get('/api/liveliness', (req, res) => {
-  res.status(200).send('OK');
+app.get("/api/liveliness", (req, res) => {
+  res.status(200).send("OK");
 });
 
 // Import users from CSV
-app.post('/api/import-csv', upload.single('file'), async (req, res) => {
+app.post("/api/import-csv", upload.single("file"), async (req, res) => {
   try {
     // Get panchayatId from the request
     const { panchayatId } = req.body;
@@ -179,7 +186,7 @@ app.post('/api/import-csv', upload.single('file'), async (req, res) => {
     if (!panchayatId) {
       return res.status(400).json({
         success: false,
-        message: 'PanchayatId is required for importing users'
+        message: "PanchayatId is required for importing users",
       });
     }
 
@@ -188,7 +195,7 @@ app.post('/api/import-csv', upload.single('file'), async (req, res) => {
     if (!panchayat) {
       return res.status(404).json({
         success: false,
-        message: 'Panchayat not found'
+        message: "Panchayat not found",
       });
     }
 
@@ -200,30 +207,31 @@ app.post('/api/import-csv', upload.single('file'), async (req, res) => {
 
     fs.createReadStream(req.file.path)
       .pipe(csv())
-      .on('headers', (headers) => {
+      .on("headers", (headers) => {
         // Log the exact headers from the CSV file
-        console.log('CSV Headers:', headers);
+        console.log("CSV Headers:", headers);
         columnNames = headers;
       })
-      .on('data', (data) => {
+      .on("data", (data) => {
         // Debug the first row to see what's coming in
         if (results.length === 0) {
-          console.log('First row data:', data);
+          console.log("First row data:", data);
         }
 
         // Handle the column name with trailing space: "Voter id number "
-        let voterIdValue = data['Voter id number'];
+        let voterIdValue = data["Voter id number"];
 
         // If not found, try with a space at the end
         if (voterIdValue === undefined) {
-          voterIdValue = data['Voter id number '];
+          voterIdValue = data["Voter id number "];
         }
 
         // Try other possible variations if still not found
         if (voterIdValue === undefined) {
           // Try with any key that contains "Voter id"
-          const voterIdKey = Object.keys(data).find(key =>
-            key.includes('Voter id') || key.includes('voter id'));
+          const voterIdKey = Object.keys(data).find(
+            (key) => key.includes("Voter id") || key.includes("voter id")
+          );
 
           if (voterIdKey) {
             voterIdValue = data[voterIdKey];
@@ -232,52 +240,59 @@ app.post('/api/import-csv', upload.single('file'), async (req, res) => {
 
         if (!voterIdValue) {
           skippedDueToMissingVoterID++;
-          console.log('Row missing voter ID:', data);
+          console.log("Row missing voter ID:", data);
           return; // Skip this row
         }
 
         results.push({
-          name: data.Name || '',
-          gender: data.Gender || '',
-          fatherName: data['Father Name'] || '',
-          husbandName: data['Husband Name'] || '',
-          motherName: data['Mother Name'] || '',
-          address: data.Address || '',
-          mobileNumber: data['Mobile number'] ? data['Mobile number'].toString() : '',
-          voterIdNumber: voterIdValue.trim().replaceAll('/', '-'), // Clean up voter ID
+          name: data.Name || "",
+          gender: data.Gender || "",
+          fatherName: data["Father Name"] || "",
+          husbandName: data["Husband Name"] || "",
+          motherName: data["Mother Name"] || "",
+          address: data.Address || "",
+          mobileNumber: data["Mobile number"]
+            ? data["Mobile number"].toString()
+            : "",
+          voterIdNumber: voterIdValue.trim().replaceAll("/", "-"), // Clean up voter ID
           caste: {
-            name: data.Caste || '',
-            category: data['Caste Category'] || ''
+            name: data.Caste || "",
+            category: data["Caste Category"] || "",
           },
           isRegistered: false,
-          panchayatId: panchayatId // Add panchayatId to each user
+          panchayatId: panchayatId, // Add panchayatId to each user
         });
       })
-      .on('end', async () => {
+      .on("end", async () => {
         try {
-          console.log(`Processed ${results.length} rows from CSV for panchayat ${panchayatId}. Skipped ${skippedDueToMissingVoterID} rows.`);
+          console.log(
+            `Processed ${results.length} rows from CSV for panchayat ${panchayatId}. Skipped ${skippedDueToMissingVoterID} rows.`
+          );
 
           if (results.length === 0) {
             return res.status(400).json({
               success: false,
-              message: `No valid data found in CSV. Skipped ${skippedDueToMissingVoterID} rows. Headers: ${columnNames.join(', ')}`
+              message: `No valid data found in CSV. Skipped ${skippedDueToMissingVoterID} rows. Headers: ${columnNames.join(
+                ", "
+              )}`,
             });
           }
 
           if (results.length > 10000) {
             return res.status(400).json({
               success: false,
-              message: 'CSV import limit exceeded. Maximum allowed is 10,000 records.'
+              message:
+                "CSV import limit exceeded. Maximum allowed is 10,000 records.",
             });
           }
 
           // Create bulk operations
-          const bulkOps = results.map(user => ({
+          const bulkOps = results.map((user) => ({
             updateOne: {
               filter: { voterIdNumber: user.voterIdNumber, panchayatId },
               update: { $set: user },
-              upsert: true
-            }
+              upsert: true,
+            },
           }));
 
           const bulkResult = await User.bulkWrite(bulkOps);
@@ -292,27 +307,35 @@ app.post('/api/import-csv', upload.single('file'), async (req, res) => {
           res.json({
             success: true,
             message: `Import complete: ${created} added, ${updated} updated, ${unchanged} unchanged, ${skippedDueToMissingVoterID} skipped due to missing voter ID.`,
-            skippedDueToMissingVoterID
+            skippedDueToMissingVoterID,
           });
         } catch (err) {
-          console.error('Import error:', err);
-          res.status(500).json({ success: false, message: 'Error saving data: ' + err.message });
+          console.error("Import error:", err);
+          res
+            .status(500)
+            .json({
+              success: false,
+              message: "Error saving data: " + err.message,
+            });
         }
       });
   } catch (error) {
-    console.error('CSV import error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error.' });
+    console.error("CSV import error:", error);
+    res.status(500).json({ success: false, message: "Internal server error." });
   }
 });
 
 // Get registration statistics with optional panchayatId filter
-app.get('/api/stats', async (req, res) => {
+app.get("/api/stats", async (req, res) => {
   try {
     const { panchayatId } = req.query;
     const filter = panchayatId ? { panchayatId } : {};
 
     const totalUsers = await User.countDocuments(filter);
-    const registeredUsers = await User.countDocuments({ ...filter, isRegistered: true });
+    const registeredUsers = await User.countDocuments({
+      ...filter,
+      isRegistered: true,
+    });
 
     // Get issue statistics if panchayat is specified
     let issueStats = null;
@@ -320,17 +343,17 @@ app.get('/api/stats', async (req, res) => {
       const totalIssues = await Issue.countDocuments({ panchayatId });
       const resolvedIssues = await Issue.countDocuments({
         panchayatId,
-        status: 'RESOLVED'
+        status: "RESOLVED",
       });
       const pendingIssues = await Issue.countDocuments({
         panchayatId,
-        status: { $in: ['REPORTED', 'AGENDA_CREATED'] }
+        status: { $in: ["REPORTED", "AGENDA_CREATED"] },
       });
 
       issueStats = {
         totalIssues,
         resolvedIssues,
-        pendingIssues
+        pendingIssues,
       };
     }
 
@@ -338,27 +361,27 @@ app.get('/api/stats', async (req, res) => {
       totalUsers,
       registeredUsers,
       pendingUsers: totalUsers - registeredUsers,
-      panchayatId: panchayatId || 'all',
-      issueStats
+      panchayatId: panchayatId || "all",
+      issueStats,
     });
   } catch (error) {
-    console.error('Error fetching stats:', error);
-    res.status(500).json({ success: false, message: 'Error fetching stats' });
+    console.error("Error fetching stats:", error);
+    res.status(500).json({ success: false, message: "Error fetching stats" });
   }
 });
 
 // Direct endpoint for backward compatibility
-app.post('/api/register-face', async (req, res) => {
+app.post("/api/register-face", async (req, res) => {
   try {
     const { voterId, faceDescriptor, faceImage, panchayatId } = req.body;
-    console.log('Legacy register-face endpoint called with voterId:', voterId);
-    console.log('PanchayatId received:', panchayatId);
+    console.log("Legacy register-face endpoint called with voterId:", voterId);
+    console.log("PanchayatId received:", panchayatId);
 
     // Validate panchayatId is provided
     if (!panchayatId) {
       return res.status(400).json({
         success: false,
-        message: 'PanchayatId is required for face registration'
+        message: "PanchayatId is required for face registration",
       });
     }
 
@@ -367,7 +390,7 @@ app.post('/api/register-face', async (req, res) => {
     if (!panchayat) {
       return res.status(404).json({
         success: false,
-        message: 'Panchayat not found'
+        message: "Panchayat not found",
       });
     }
 
@@ -375,14 +398,16 @@ app.post('/api/register-face', async (req, res) => {
     const user = await User.findOne({ voterIdNumber: voterId, panchayatId });
 
     if (!user) {
-      return res.status(404).json({ success: false, message: 'Member not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Member not found" });
     }
 
     // Check if face already exists for another user in the same panchayat
     const allUsers = await User.find({
       faceDescriptor: { $exists: true, $ne: null },
       voterIdNumber: { $ne: voterId },
-      panchayatId
+      panchayatId,
     });
 
     // Face similarity check
@@ -390,9 +415,17 @@ app.post('/api/register-face', async (req, res) => {
     let existingMatch = null;
 
     for (const existingUser of allUsers) {
-      if (existingUser.faceDescriptor && existingUser.faceDescriptor.length > 0) {
-        const distance = calculateFaceDistance(existingUser.faceDescriptor, faceDescriptor);
-        console.log(`Face distance with ${existingUser.voterIdNumber}: ${distance}`);
+      if (
+        existingUser.faceDescriptor &&
+        existingUser.faceDescriptor.length > 0
+      ) {
+        const distance = calculateFaceDistance(
+          existingUser.faceDescriptor,
+          faceDescriptor
+        );
+        console.log(
+          `Face distance with ${existingUser.voterIdNumber}: ${distance}`
+        );
 
         if (distance < threshold) {
           existingMatch = existingUser;
@@ -404,20 +437,24 @@ app.post('/api/register-face', async (req, res) => {
     if (existingMatch) {
       return res.status(400).json({
         success: false,
-        message: `This face appears to be already registered with voter ID: ${existingMatch.voterIdNumber} (${existingMatch.name})`
+        message: `This face appears to be already registered with voter ID: ${existingMatch.voterIdNumber} (${existingMatch.name})`,
       });
     }
 
-    console.log('Attempting to save face image...');
+    console.log("Attempting to save face image...");
     // Save face image if provided
     let faceImagePath = null;
     if (faceImage) {
       // Remove header from base64 string
-      const base64Data = faceImage.replace(/^data:image\/\w+;base64,/, '');
+      const base64Data = faceImage.replace(/^data:image\/\w+;base64,/, "");
 
       // Create a faces subdirectory within panchayat directory if it doesn't exist
-      const panchayatDir = path.join(__dirname, 'uploads', panchayatId.toString());
-      const facesDir = path.join(panchayatDir, 'faces');
+      const panchayatDir = path.join(
+        __dirname,
+        "uploads",
+        panchayatId.toString()
+      );
+      const facesDir = path.join(panchayatDir, "faces");
 
       if (!fs.existsSync(panchayatDir)) {
         fs.mkdirSync(panchayatDir, { recursive: true });
@@ -428,7 +465,7 @@ app.post('/api/register-face', async (req, res) => {
       }
 
       // Create a safe filename based on voter ID (removing any slashes or problematic characters)
-      const safeVoterId = voterId.replace(/[\/\\:*?"<>|]/g, '_');
+      const safeVoterId = voterId.replace(/[\/\\:*?"<>|]/g, "_");
       const filename = `${safeVoterId}_${Date.now()}.jpg`;
 
       // Use a path format that works with our static file serving
@@ -436,17 +473,21 @@ app.post('/api/register-face', async (req, res) => {
 
       // Save the image
       try {
-        fs.writeFileSync(path.join(facesDir, filename), base64Data, 'base64');
+        fs.writeFileSync(path.join(facesDir, filename), base64Data, "base64");
         console.log(`Face image saved at: ${faceImagePath}`);
       } catch (error) {
-        console.error('Error saving face image:', error);
-        throw new Error('Failed to save face image: ' + error.message);
+        console.error("Error saving face image:", error);
+        throw new Error("Failed to save face image: " + error.message);
       }
     }
 
     // Helper function for face comparison
     function calculateFaceDistance(descriptor1, descriptor2) {
-      if (!descriptor1 || !descriptor2 || descriptor1.length !== descriptor2.length) {
+      if (
+        !descriptor1 ||
+        !descriptor2 ||
+        descriptor1.length !== descriptor2.length
+      ) {
         return Infinity;
       }
 
@@ -466,38 +507,43 @@ app.post('/api/register-face', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Face registered successfully',
+      message: "Face registered successfully",
       user: {
         name: user.name,
         voterIdNumber: user.voterIdNumber,
         panchayatId: user.panchayatId,
         isRegistered: user.isRegistered,
-        faceImagePath: user.faceImagePath
-      }
+        faceImagePath: user.faceImagePath,
+      },
     });
   } catch (error) {
-    console.error('Error registering face:', error);
-    res.status(500).json({ success: false, message: 'Error registering face: ' + error.message });
+    console.error("Error registering face:", error);
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: "Error registering face: " + error.message,
+      });
   }
 });
 
 // Routes
-app.use('/api/panchayats', panchayatRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/issues', issueRoutes);
-app.use('/api/citizens', citizenRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/officials', officialRoutes);
-app.use('/api/gram-sabha', gramSabhaRoutes);
-app.use('/api/platform-configurations', platformConfigRoutes);
+app.use("/api/panchayats", panchayatRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/issues", issueRoutes);
+app.use("/api/citizens", citizenRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/officials", officialRoutes);
+app.use("/api/gram-sabha", gramSabhaRoutes);
+app.use("/api/platform-configurations", platformConfigRoutes);
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get("/api/health", (req, res) => {
   res.json({
-    status: 'ok',
+    status: "ok",
     serverTime: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    backendUrl: BACKEND_URL
+    environment: process.env.NODE_ENV || "development",
+    backendUrl: BACKEND_URL,
   });
 });
 
@@ -505,11 +551,11 @@ app.get('/api/health', (req, res) => {
 createDefaultRoles().catch(console.error);
 
 // Debug route for file paths
-app.get('/api/debug/paths', (req, res) => {
+app.get("/api/debug/paths", (req, res) => {
   res.json({
     uploadsDir: uploadsDir,
     dirExists: fs.existsSync(uploadsDir),
-    backendUrl: BACKEND_URL
+    backendUrl: BACKEND_URL,
   });
 });
 
@@ -519,12 +565,12 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
 
   const statusCode = err.statusCode || 500;
-  const message = err.message || 'Internal server error';
+  const message = err.message || "Internal server error";
 
   res.status(statusCode).json({
     success: false,
     message,
-    stack: process.env.NODE_ENV === 'production' ? '🥞' : err.stack
+    stack: process.env.NODE_ENV === "production" ? "🥞" : err.stack,
   });
 });
 
@@ -534,4 +580,19 @@ app.listen(PORT, () => {
   console.log(`Backend URL: ${BACKEND_URL}`);
   console.log(`CORS Origin: ${CORS_ORIGIN}`);
   console.log(`Environment: ${NODE_ENV}`);
+});
+
+// Ensure platform config is initialized at server start
+async function initializePlatformConfig() {
+  const config = await PlatformConfiguration.findOne();
+  if (!config) {
+    await PlatformConfiguration.create({ settings: defaultSettings });
+    console.log("PlatformConfiguration initialized with default settings.");
+  }
+}
+
+// Call this after DB connection is established
+mongoose.connection.once("open", async () => {
+  await initializePlatformConfig();
+  // ...other startup logic...
 });
