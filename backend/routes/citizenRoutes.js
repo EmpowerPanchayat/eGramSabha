@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Panchayat = require('../models/Panchayat');
+const { isCitizen } = require('../middleware/auth');
 
 // Helper function to calculate Euclidean distance between face descriptors
 const calculateFaceDistance = (descriptor1, descriptor2) => {
@@ -127,7 +128,7 @@ router.post('/face-login', async (req, res) => {
 });
 
 // Get citizen profile
-router.get('/profile/:userId', async (req, res) => {
+router.get('/profile/:userId', isCitizen, async (req, res) => {
     try {
         const { userId } = req.params;
 

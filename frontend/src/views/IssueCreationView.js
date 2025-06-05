@@ -32,6 +32,7 @@ import FileUploader from '../components/FileUploader';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useLanguage } from '../utils/LanguageContext';
 import { getCategories, getSubcategories } from '../utils/categoryUtils';
+import tokenManager from '../utils/tokenManager';
 
 const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
     const { strings } = useLanguage();
@@ -61,17 +62,32 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
         severity: 'success'
     });
 
+    // Helper to get Authorization header for issues endpoints
+    const getAuthHeaders = () => {
+        const token = tokenManager.getToken();
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
+    };
+
     // Fetch users when component mounts
     useEffect(() => {
         const fetchUsers = async () => {
             if (user.role && ['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY'].includes(user.role)) {
                 setLoadingUsers(true);
                 try {
-                    const response = await fetch(`${API_URL}/users/panchayat/${user.panchayatId}`);
-                    if (response.ok) {
-                        const data = await response.json();
-                        setUsers(data.users || []);
-                    }
+                  // Add Authorization header if token exists
+                  const headers = {
+                    "Content-Type": "application/json",
+                    ...getAuthHeaders(),
+                  };
+
+                  const response = await fetch(
+                    `${API_URL}/users/panchayat/${user.panchayatId}`,
+                    { method: 'GET', headers }
+                  );
+                  if (response.ok) {
+                    const data = await response.json();
+                    setUsers(data.users || []);
+                  }
                 } catch (error) {
                     console.error('Error fetching users:', error);
                 } finally {
@@ -149,6 +165,7 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    ...getAuthHeaders()
                 },
                 body: JSON.stringify({
                     ...formattedData,
@@ -176,6 +193,7 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
+                                ...getAuthHeaders()
                             },
                             body: JSON.stringify({
                                 issueId,
@@ -197,6 +215,7 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
+                            ...getAuthHeaders()
                         },
                         body: JSON.stringify({
                             issueId,

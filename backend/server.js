@@ -15,6 +15,7 @@ const xss = require("xss-clean");
 const hpp = require("hpp");
 const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
+const auth = require("./middleware/auth");
 
 // Load environment variables
 dotenv.config();
@@ -33,14 +34,16 @@ const swaggerDocument = require('./swagger-output.json');
 const configureSecurityMiddleware = require("./middleware/securityMiddleware");
 
 // Import routes
-const panchayatRoutes = require("./routes/panchayatRoutes");
-const userRoutes = require("./routes/userRoutes");
-const issueRoutes = require("./routes/issueRoutes");
-const citizenRoutes = require("./routes/citizenRoutes");
-const authRoutes = require("./routes/authRoutes");
-const officialRoutes = require("./routes/officialRoutes");
-const gramSabhaRoutes = require("./routes/gramSabhaRoutes");
-const platformConfigRoutes = require("./routes/platformConfigRoutes");
+const panchayatRoutes = require('./routes/panchayatRoutes');
+const userRoutes = require('./routes/userRoutes');
+const issueRoutes = require('./routes/issueRoutes');
+const citizenRoutes = require('./routes/citizenRoutes');
+const adminAuthRoutes = require('./routes/adminAuthRoutes');
+const officialAuthRoutes = require('./routes/officialAuthRoutes');
+const citizenAuthRoutes = require('./routes/citizenAuthRoutes');
+const officialRoutes = require('./routes/officialRoutes');
+const gramSabhaRoutes = require('./routes/gramSabhaRoutes');
+const platformConfigRoutes = require('./routes/platformConfigRoutes');
 
 // Import models
 const User = require("./models/User");
@@ -199,7 +202,7 @@ app.get("/api/liveliness", (req, res) => {
 });
 
 // Import users from CSV
-app.post("/api/import-csv", upload.single("file"), async (req, res) => {
+app.post('/api/import-csv', auth.isAdmin, upload.single('file'), async (req, res) => {
   try {
     // Get panchayatId from the request
     const { panchayatId } = req.body;
@@ -347,7 +350,7 @@ app.post("/api/import-csv", upload.single("file"), async (req, res) => {
 });
 
 // Get registration statistics with optional panchayatId filter
-app.get("/api/stats", async (req, res) => {
+app.get('/api/stats', auth.isAdmin, async (req, res) => {
   try {
     const { panchayatId } = req.query;
     const filter = panchayatId ? { panchayatId } : {};
@@ -392,7 +395,7 @@ app.get("/api/stats", async (req, res) => {
 });
 
 // Direct endpoint for backward compatibility
-app.post("/api/register-face", async (req, res) => {
+app.post('/api/register-face', auth.isAdmin, async (req, res) => {
   try {
     const { voterId, faceDescriptor, faceImage, panchayatId } = req.body;
     console.log("Legacy register-face endpoint called with voterId:", voterId);
@@ -549,14 +552,22 @@ app.post("/api/register-face", async (req, res) => {
 });
 
 // Routes
-app.use("/api/panchayats", panchayatRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/issues", issueRoutes);
-app.use("/api/citizens", citizenRoutes);
-app.use("/api/auth", authRoutes);
-app.use("/api/officials", officialRoutes);
-app.use("/api/gram-sabha", gramSabhaRoutes);
-app.use("/api/platform-configurations", platformConfigRoutes);
+app.use('/api/panchayats', panchayatRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/issues', issueRoutes);
+app.use('/api/citizens', citizenRoutes);
+
+// Authentication routes
+app.use('/api/auth/admin', adminAuthRoutes);
+app.use('/api/auth/official', officialAuthRoutes);
+app.use('/api/auth/citizen', citizenAuthRoutes);
+
+// Deprecated - will be removed in future versions
+app.use('/api/auth', require('./routes/authRoutes'));
+
+app.use('/api/officials', officialRoutes);
+app.use('/api/gram-sabha', gramSabhaRoutes);
+app.use('/api/platform-configurations', platformConfigRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {

@@ -1,6 +1,6 @@
-// File: frontend/src/utils/authContext.js
+// File: frontend/src/utils/authContext.js (Updated with better linkedUser handling)
 import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
-import { login, refreshToken } from '../api/auth';
+import { login as genericLogin, adminLogin, officialLogin, citizenLogin, refreshToken as apiRefreshToken } from '../api/auth';
 import { getProfile } from '../api/profile';
 import tokenManager from './tokenManager';
 
@@ -37,6 +37,7 @@ export const AuthProvider = ({ children }) => {
 
         // Then clear tokens and user data
         tokenManager.clearTokens();
+        localStorage.removeItem('user');
         setUser(null);
         setError(null);
     }, []);
@@ -57,7 +58,11 @@ export const AuthProvider = ({ children }) => {
                 throw new Error('No refresh token available');
             }
 
-            const response = await refreshToken(refreshTokenValue);
+            // Get the user type from the stored user if available
+            const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
+            const userType = storedUser?.userType || null;
+
+            const response = await apiRefreshToken(refreshTokenValue, userType);
 
             // Check if the response contains the expected data
             if (!response?.token) {
@@ -66,6 +71,11 @@ export const AuthProvider = ({ children }) => {
 
             // Update tokens using token manager
             tokenManager.setTokens(response.token, response.refreshToken);
+
+            // If we got updated user data, update it in state
+            if (response.user) {
+                setUserData(response.user);
+            }
 
             isRefreshingRef.current = false;
             return true;
@@ -77,44 +87,76 @@ export const AuthProvider = ({ children }) => {
         }
     }, [clearAuthData]);
 
-    // Set user data safely
+    // Set user data safely with improved linkedUser handling
     const setUserData = useCallback((userData) => {
         if (!userData) {
             setUser(null);
+            localStorage.removeItem('user');
             return;
         }
 
-        // For admin or regular officials
-        if (['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY', 'ADMIN'].includes(userData.role)) {
-            setUser({
-                id: userData._id || userData.id,
-                user: userData.linkedUser ? userData.linkedUser._id || userData.linkedUser.id : null,
-                username: userData.username || '',
-                name: userData.name || '',
-                email: userData.email || '',
-                role: userData.role || '',
-                panchayatId: userData.panchayatId || null,
-                avatarUrl: userData.avatarUrl || '',
-                isActive: userData.isActive || false,
-                linkedUser: userData.linkedUser ? {
-                    id: userData.linkedUser._id || userData.linkedUser.id,
+        // Store the user type
+        let userType = 'CITIZEN'; // Default
+
+        // For admin or official users
+        if (['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY', 'GUEST'].includes(userData.role)) {
+            userType = 'OFFICIAL';
+        } else if (userData.role === 'ADMIN') {
+            userType = 'ADMIN';
+        }
+
+        // Enhanced user object with proper type and structured data
+        const enhancedUserData = {
+            ...userData,
+            userType
+        };
+
+        // Store complete user data in localStorage for persistence
+        localStorage.setItem('user', JSON.stringify(enhancedUserData));
+        console.log({ userData })
+        // Set user state with appropriate structure based on role
+        if (['ADMIN', 'SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY', 'GUEST'].includes(userData.role)) {
+            // Handle linkedUser data carefully
+            let linkedUserData = null;
+
+            // Process linked user data if it exists
+            if (userData.linkedCitizenId && userData.linkedUser) {
+                // Safe access to linkedUser properties
+                linkedUserData = {
+                    id: userData.linkedUser._id || userData.linkedUser.id || null,
                     name: userData.linkedUser.name || '',
                     voterIdNumber: userData.linkedUser.voterIdNumber || '',
                     panchayatId: userData.linkedUser.panchayatId || null,
                     faceImagePath: userData.linkedUser.faceImagePath || ''
-                } : null
-            });
-        } else {
+                };
+            }
+
             setUser({
                 id: userData._id || userData.id,
-                user: userData._id || userData.id,
+                user: linkedUserData ? linkedUserData.id : null,
                 username: userData.username || '',
                 name: userData.name || '',
                 email: userData.email || '',
                 role: userData.role || '',
                 panchayatId: userData.panchayatId || null,
                 avatarUrl: userData.avatarUrl || '',
-                isActive: userData.isActive || false
+                isActive: userData.isActive !== false, // Default to true if not specified
+                linkedCitizenId: userData.linkedCitizenId || null,
+                linkedUser: linkedUserData,
+                wardId: userData.wardId || null,
+                userType: userType
+            });
+        } else {
+            // For citizen users
+            setUser({
+                id: userData._id || userData.id,
+                user: userData._id || userData.id,
+                name: userData.name || '',
+                voterIdNumber: userData.voterIdNumber || '',
+                panchayatId: userData.panchayatId || null,
+                wardId: userData.wardId || null,
+                panchayat: userData.panchayat || null,
+                userType: userType
             });
         }
     }, []);
@@ -171,12 +213,44 @@ export const AuthProvider = ({ children }) => {
             }
 
             try {
-                // Try to get user data with existing token
-                const response = await getProfile();
+                // Get stored user info to determine user type
+                const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
 
-                // Correctly navigate the response structure
+                if (!storedUser) {
+                    throw new Error('No stored user data');
+                }
+
+                // Determine which profile endpoint to use based on user type
+                let profileEndpoint = '/auth/me'; // Default
+                if (storedUser.userType) {
+                    switch (storedUser.userType) {
+                        case 'ADMIN':
+                            profileEndpoint = '/auth/admin/me';
+                            break;
+                        case 'OFFICIAL':
+                            profileEndpoint = '/auth/official/me';
+                            break;
+                        case 'CITIZEN':
+                            profileEndpoint = '/auth/citizen/me';
+                            break;
+                        default:
+                            break;
+                    }
+                }
+
+                // Try to get user profile with existing token
+                const response = await getProfile(profileEndpoint);
+
+                // Update user state if successful
                 if (response?.success && response?.data?.user) {
-                    setUserData(response.data.user);
+                    // Preserve userType from stored data
+                    const userData = response.data.user;
+
+                    // Combine the fresh data from API with stored user type
+                    setUserData({
+                        ...userData,
+                        userType: storedUser.userType
+                    });
 
                     // Start session management
                     startTokenRefreshTimer();
@@ -194,9 +268,33 @@ export const AuthProvider = ({ children }) => {
                     if (refreshed) {
                         // Try getting profile again if refresh was successful
                         try {
-                            const refreshedResponse = await getProfile();
+                            const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
+                            let profileEndpoint = '/auth/me';
+
+                            if (storedUser?.userType) {
+                                switch (storedUser.userType) {
+                                    case 'ADMIN':
+                                        profileEndpoint = '/auth/admin/me';
+                                        break;
+                                    case 'OFFICIAL':
+                                        profileEndpoint = '/auth/official/me';
+                                        break;
+                                    case 'CITIZEN':
+                                        profileEndpoint = '/auth/citizen/me';
+                                        break;
+                                    default:
+                                        break;
+                                }
+                            }
+
+                            const refreshedResponse = await getProfile(profileEndpoint);
+
                             if (refreshedResponse?.success && refreshedResponse?.data?.user) {
-                                setUserData(refreshedResponse.data.user);
+                                // Combine the fresh data with stored user type
+                                setUserData({
+                                    ...refreshedResponse.data.user,
+                                    userType: storedUser?.userType
+                                });
 
                                 // Start session management
                                 startTokenRefreshTimer();
@@ -253,10 +351,31 @@ export const AuthProvider = ({ children }) => {
         };
     }, []);
 
-    // Login function
-    const handleLogin = async (username, password) => {
+    // Enhanced login function that supports multiple user types
+    const handleLogin = async (username, password, userType = null) => {
         try {
-            const response = await login(username, password);
+            setError(null);
+            let response;
+
+            // Use the appropriate login function based on user type
+            if (userType) {
+                switch (userType.toUpperCase()) {
+                    case 'ADMIN':
+                        response = await adminLogin(username, password);
+                        break;
+                    case 'OFFICIAL':
+                        response = await officialLogin(username, password);
+                        break;
+                    default:
+                        // Fall back to generic login if type is not recognized
+                        response = await genericLogin(username, password);
+                        break;
+                }
+            } else {
+                // If no specific user type, use generic login
+                response = await genericLogin(username, password);
+            }
+
             if (!response?.token || !response?.refreshToken || !response?.user) {
                 throw new Error('Invalid login response');
             }
@@ -275,7 +394,43 @@ export const AuthProvider = ({ children }) => {
 
             return true;
         } catch (error) {
+            console.error('Login error:', error);
             setError(error.message || 'Login failed');
+            return false;
+        }
+    };
+
+    // Modified citizen login function
+    const handleCitizenLogin = async (faceLoginData) => {
+        try {
+            setError(null);
+
+            // Use the citizen-specific login function
+            const response = await citizenLogin(faceLoginData);
+
+            if (!response?.token || !response?.refreshToken || !response?.user) {
+                throw new Error('Invalid login response');
+            }
+
+            const { token, refreshToken: newRefreshToken, user: userData } = response;
+
+            // Store tokens using token manager
+            tokenManager.setTokens(token, newRefreshToken);
+
+            // Set user data
+            setUserData({
+                ...userData,
+                userType: 'CITIZEN'
+            });
+
+            // Start session management
+            startTokenRefreshTimer();
+            startInactivityTimer();
+
+            return true;
+        } catch (error) {
+            console.error('Citizen login error:', error);
+            setError(error.message || 'Facial recognition login failed');
             return false;
         }
     };
@@ -285,19 +440,33 @@ export const AuthProvider = ({ children }) => {
         clearAuthData();
     };
 
+    // Get linked citizen data helper function
+    const getLinkedCitizen = () => {
+        if (!user || !user.linkedUser) {
+            return null;
+        }
+        return user.linkedUser;
+    };
+
     return (
         <AuthContext.Provider value={{
             user,
             loading,
             error,
             login: handleLogin,
+            citizenLogin: handleCitizenLogin,
             logout: handleLogout,
+            refreshToken: handleRefreshToken,
             hasRole: (roles) => {
                 if (!user) return false;
                 return Array.isArray(roles)
                     ? roles.includes(user.role)
                     : user.role === roles;
-            }
+            },
+            getUserType: () => user?.userType || null,
+            getLinkedCitizen,
+            // Helper to check if user is linked to a citizen
+            hasLinkedCitizen: () => !!user?.linkedCitizenId && !!user?.linkedUser
         }}>
             {children}
         </AuthContext.Provider>

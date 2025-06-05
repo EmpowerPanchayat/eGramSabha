@@ -41,6 +41,8 @@ import { useLanguage } from '../utils/LanguageContext';
 import { getFaceImageUrl } from '../api/index';
 import UpcomingMeetingsBanner from '../components/GramSabha/UpcomingMeetingsBanner';
 import PastMeetingsList from '../components/GramSabha/PastMeetingsList';
+import { getCitizenProfile } from '../api/profile';
+import tokenManager from '../utils/tokenManager';
 
 const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
     const { strings } = useLanguage();
@@ -53,31 +55,78 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
     const [profileCollapsed, setProfileCollapsed] = useState(false);
     const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
+    // Helper to get Authorization header for issues endpoints
+    const getAuthHeaders = () => {
+        const token = tokenManager.getToken();
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
+    };
+    
+
     useEffect(() => {
         const fetchUserDetails = async () => {
-            console.log({user})
-            if (!user || !user._id) return;
+            if (!user || !user.id) return;
+
             setLoading(true);
             try {
-                console.log('CitizenDashboard - Fetching user details for:', user._id);
-                const response = await fetch(`${API_URL}/citizens/profile/${user._id}`);
-                if (!response.ok) throw new Error('Failed to fetch user profile');
-                const data = await response.json();
-                console.log('CitizenDashboard - Received user data:', data);
-                setPanchayatInfo(data.user.panchayat);
-                console.log('CitizenDashboard - Set panchayatInfo:', data.user.panchayat);
+                console.log('CitizenDashboard - Fetching user details');
 
-                // Set face image URL properly if it exists
-                if (data.user.faceImagePath) {
-                    // Get the correct URL using the same function as RegistrationView
-                    let imageUrl = getFaceImageUrl(data.user.faceImagePath);
+                // Use the profile API that will use the token from tokenManager
+                const response = await getCitizenProfile();
+                if (response?.success && response?.data?.user) {
+                    const userData = response.data.user;
+                    console.log({ userData });
+                    setPanchayatInfo(userData.panchayat);
 
-                    // Fix duplicate /uploads/ if present
-                    if (imageUrl.includes('//uploads')) {
-                        imageUrl = imageUrl.replace('//uploads', '/uploads');
+                    // Set face image URL properly if it exists
+                    if (userData.faceImagePath) {
+                        // Get the correct URL using the same function as RegistrationView
+                        let imageUrl = getFaceImageUrl(userData.faceImagePath);
+
+                        // Fix duplicate /uploads/ if present
+                        if (imageUrl.includes('//uploads')) {
+                            imageUrl = imageUrl.replace('//uploads', '/uploads');
+                        }
+
+                        setUserState(prev => ({ ...prev, faceImageUrl: imageUrl }));
                     }
+                } else {
+                  // If API call fails, try a direct fetch as fallback
+                  console.log(
+                    "CitizenDashboard - API call failed, trying direct fetch"
+                  );
+                  // Add Authorization header if token exists
+                  const headers = {
+                    "Content-Type": "application/json",
+                    ...getAuthHeaders(),
+                  };
+                  const directResponse = await fetch(
+                    `${API_URL}/citizens/profile/${user.id}`,
+                    {
+                      method: "GET",
+                      headers: headers,
+                    }
+                  );
 
-                    setUserState(prev => ({ ...prev, faceImageUrl: imageUrl }));
+                  if (!directResponse.ok) {
+                    throw new Error(
+                      "Failed to fetch user profile via direct API"
+                    );
+                  }
+
+                  const data = await directResponse.json();
+                  setPanchayatInfo(data.userData.panchayat);
+
+                  // Handle face image as above
+                  if (data.userData.faceImagePath) {
+                    let imageUrl = getFaceImageUrl(data.userData.faceImagePath);
+                    if (imageUrl.includes("//uploads")) {
+                      imageUrl = imageUrl.replace("//uploads", "/uploads");
+                    }
+                    setUserState((prev) => ({
+                      ...prev,
+                      faceImageUrl: imageUrl,
+                    }));
+                  }
                 }
             } catch (error) {
                 console.error('CitizenDashboard - Error fetching user details:', error);
@@ -292,7 +341,7 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
                     <Grid item xs={12} md={8} lg={9}>
                         <Stack spacing={3}>
                             {/* Upcoming Meetings Banner */}
-                            <UpcomingMeetingsBanner panchayatId={panchayatInfo?._id} user={user} />
+                            <UpcomingMeetingsBanner panchayatId={panchayatInfo?.id} user={user} />
                             
                             <Grid container spacing={3}>
                                 <Grid item xs={12} md={6}>
@@ -440,7 +489,7 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
                             </Grid>
                             
                             {/* Past Meetings List */}
-                            <PastMeetingsList panchayatId={panchayatInfo?._id} user={user} />
+                            <PastMeetingsList panchayatId={panchayatInfo?.id} user={user} />
                         </Stack>
                     </Grid>
                 </Grid>

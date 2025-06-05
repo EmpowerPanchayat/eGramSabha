@@ -275,6 +275,7 @@ export const getRSVPStats = async (meetingId) => {
  */
 export const fetchTodaysMeetings = async (panchayatId) => {
     try {
+        console.log('Fetching today\'s meetings for Panchayat ID:', panchayatId);
         const response = await api.get(`/gram-sabha/panchayat/${panchayatId}/today`);
         return response.data;
     } catch (error) {

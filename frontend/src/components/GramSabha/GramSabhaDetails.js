@@ -93,8 +93,8 @@ const GramSabhaDetails = ({ meetingId, user }) => {
         setMeeting(meetingData);
 
         // Fetch RSVP status if user is logged in
-        if (user?._id) {
-          const rsvpResponse = await getRSVPStatus(meetingId, user._id);
+        if (user?.id) {
+          const rsvpResponse = await getRSVPStatus(meetingId, user.id);
           setRsvpStatus(rsvpResponse.data?.status || null);
         }
 
@@ -125,14 +125,14 @@ const GramSabhaDetails = ({ meetingId, user }) => {
   }, [meetingId, user?._id, isPresident]);
 
   const handleRSVP = async (status) => {
-    if (!user?._id) {
+    if (!user?.id) {
       setError('Please login to RSVP');
       return;
     }
 
     try {
       setRsvpLoading(true);
-      await submitRSVP(meetingId, { status }, user._id);
+      await submitRSVP(meetingId, { status }, user.id);
 
       // Update local RSVP status
       setRsvpStatus(status);

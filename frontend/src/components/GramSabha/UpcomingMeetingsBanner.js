@@ -46,6 +46,7 @@ const UpcomingMeetingsBanner = ({ panchayatId, user }) => {
     const [selectedMeetingId, setSelectedMeetingId] = useState(null);
 
     useEffect(() => {
+        console.log('UpcomingMeetingsBanner - panchayatId:', panchayatId);
         if (panchayatId) {
             loadUpcomingMeetings();
         }
@@ -59,7 +60,7 @@ const UpcomingMeetingsBanner = ({ panchayatId, user }) => {
             setError('');
             const data = await fetchUpcomingMeetings(panchayatId);
             setMeetings(data);
-
+            console.log('UpcomingMeetingsBanner - Received meetings:', data);
             // Load RSVP status for each meeting
             data.forEach(meeting => {
                 loadRSVPStatus(meeting._id);
@@ -73,12 +74,12 @@ const UpcomingMeetingsBanner = ({ panchayatId, user }) => {
     };
 
     const loadRSVPStatus = async (meetingId) => {
-        if (!user?._id) return;
+        if (!user?.id) return;
         try {
-            const response = await getRSVPStatus(meetingId, user._id);
+            const response = await getRSVPStatus(meetingId, user.id);
             setRsvpStatus(prev => ({
                 ...prev,
-                [meetingId]: response.data?.status || null
+                [meetingId]: response?.data?.status || null
             }));
         } catch (error) {
             console.error('Error loading RSVP status:', error);
@@ -92,7 +93,7 @@ const UpcomingMeetingsBanner = ({ panchayatId, user }) => {
         }
         try {
             setRsvpLoading(prev => ({ ...prev, [meetingId]: true }));
-            await submitRSVP(meetingId, { status }, user._id);
+            await submitRSVP(meetingId, { status }, user.id);
             await loadRSVPStatus(meetingId);
             setAnchorEl(null); // Close the menu after selection
         } catch (error) {

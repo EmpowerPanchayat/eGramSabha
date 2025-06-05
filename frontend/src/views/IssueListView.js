@@ -58,6 +58,7 @@ import IssueStatusDropdown from '../components/IssueStatusDropdown';
 import CategorySubcategorySelector from '../components/IssueCategorySubcategorySelector';
 import filterIssues from '../utils/filterIssues';
 import { getLabelKeyFromValue } from '../utils/categoryUtils';
+import tokenManager from '../utils/tokenManager';
 
 const IssueListView = ({ user, onBack, onViewIssue }) => {
     const { strings } = useLanguage();
@@ -79,6 +80,14 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
 
     const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
+    // Helper to get Authorization header for issues endpoints
+    const getAuthHeaders = () => {
+        console.log('Fetching auth headers');
+        const token = tokenManager.getToken();
+        console.log('Token:', token);
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
+    };
+
     useEffect(() => {
         fetchIssues();
     }, [tabValue]);
@@ -94,8 +103,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
             if (tabValue === 0) {
                 // My Issues
                 // For officials, use linkedCitizenId if available, otherwise use their own id
-                console.log({ user });
-                const userId = user.user || user.id || user._id;
+                const userId = user.linkedCitizenId || user.id;
                 url = `${API_URL}/issues/user/${userId}`;
             } else {
                 // All Issues from same panchayat
@@ -106,9 +114,31 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                 url = `${API_URL}/issues/panchayat/${user.panchayatId}`;
             }
 
-            const response = await fetch(url);
+            // Add Authorization header if token exists
+            const headers = {
+              "Content-Type": "application/json",
+              ...getAuthHeaders(),
+            };
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: headers
+            });
 
             if (!response.ok) {
+                // Handle token expiration
+                if (response.status === 401) {
+                    // Optionally refresh token or redirect to login
+                    if (response.data?.expired) {
+                        // Try to refresh token (or can be handled by axiosConfig interceptors)
+                        const refreshed = await handleTokenRefresh();
+                        if (!refreshed) {
+                            // If refresh failed, redirect to login
+                            onBack(); // Go back to the login page
+                            return;
+                        }
+                    }
+                }
                 throw new Error(strings.errorFetchingIssues);
             }
 
@@ -120,6 +150,43 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
         } finally {
             setLoading(false);
             setRefreshing(false);
+        }
+    };
+
+    // Add a token refresh handler function
+    const handleTokenRefresh = async () => {
+        try {
+            const refreshToken = tokenManager.getRefreshToken();
+            if (!refreshToken) {
+                return false;
+            }
+
+            const response = await fetch(
+              `${API_URL}/auth/citizen/refresh-token`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${localStorage.getItem("token")}`,
+                },
+                body: JSON.stringify({ refreshToken }),
+              }
+            );
+
+            if (!response.ok) {
+                return false;
+            }
+
+            const data = await response.json();
+            if (data.success && data.data && data.data.token) {
+                tokenManager.setTokens(data.data.token, data.data.refreshToken || refreshToken);
+                return true;
+            }
+
+            return false;
+        } catch (error) {
+            console.error('Error refreshing token:', error);
+            return false;
         }
     };
 
@@ -440,6 +507,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                                                         <AudioPlayer
                                                                             audioUrl={`${API_URL}/issues/${issue._id}/attachment/${issue.attachments.find(att => att.mimeType.startsWith('audio/'))._id}`}
+                                                                            authToken={tokenManager.getToken()}
                                                                         />
                                                                     </Box>
                                                                 )}
@@ -531,6 +599,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                                                 <AudioPlayer
                                                                     audioUrl={`${API_URL}/issues/${issue._id}/attachment/${issue.attachments.find(att => att.mimeType.startsWith('audio/'))._id}`}
+                                                                    authToken={tokenManager.getToken()}
                                                                 />
                                                             </Box>
                                                         )}
@@ -780,6 +849,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                     attachmentUrl={`${API_URL}/issues/${selectedIssue._id}/attachment/${attachment._id}`}
                                                     filename={attachment.filename || `Attachment ${index + 1}`}
                                                     mimeType={attachment.mimeType}
+                                                    authToken={tokenManager.getToken()}
                                                 />
                                             ))}
                                         </Box>
