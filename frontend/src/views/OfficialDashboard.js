@@ -109,19 +109,9 @@ const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha }) =
                 // Update the entire userState with the response data
                 const updatedUserState = { ...data.data };
 
-                // Set face image URL if it exists - FIXED IMPLEMENTATION
-                if (updatedUserState.linkedUser?.faceImagePath) {
-                    // Get the correct URL using the getFaceImageUrl function
-                    let imageUrl = getFaceImageUrl(updatedUserState.linkedUser.faceImagePath);
-
-                    // Fix duplicate /uploads/ if present
-                    if (imageUrl.includes('//uploads')) {
-                        imageUrl = imageUrl.replace('//uploads', '/uploads');
-                    }
-
-                    // Add the processed URL directly to the linkedUser object
-                    updatedUserState.linkedUser.faceImageUrl = imageUrl;
-
+                if (updatedUserState?.linkedCitizenId) {
+                    const imageUrl = `${API_URL}/users/${updatedUserState.linkedCitizenId}/thumbnail`;
+                    updatedUserState.faceImageUrl = imageUrl;
                     setImageUrl(imageUrl);
                 }
 
