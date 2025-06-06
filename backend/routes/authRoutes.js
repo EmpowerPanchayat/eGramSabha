@@ -133,7 +133,7 @@ router.post('/login', async (req, res) => {
         let linkedUser = null;
         if (official.linkedCitizenId) {
             linkedUser = await mongoose.model('User').findById(official.linkedCitizenId)
-                .select('_id name voterIdNumber panchayatId faceImagePath');
+                .select('_id name voterIdNumber panchayatId faceImageId thumbnailImageId');
         }
 
         res.json({
@@ -154,7 +154,8 @@ router.post('/login', async (req, res) => {
                         name: linkedUser.name,
                         voterIdNumber: linkedUser.voterIdNumber,
                         panchayatId: linkedUser.panchayatId,
-                        faceImagePath: linkedUser.faceImagePath
+                        faceImageId: linkedUser.faceImageId,
+                        thumbnailImageId: linkedUser.thumbnailImageId,
                     } : null
                 },
                 token,
@@ -213,7 +214,7 @@ router.post('/refresh-token', async (req, res) => {
         let linkedUser = null;
         if (official.linkedCitizenId) {
             linkedUser = await mongoose.model('User').findById(official.linkedCitizenId)
-                .select('_id name voterIdNumber panchayatId faceImagePath');
+                .select('_id name voterIdNumber panchayatId faceImageId thumbnailImageId');
         }
 
         res.json({
@@ -236,7 +237,8 @@ router.post('/refresh-token', async (req, res) => {
                         name: linkedUser.name,
                         voterIdNumber: linkedUser.voterIdNumber,
                         panchayatId: linkedUser.panchayatId,
-                        faceImagePath: linkedUser.faceImagePath
+                        faceImageId: linkedUser.faceImageId,
+                        thumbnailImageId: linkedUser.thumbnailImageId,
                     } : null
                 }
             }

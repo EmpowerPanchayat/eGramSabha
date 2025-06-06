@@ -153,7 +153,8 @@ router.get('/profile/:userId', isCitizen, async (req, res) => {
                 voterIdNumber: user.voterIdNumber,
                 address: user.address,
                 mobileNumber: user.mobileNumber,
-                faceImagePath: user.faceImagePath,
+                faceImageId: user.faceImageId,
+                thumbnailImageId: user.thumbnailImageId,
                 isRegistered: user.isRegistered,
                 panchayat: panchayat ? {
                     _id: panchayat._id,
