@@ -612,7 +612,7 @@ router.get('/profile/:id', isAuthenticated, async (req, res) => {
                 phone: official.phone,
                 wardId: official.wardId,
                 isActive: official.isActive,
-                faceImagePath: official.faceImagePath,
+                linkedCitizenId: official.linkedCitizenId,
                 panchayat: panchayat ? {
                     _id: panchayat._id,
                     name: panchayat.name,

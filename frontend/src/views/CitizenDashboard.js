@@ -38,7 +38,6 @@ import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import FlagIcon from '@mui/icons-material/Flag';
 import { useLanguage } from '../utils/LanguageContext';
-import { getFaceImageUrl } from '../api/index';
 import UpcomingMeetingsBanner from '../components/GramSabha/UpcomingMeetingsBanner';
 import PastMeetingsList from '../components/GramSabha/PastMeetingsList';
 import { getCitizenProfile } from '../api/profile';
@@ -74,21 +73,13 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
                 const response = await getCitizenProfile();
                 if (response?.success && response?.data?.user) {
                     const userData = response.data.user;
-                    console.log({ userData });
                     setPanchayatInfo(userData.panchayat);
 
-                    // Set face image URL properly if it exists
-                    if (userData.faceImagePath) {
-                        // Get the correct URL using the same function as RegistrationView
-                        let imageUrl = getFaceImageUrl(userData.faceImagePath);
-
-                        // Fix duplicate /uploads/ if present
-                        if (imageUrl.includes('//uploads')) {
-                            imageUrl = imageUrl.replace('//uploads', '/uploads');
-                        }
-
-                        setUserState(prev => ({ ...prev, faceImageUrl: imageUrl }));
-                    }
+                    // Always set the thumbnail URL using the GridFS API endpoint
+                    setUserState(prev => ({
+                        ...prev,
+                        faceImageUrl: `${API_URL}/users/${userData.id}/thumbnail`
+                    }));
                 } else {
                   // If API call fails, try a direct fetch as fallback
                   console.log(
@@ -116,17 +107,11 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
                   const data = await directResponse.json();
                   setPanchayatInfo(data.userData.panchayat);
 
-                  // Handle face image as above
-                  if (data.userData.faceImagePath) {
-                    let imageUrl = getFaceImageUrl(data.userData.faceImagePath);
-                    if (imageUrl.includes("//uploads")) {
-                      imageUrl = imageUrl.replace("//uploads", "/uploads");
-                    }
-                    setUserState((prev) => ({
-                      ...prev,
-                      faceImageUrl: imageUrl,
+                    // Always use the GridFS thumbnail endpoint
+                    setUserState(prev => ({
+                        ...prev,
+                        faceImageUrl: `${API_URL}/users/${user.id}/thumbnail`
                     }));
-                  }
                 }
             } catch (error) {
                 console.error('CitizenDashboard - Error fetching user details:', error);

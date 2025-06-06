@@ -8,6 +8,7 @@ const mongoose = require("mongoose");
 const PlatformConfiguration = require("./models/PlatformConfiguration");
 const defaultSettings = require("./defaults/defaultPlatformSettings");
 const path = require("path");
+const storageService = require('./storage/storageService');
 
 const dotenv = require("dotenv");
 const helmet = require("helmet");
@@ -103,26 +104,6 @@ const uploadsDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
-
-// Serve static files from the uploads directory
-app.use(
-  "/uploads",
-  (req, res, next) => {
-    res.header("Access-Control-Allow-Origin", CORS_ORIGIN);
-    res.header("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.header(
-      "Access-Control-Allow-Headers",
-      "Origin, X-Requested-With, Content-Type, Accept"
-    );
-    res.header("Access-Control-Allow-Credentials", "true");
-    if (req.method === "OPTIONS") {
-      return res.sendStatus(200);
-    }
-    next();
-  },
-  express.static(uploadsDir)
-);
-app.use("/static", express.static(path.join(__dirname, "public")));
 
 // MongoDB Connection
 const MONGODB_URI =
@@ -467,65 +448,42 @@ app.post('/api/register-face', auth.isAdmin, async (req, res) => {
 
     console.log("Attempting to save face image...");
     // Save face image if provided
-    let faceImagePath = null;
+    let faceImageId = null;
     if (faceImage) {
       // Remove header from base64 string
       const base64Data = faceImage.replace(/^data:image\/\w+;base64,/, "");
-
-      // Create a faces subdirectory within panchayat directory if it doesn't exist
-      const panchayatDir = path.join(
-        __dirname,
-        "uploads",
-        panchayatId.toString()
-      );
-      const facesDir = path.join(panchayatDir, "faces");
-
-      if (!fs.existsSync(panchayatDir)) {
-        fs.mkdirSync(panchayatDir, { recursive: true });
-      }
-
-      if (!fs.existsSync(facesDir)) {
-        fs.mkdirSync(facesDir, { recursive: true });
-      }
-
-      // Create a safe filename based on voter ID (removing any slashes or problematic characters)
-      const safeVoterId = voterId.replace(/[\/\\:*?"<>|]/g, "_");
+      const buffer = Buffer.from(base64Data, 'base64');
       const filename = `${safeVoterId}_${Date.now()}.jpg`;
 
-      // Use a path format that works with our static file serving
-      faceImagePath = `/uploads/${panchayatId}/faces/${filename}`;
+      // Upload original image
+      const faceImageId = await storageService.uploadImage(buffer, filename, {
+        userId: user._id,
+        voterId,
+        panchayatId,
+        type: 'profile'
+      });
 
-      // Save the image
-      try {
-        fs.writeFileSync(path.join(facesDir, filename), base64Data, "base64");
-        console.log(`Face image saved at: ${faceImagePath}`);
-      } catch (error) {
-        console.error("Error saving face image:", error);
-        throw new Error("Failed to save face image: " + error.message);
-      }
-    }
+      // Create thumbnail
+      const sharp = require('sharp');
+      const thumbBuffer = await sharp(buffer).resize(100, 100).jpeg({ quality: 80 }).toBuffer();
+      const thumbFilename = `${safeVoterId}_thumb_${Date.now()}.jpg`;
+      const thumbImageId = await storageService.uploadImage(thumbBuffer, thumbFilename, {
+        userId: user._id,
+        voterId,
+        panchayatId,
+        type: 'thumbnail',
+        originalImageId: faceImageId
+      });
 
-    // Helper function for face comparison
-    function calculateFaceDistance(descriptor1, descriptor2) {
-      if (
-        !descriptor1 ||
-        !descriptor2 ||
-        descriptor1.length !== descriptor2.length
-      ) {
-        return Infinity;
-      }
-
-      let sum = 0;
-      for (let i = 0; i < descriptor1.length; i++) {
-        sum += Math.pow(descriptor1[i] - descriptor2[i], 2);
-      }
-      return Math.sqrt(sum);
+      user.faceImageId = faceImageId;
+      user.thumbnailImageId = thumbImageId;
+      await user.save();
     }
 
     // Update user
     user.faceDescriptor = faceDescriptor;
-    user.faceImagePath = faceImagePath;
     user.isRegistered = true;
+    if (faceImageId) user.faceImageId = faceImageId;
     user.registrationDate = new Date();
     await user.save();
 
@@ -537,7 +495,8 @@ app.post('/api/register-face', auth.isAdmin, async (req, res) => {
         voterIdNumber: user.voterIdNumber,
         panchayatId: user.panchayatId,
         isRegistered: user.isRegistered,
-        faceImagePath: user.faceImagePath,
+        faceImageId: user.faceImageId,
+        thumbnailImageId: user.thumbnailImageId,
       },
     });
   } catch (error) {
@@ -614,6 +573,23 @@ app.listen(PORT, () => {
   console.log(`Environment: ${NODE_ENV}`);
   console.log(`Swagger docs at ${BACKEND_URL}/api-docs`);
 });
+
+// Helper function for face comparison
+    function calculateFaceDistance(descriptor1, descriptor2) {
+      if (
+        !descriptor1 ||
+        !descriptor2 ||
+        descriptor1.length !== descriptor2.length
+      ) {
+        return Infinity;
+      }
+
+      let sum = 0;
+      for (let i = 0; i < descriptor1.length; i++) {
+        sum += Math.pow(descriptor1[i] - descriptor2[i], 2);
+      }
+      return Math.sqrt(sum);
+    }
 
 // Ensure platform config is initialized at server start
 async function initializePlatformConfig() {

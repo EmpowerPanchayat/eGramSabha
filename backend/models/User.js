@@ -28,7 +28,14 @@ const userSchema = new mongoose.Schema({
     type: [Number],
     default: []
   },
-  faceImagePath: String,
+  faceImageId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'fs.files', // or your GridFS collection name
+  },
+  thumbnailImageId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'fs.files',
+  },
   isRegistered: {
     type: Boolean,
     default: false

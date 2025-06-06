@@ -127,7 +127,8 @@ export const AuthProvider = ({ children }) => {
                     name: userData.linkedUser.name || '',
                     voterIdNumber: userData.linkedUser.voterIdNumber || '',
                     panchayatId: userData.linkedUser.panchayatId || null,
-                    faceImagePath: userData.linkedUser.faceImagePath || ''
+                    faceImageId: userData.linkedUser.faceImageId || null,
+                    thumbnailImageId: userData.linkedUser.thumbnailImageId || null,
                 };
             }
 

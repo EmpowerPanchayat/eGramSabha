@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Custom Swagger/OpenAPI documentation generator: Automatically scans Express route files using AST parsing, generates accurate API docs with full endpoint URLs and correct tags. ([#32](https://github.com/EmpowerPanchayat/eGramSabha/issues/32))
 - Secure All APIs in Admin with proper auth. ([#15](https://github.com/EmpowerPanchayat/eGramSabha/issues/15))
 - Citizen API must be secured with token and proper auth. ([#16](https://github.com/EmpowerPanchayat/eGramSabha/issues/16))
+- Migrated user face images storage from local `/uploads` folder to MongoDB GridFS for improved scalability and reliability with thumbnail functionality. ([#17](https://github.com/EmpowerPanchayat/eGramSabha/issues/17))
 
 ### Removed
 

@@ -1,10 +1,11 @@
 // Updated File: backend/routes/userRoutes.js
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
 const User = require('../models/User');
 const Panchayat = require('../models/Panchayat');
+const sharp = require('sharp');
+const mongoose = require('mongoose');
+const storageService = require('../storage/storageService');
 
 // Get all users with optional panchayatId filter
 router.get('/', async (req, res) => {
@@ -119,46 +120,67 @@ router.post('/register-face', async (req, res) => {
 
     console.log('Attempting to save face image...');
     // Save face image if provided
-    let faceImagePath = null;
+    let faceImageId = null;
+    let oldFaceImageId = user.faceImageId;
+    let oldThumbnailImageId = user.thumbnailImageId;
     if (faceImage) {
       // Remove header from base64 string
       const base64Data = faceImage.replace(/^data:image\/\w+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
 
-      // Create a faces subdirectory within panchayat directory if it doesn't exist
-      const panchayatDir = path.join(__dirname, '../uploads', panchayatId.toString());
-      const facesDir = path.join(panchayatDir, 'faces');
-
-      if (!fs.existsSync(panchayatDir)) {
-        fs.mkdirSync(panchayatDir, { recursive: true });
-      }
-
-      if (!fs.existsSync(facesDir)) {
-        fs.mkdirSync(facesDir, { recursive: true });
-      }
-
-      // Create a safe filename based on voter ID (removing any slashes or problematic characters)
+      // Use a safe filename
       const safeVoterId = voterId.replace(/[\/\\:*?"<>|]/g, '_');
       const filename = `${safeVoterId}_${Date.now()}.jpg`;
 
-      // Use a path format that works with our static file serving
-      faceImagePath = `/uploads/${panchayatId}/faces/${filename}`;
+      // Upload original image
+      faceImageId = await storageService.uploadImage(buffer, filename, {
+        userId: user._id,
+        voterId,
+        panchayatId,
+        type: 'profile'
+      });
 
-      // Save the image
+      // Create and upload thumbnail
       try {
-        fs.writeFileSync(path.join(facesDir, filename), base64Data, 'base64');
-        console.log(`Face image saved at: ${faceImagePath}`);
-      } catch (error) {
-        console.error('Error saving face image:', error);
-        throw new Error('Failed to save face image: ' + error.message);
+        const thumbBuffer = await sharp(buffer).resize(100, 100).jpeg({ quality: 80 }).toBuffer();
+        const thumbFilename = `${safeVoterId}_thumb_${Date.now()}.jpg`;
+        const thumbImageId = await storageService.uploadImage(thumbBuffer, thumbFilename, {
+          userId: user._id,
+          voterId,
+          panchayatId,
+          type: 'thumbnail',
+          originalImageId: faceImageId
+        });
+        user.thumbnailImageId = thumbImageId;
+        await user.save();
+        // Delete old thumbnail if exists
+        if (oldThumbnailImageId) {
+          try { 
+            await storageService.deleteImage(oldThumbnailImageId);
+          } catch (e) {
+            console.warn('Failed to delete old image:', e);
+          }
+        }
+      } catch (err) {
+        console.error('Thumbnail creation failed:', err);
       }
     }
 
     // Update user
     user.faceDescriptor = faceDescriptor;
-    user.faceImagePath = faceImagePath;
+    if (faceImageId) user.faceImageId = faceImageId;
     user.isRegistered = true;
     user.registrationDate = new Date();
     await user.save();
+
+    // Delete old face image if new one was uploaded
+    if (faceImageId && oldFaceImageId) {
+      try {
+        await storageService.deleteImage(oldFaceImageId);
+      } catch (e) {
+        console.warn('Failed to delete old image:', e);
+      }
+    }
 
     res.json({
       success: true,
@@ -168,7 +190,7 @@ router.post('/register-face', async (req, res) => {
         voterIdNumber: user.voterIdNumber,
         panchayatId: user.panchayatId,
         isRegistered: user.isRegistered,
-        faceImagePath: user.faceImagePath
+        faceImageId: user.faceImageId
       }
     });
   } catch (error) {
@@ -197,17 +219,42 @@ router.get('/:voterId/face', async (req, res) => {
 
     const user = await User.findOne(filter);
 
-    if (!user || !user.faceImagePath) {
+    if (!user || !user.faceImageId) {
       return res.status(404).json({ success: false, message: 'Face image not found' });
     }
 
     res.json({
       success: true,
-      faceImagePath: user.faceImagePath
+      faceImageId: user.faceImageId
     });
   } catch (error) {
     console.error('Error fetching face image:', error);
     res.status(500).json({ success: false, message: 'Error fetching face image' });
+  }
+});
+
+// Get face image by ID
+router.get('/face-image/:faceImageId', async (req, res) => {
+  try {
+    const fileId = mongoose.Types.ObjectId.isValid(req.params.faceImageId)
+      ? new mongoose.Types.ObjectId(req.params.faceImageId)
+      : req.params.faceImageId;
+
+    const imageStream = await storageService.getImageStream(fileId);
+
+    // Only set headers after confirming the file exists, or handle the error before piping.
+    let sent = false;
+    imageStream.on('error', () => {
+      if (!sent) {
+        sent = true;
+        res.status(404).send('Image not found');
+      }
+    });
+
+    res.set('Content-Type', 'image/jpeg');
+    imageStream.pipe(res);
+  } catch (error) {
+    res.status(404).send('Image not found');
   }
 });
 
@@ -291,6 +338,21 @@ router.get('/panchayat/:panchayatId', async (req, res) => {
             error: error.message
         });
     }
+});
+
+// Stream thumbnail image from GridFS by user ID
+router.get('/:id/thumbnail', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user || !user.thumbnailImageId) {
+      return res.status(404).send('Thumbnail not found');
+    }
+    const stream = await storageService.getImageStream(user.thumbnailImageId);
+    res.set('Content-Type', 'image/jpeg');
+    stream.pipe(res);
+  } catch (error) {
+    res.status(404).send('Thumbnail not found');
+  }
 });
 
 module.exports = router;
