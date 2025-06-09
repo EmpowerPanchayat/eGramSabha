@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+pydub
+moviepy
+transformers
+python-dotenv
+requests
+ffmpeg-python
+torch
+soundfile
+motor
+googletrans==4.0.0-rc1
+python-docx
+python-multipart==0.0.20
+pydantic-settings==2.9.1
