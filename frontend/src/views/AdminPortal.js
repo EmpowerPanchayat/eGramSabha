@@ -271,7 +271,13 @@ const AdminPortal = () => {
 
     // Handle user update (after registration)
     const handleUserUpdate = (updatedUser) => {
-        setSelectedUser(updatedUser);
+        setSelectedUser(updatedUser); // Update selectedUser with new data
+        // Update the users list with the updated user
+        setUsers(prevUsers =>
+            prevUsers.map(u =>
+                u._id === updatedUser._id ? { ...u, ...updatedUser } : u
+            )
+        );
         // Refresh stats
         if (selectedPanchayat) {
             fetchStats(selectedPanchayat._id).then(data => setStats(data));
@@ -389,6 +395,7 @@ const AdminPortal = () => {
                         <RegistrationView
                             user={selectedUser}
                             navigateTo={navigateTo}
+                            onUserUpdate={handleUserUpdate}
                         >
                             <FaceRegistration
                                 user={selectedUser}
