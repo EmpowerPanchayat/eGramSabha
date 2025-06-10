@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Citizen API must be secured with token and proper auth. ([#16](https://github.com/EmpowerPanchayat/eGramSabha/issues/16))
 - Migrated user face images storage from local `/uploads` folder to MongoDB GridFS for improved scalability and reliability with thumbnail functionality. ([#17](https://github.com/EmpowerPanchayat/eGramSabha/issues/17))
 - add issues with filters, pagination, sorting, and search. ([#45](https://github.com/EmpowerPanchayat/eGramSabha/issues/45))
+- Implement End Meeting button and Cron Job for status change.([#71](https://github.com/EmpowerPanchayat/eGramSabha/pull/71))
 
 ### Removed
 
