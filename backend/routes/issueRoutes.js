@@ -1,8 +1,7 @@
 // File: backend/routes/issueRoutes.js
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
+const mongoose = require('mongoose');
 const Issue = require('../models/Issue');
 const User = require('../models/User');
 const Panchayat = require('../models/Panchayat');
@@ -83,6 +82,135 @@ router.post('/', anyAuthenticated, async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error creating issue/suggestion: ' + error.message
+        });
+    }
+});
+
+router.get('/', anyAuthenticated, async (req, res) => {
+    try {
+        const {
+            userId,
+            panchayatId,
+            category,
+            subcategory,
+            status,
+            createdOn,
+            creator,
+            createdFor,
+            searchText,
+            sort = 'desc',
+            sortBy = 'createdAt'
+        } = req.query;
+
+        // Validate page and limit
+        const pageStr = req.query.page ?? '1';
+        const limitStr = req.query.limit ?? '10';
+
+        if (!/^\d+$/.test(pageStr) || parseInt(pageStr, 10) < 1) {
+            return res.status(400).json({ success: false, message: '"page" must be a positive integer' });
+        }
+
+        if (!/^\d+$/.test(limitStr) || parseInt(limitStr, 10) < 1) {
+            return res.status(400).json({ success: false, message: '"limit" must be a positive integer' });
+        }
+
+        const page = parseInt(pageStr, 10);
+        const limit = Math.min(parseInt(limitStr, 10), 100);
+        const skip = (page - 1) * limit;
+
+        // Validate sort
+        const sortOrder = sort.toLowerCase() === 'asc' ? 1 : -1;
+        const sortField = typeof sortBy === 'string' && sortBy.trim() !== '' ? sortBy : 'createdAt';
+
+        // Validate ObjectIds
+        if (!userId && !panchayatId) {
+            return res.status(400).json({ success: false, message: 'Either userId or panchayatId is required.' });
+        }
+
+        if (userId && !mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({ success: false, message: 'Invalid userId' });
+        }
+
+        if (panchayatId && !mongoose.Types.ObjectId.isValid(panchayatId)) {
+            return res.status(400).json({ success: false, message: 'Invalid panchayatId' });
+        }
+
+        // Build query
+        const query = {};
+        if (userId) query.creatorId = userId;
+        if (panchayatId) query.panchayatId = panchayatId;
+        if (subcategory) query.subcategory = subcategory;
+        if (status) query.status = status;
+
+        // Partial match on category (case-insensitive)
+        if (category?.trim()) {
+            query.category = { $regex: new RegExp(category.trim(), 'i') };
+        }
+
+        // Partial match on createdFor (exact field must exist on schema)
+        if (createdFor?.trim()) {
+            query.createdFor = { $regex: new RegExp(createdFor.trim(), 'i') };
+        }
+
+        // Date filter
+        if (createdOn) {
+            const [from, to] = createdOn.split('_to_');
+            if (from && !isNaN(Date.parse(from))) {
+                const fromDate = new Date(from);
+                const toDate = to && !isNaN(Date.parse(to)) ? new Date(to + 'T23:59:59.999Z') : new Date(from + 'T23:59:59.999Z');
+                query.createdAt = { $gte: fromDate, $lte: toDate };
+            }
+        }
+
+        // Filter by creator name (fuzzy)
+        if (creator?.trim()) {
+            const users = await User.find({
+                name: { $regex: new RegExp(creator.trim(), 'i') }
+            }).select('_id');
+
+            const creatorIds = users.map(u => u._id);
+            if (creatorIds.length === 0) {
+                res.set('X-Total-Count', '0');
+                return res.status(200).json([]);
+            }
+            query.creatorId = { $in: creatorIds };
+        }
+
+        // Search text (optional) on text, category, createdFor etc.
+        if (searchText?.trim()) {
+            const regex = new RegExp(searchText.trim(), 'i');
+            query.$or = [
+                { text: { $regex: regex } },
+                { category: { $regex: regex } },
+                { createdFor: { $regex: regex } },
+            ];
+        }
+
+        // Execute query
+        const [issues, total] = await Promise.all([
+            Issue.find(query)
+                .sort({ [sortField]: sortOrder })
+                .skip(skip)
+                .limit(limit)
+                .select('-attachments.attachment')
+                .populate({ path: 'creatorId', select: 'name' }),
+            Issue.countDocuments(query)
+        ]);
+
+        const formatted = issues.map(issue => ({
+            ...issue.toObject(),
+            creator: { name: issue.creatorId?.name || 'Unknown' }
+        }));
+
+        res.set('X-Total-Count', total.toString());
+        return res.status(200).json(formatted);
+
+    } catch (error) {
+        console.error('Error fetching issues:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
         });
     }
 });
