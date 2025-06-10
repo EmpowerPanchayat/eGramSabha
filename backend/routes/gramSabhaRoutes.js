@@ -11,6 +11,7 @@ const Panchayat = require("../models/Panchayat");
 const multer = require("multer");
 const mongoose = require("mongoose");
 const User = require("../models/User");
+const { autoUpdateMeetingStatus } = require('../utils/meetingUtils');
 
 const { JIOMEET_APP_ID, JIOMEET_API, BACKEND_URL } = process.env;
 const privateKey = fs.readFileSync(process.env.PRIVATE_KEY_PATH, "utf8");
@@ -165,27 +166,17 @@ router.post(
 // Get all Gram Sabha meetings for a panchayat
 router.get("/panchayat/:panchayatId", async (req, res) => {
   try {
-    const gramSabhas = await GramSabha.find({
+    let gramSabhas = await GramSabha.find({
       panchayatId: req.params.panchayatId,
     })
       .populate("scheduledById", "name")
       .sort({ dateTime: -1 });
-    const now = new Date();
 
-    for (const sabha of gramSabhas) {
-      const durationInHours = sabha.scheduledDurationHours;
-      const meetingEndTime = new Date(
-        sabha.dateTime.getTime() + durationInHours * 60 * 60 * 1000
-      );
+    // Auto-update status for each meeting
+    gramSabhas = await Promise.all(
+      gramSabhas.map(meeting => autoUpdateMeetingStatus(meeting))
+    );
 
-      if (
-        (sabha.status === "IN_PROGRESS" || sabha.status === "SCHEDULED") &&
-        now > meetingEndTime
-      ) {
-        sabha.status = "CONCLUDED";
-        await sabha.save();
-      }
-    }
     res.send(gramSabhas);
   } catch (error) {
     res.status(500).send(error);
@@ -887,13 +878,18 @@ router.get("/panchayat/:panchayatId/today", async (req, res) => {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const gramSabhas = await GramSabha.find({
+    let gramSabhas = await GramSabha.find({
       panchayatId: req.params.panchayatId,
       dateTime: { $gte: today, $lt: tomorrow },
     })
-      .select("-attachments") // Exclude attachments
+      .select("-attachments")
       .populate("scheduledById", "name")
       .sort({ dateTime: 1 });
+
+    // Auto-update status for each meeting
+    gramSabhas = await Promise.all(
+      gramSabhas.map(meeting => autoUpdateMeetingStatus(meeting))
+    );
 
     res.json(gramSabhas);
   } catch (error) {
