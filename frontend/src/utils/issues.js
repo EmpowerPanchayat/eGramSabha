@@ -1,6 +1,6 @@
 import STATUS_KEY_VALUE_MAP from "../constants/issueStatus";
 
-function filterIssues(issues, filters) {
+export function filterIssues(issues, filters) {
     const { category, subcategory, status, searchTerm } = filters;
 
     return issues.filter(issue => {
@@ -24,4 +24,22 @@ function filterIssues(issues, filters) {
     });
 }
 
-export default filterIssues;
+// Get category icon based on category name
+export const getCategoryIcon = (category) => {
+    switch (category) {
+        case 'CULTURE_AND_NATURE':
+            return '🌳';
+        case 'INFRASTRUCTURE':
+            return '🏗️';
+        case 'EARNING_OPPORTUNITIES':
+            return '💰';
+        case 'BASIC_AMENITIES':
+            return '🏠';
+        case 'SOCIAL_WELFARE_SCHEMES':
+            return '🤝';
+        case 'OTHER':
+            return '📋';
+        default:
+            return '📋';
+    }
+};

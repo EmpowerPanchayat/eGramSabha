@@ -25,11 +25,9 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
-    Divider,
     TextField,
     Grid,
     InputAdornment,
-    Avatar,
     Stack,
     useTheme,
     useMediaQuery
@@ -37,12 +35,10 @@ import {
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SearchIcon from '@mui/icons-material/Search';
-import FilterListIcon from '@mui/icons-material/FilterList';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import CategoryIcon from '@mui/icons-material/Category';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import FolderIcon from '@mui/icons-material/Folder';
-import AttachmentIcon from '@mui/icons-material/Attachment';
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PersonIcon from '@mui/icons-material/Person';
@@ -50,15 +46,17 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import NoteIcon from '@mui/icons-material/Note';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useLanguage } from '../utils/LanguageContext';
-import { format } from 'date-fns';
 import AttachmentViewer from '../components/AttachmentViewer';
 import AudioPlayer from '../components/AudioPlayer';
-import { useAuth } from '../utils/authContext';
 import IssueStatusDropdown from '../components/IssueStatusDropdown';
 import CategorySubcategorySelector from '../components/IssueCategorySubcategorySelector';
-import filterIssues from '../utils/filterIssues';
+import { getCategoryIcon, filterIssues } from '../utils/issues';
 import { getLabelKeyFromValue } from '../utils/categoryUtils';
+import { fetchAllIssues } from '../api/issues';
 import tokenManager from '../utils/tokenManager';
+import formatDate from '../utils/formatDate';
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const IssueListView = ({ user, onBack, onViewIssue }) => {
     const { strings } = useLanguage();
@@ -78,16 +76,6 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     const [subcategory, setSubcategory] = useState('');
     const [status, setStatus] = useState('');
 
-    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-
-    // Helper to get Authorization header for issues endpoints
-    const getAuthHeaders = () => {
-        console.log('Fetching auth headers');
-        const token = tokenManager.getToken();
-        console.log('Token:', token);
-        return token ? { 'Authorization': `Bearer ${token}` } : {};
-    };
-
     useEffect(() => {
         fetchIssues();
     }, [tabValue]);
@@ -99,94 +87,31 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
 
         try {
             let url;
-
             if (tabValue === 0) {
-                // My Issues
-                // For officials, use linkedCitizenId if available, otherwise use their own id
                 const userId = user.linkedCitizenId || user.id;
-                url = `${API_URL}/issues/user/${userId}`;
+                url = `issues/user/${userId}`;
             } else {
-                // All Issues from same panchayat
                 if (!user.panchayatId) {
                     setError('Panchayat ID not available');
                     return;
                 }
-                url = `${API_URL}/issues/panchayat/${user.panchayatId}`;
+                url = `issues/panchayat/${user.panchayatId}`;
             }
 
-            // Add Authorization header if token exists
-            const headers = {
-              "Content-Type": "application/json",
-              ...getAuthHeaders(),
-            };
+            const { data, retry } = await fetchAllIssues({ url });
 
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: headers
-            });
-
-            if (!response.ok) {
-                // Handle token expiration
-                if (response.status === 401) {
-                    // Optionally refresh token or redirect to login
-                    if (response.data?.expired) {
-                        // Try to refresh token (or can be handled by axiosConfig interceptors)
-                        const refreshed = await handleTokenRefresh();
-                        if (!refreshed) {
-                            // If refresh failed, redirect to login
-                            onBack(); // Go back to the login page
-                            return;
-                        }
-                    }
-                }
-                throw new Error(strings.errorFetchingIssues);
+            // Retry once after token refresh
+            if (retry) {
+                const { data: retryData } = await fetchAllIssues({ url });
+                setIssues(retryData?.issues || []);
+            } else {
+                setIssues(data?.issues || []);
             }
-
-            const data = await response.json();
-            setIssues(data.issues || []);
         } catch (error) {
-            console.error('Error fetching issues:', error);
-            setError(error.message || strings.errorFetchingIssues);
+            setError(error.message || 'Error fetching issues');
         } finally {
             setLoading(false);
             setRefreshing(false);
-        }
-    };
-
-    // Add a token refresh handler function
-    const handleTokenRefresh = async () => {
-        try {
-            const refreshToken = tokenManager.getRefreshToken();
-            if (!refreshToken) {
-                return false;
-            }
-
-            const response = await fetch(
-              `${API_URL}/auth/citizen/refresh-token`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${localStorage.getItem("token")}`,
-                },
-                body: JSON.stringify({ refreshToken }),
-              }
-            );
-
-            if (!response.ok) {
-                return false;
-            }
-
-            const data = await response.json();
-            if (data.success && data.data && data.data.token) {
-                tokenManager.setTokens(data.data.token, data.data.refreshToken || refreshToken);
-                return true;
-            }
-
-            return false;
-        } catch (error) {
-            console.error('Error refreshing token:', error);
-            return false;
         }
     };
 
@@ -216,16 +141,6 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     const handleSearchChange = (event) => {
         setSearchTerm(event.target.value);
         setPage(0);
-    };
-
-    // Format date to readable string
-    const formatDate = (dateString) => {
-        if (!dateString) return 'N/A';
-        try {
-            return format(new Date(dateString), 'dd/MM/yyyy');
-        } catch (error) {
-            return 'Invalid Date';
-        }
     };
 
     // Filter issues based on search term
@@ -281,26 +196,6 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                 variant="outlined"
             />
         );
-    };
-
-    // Get category icon based on category name
-    const getCategoryIcon = (category) => {
-        switch (category) {
-            case 'CULTURE_AND_NATURE':
-                return '🌳';
-            case 'INFRASTRUCTURE':
-                return '🏗️';
-            case 'EARNING_OPPORTUNITIES':
-                return '💰';
-            case 'BASIC_AMENITIES':
-                return '🏠';
-            case 'SOCIAL_WELFARE_SCHEMES':
-                return '🤝';
-            case 'OTHER':
-                return '📋';
-            default:
-                return '📋';
-        }
     };
 
     const handleRefreshClick = () => {
