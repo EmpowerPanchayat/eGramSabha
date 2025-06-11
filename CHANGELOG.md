@@ -11,11 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Multilingual file generation with proper Hindi text rendering and word wrapping.([#57](https://github.com/EmpowerPanchayat/eGramSabha/issues/57))
 - Centralized all category and subcategory configurations into a single category.js source file to avoid duplication and improve maintainability. ([#42](https://github.com/EmpowerPanchayat/eGramSabha/issues/42))
--  Enhancements to platform configutation. ([#47](https://github.com/EmpowerPanchayat/eGramSabha/issues/47)) 
+- Enhancements to platform configutation. ([#47](https://github.com/EmpowerPanchayat/eGramSabha/issues/47))
 - Custom Swagger/OpenAPI documentation generator: Automatically scans Express route files using AST parsing, generates accurate API docs with full endpoint URLs and correct tags. ([#32](https://github.com/EmpowerPanchayat/eGramSabha/issues/32))
 - Secure All APIs in Admin with proper auth. ([#15](https://github.com/EmpowerPanchayat/eGramSabha/issues/15))
 - Citizen API must be secured with token and proper auth. ([#16](https://github.com/EmpowerPanchayat/eGramSabha/issues/16))
 - Migrated user face images storage from local `/uploads` folder to MongoDB GridFS for improved scalability and reliability with thumbnail functionality. ([#17](https://github.com/EmpowerPanchayat/eGramSabha/issues/17))
+- add issues with filters, pagination, sorting, and search. ([#45](https://github.com/EmpowerPanchayat/eGramSabha/issues/45))
 
 ### Removed
 
