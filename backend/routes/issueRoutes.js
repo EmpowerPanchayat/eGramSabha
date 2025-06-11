@@ -170,7 +170,7 @@ router.get('/', anyAuthenticated, async (req, res) => {
 
             const creatorIds = users.map(u => u._id);
             if (creatorIds.length === 0) {
-                res.set('X-Total-Count', '0');
+                res.set('x-total-count', '0');
                 return res.status(200).json([]);
             }
             query.creatorId = { $in: creatorIds };
@@ -202,7 +202,7 @@ router.get('/', anyAuthenticated, async (req, res) => {
             creator: { name: issue.creatorId?.name || 'Unknown' }
         }));
 
-        res.set('X-Total-Count', total.toString());
+        res.set('x-total-count', total.toString());
         return res.status(200).json(formatted);
 
     } catch (error) {
