@@ -46,18 +46,63 @@ const handleTokenRefresh = async () => {
         return false;
     }
 };
+/**
+ * Fetches paginated issues based on filters, sorting, and search.
+ *
+ * @param {Object} params - The parameters for the API call.
+ * @returns {Promise<{ data: any[], total: number }>}
+ */
+export const fetchAllIssues = async (params = {}) => {
+    const {
+        page = 0,
+        limit = 10,
+        sortBy = 'createdAt',
+        sort = 'desc',
+        userId,
+        panchayatId,
+        category,
+        subcategory,
+        status,
+        createdOn,
+        creator,
+        createdFor,
+        searchText,
+    } = params;
 
-export const fetchAllIssues = async ({ url, method = 'GET', headers = {}, body = null }) => {
-    const defaultHeaders = {
-        "Content-Type": "application/json",
-        ...getAuthHeaders(), // Assuming this is globally available
+    // Build query params dynamically
+    const queryObject = {
+        page: page + 1,
+        limit,
+        sortBy,
+        sort,
+        userId,
+        panchayatId,
+        category,
+        subcategory,
+        status,
+        createdOn,
+        creator,
+        createdFor,
+        searchText,
     };
 
+    const queryParams = new URLSearchParams();
+
+    Object.entries(queryObject).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+            queryParams.append(key, value);
+        }
+    });
+
+    const url = `${API_URL}/issues?${queryParams.toString()}`;
+
     try {
-        const response = await fetch(`${API_URL}/${url}`, {
-            method,
-            headers: { ...defaultHeaders, ...headers },
-            ...(body && { body: JSON.stringify(body) }),
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders(),
+            },
         });
 
         if (!response.ok) {
@@ -66,16 +111,18 @@ export const fetchAllIssues = async ({ url, method = 'GET', headers = {}, body =
                 if (json?.expired) {
                     const refreshed = await handleTokenRefresh();
                     if (!refreshed) throw new Error('Session expired. Please login again.');
-                    return { retry: true }; // Indicate a retry is needed
+                    return { retry: true };
                 }
             }
-            throw new Error('Failed to fetch data');
+            throw new Error('Failed to fetch issues');
         }
 
+        const total = parseInt(response.headers.get('x-total-count'), 10) || 0;
         const data = await response.json();
-        return { data };
+
+        return { data, total };
     } catch (error) {
-        console.error("Fetch error:", error);
+        console.error('Fetch error:', error);
         throw error;
     }
 };
