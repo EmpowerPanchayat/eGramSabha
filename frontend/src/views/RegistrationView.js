@@ -46,7 +46,7 @@ import { getFaceImageUrl, getFaceImage, updateUserProfile } from '../api';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
-const RegistrationView = ({ user, navigateTo, children }) => {
+const RegistrationView = ({ user, navigateTo, children, onUserUpdate }) => {
   const [faceImageUrl, setFaceImageUrl] = useState(null);
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
@@ -236,8 +236,9 @@ const RegistrationView = ({ user, navigateTo, children }) => {
         severity: 'success',
         error: null
       });
-      if (typeof children === 'function') {
-        children({ ...response.user });
+      // Call onUserUpdate with updated user data
+      if (onUserUpdate) {
+        onUserUpdate({ ...response.user });
       }
     } catch (error) {
       if (error.message.includes('Voter ID already exists')) {
