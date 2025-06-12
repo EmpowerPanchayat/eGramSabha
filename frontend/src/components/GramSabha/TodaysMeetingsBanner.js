@@ -47,7 +47,7 @@ import {
 } from "@mui/icons-material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import StopIcon from "@mui/icons-material/Stop";
-import { fetchTodaysMeetings } from "../../api/gram-sabha";
+import { fetchTodaysMeetings, updateGramSabhaStatus } from "../../api/gram-sabha";
 import { useLanguage } from "../../utils/LanguageContext";
 import GramSabhaDetails from "./GramSabhaDetails";
 import { FaceMesh } from "@mediapipe/face_mesh";
@@ -611,10 +611,14 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
       setError("");
 
       const data = await fetchTodaysMeetings(panchayatId);
-      setTodaysMeetings(data);
+      // Filter out meetings with status "CONCLUDED"
+      const activeMeetings = data.filter(
+        (meeting) => meeting.status !== "CONCLUDED"
+      );
+      setTodaysMeetings(activeMeetings);
 
-      if (data.length > 0) {
-        loadAttendanceStats(data[0]._id);
+      if (activeMeetings.length > 0) {
+        loadAttendanceStats(activeMeetings[0]._id);
       }
     } catch (error) {
       console.error("Error loading meetings:", error);
@@ -665,16 +669,25 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   );
 
   const handleStartRecording = useCallback(
-    async (meetingId, meetingLink, roomPIN, hostToken) => {
+    async (gramSabhaId, jiomeetId, meetingLink, roomPIN, hostToken) => {
+      try {
+        await updateGramSabhaStatus(gramSabhaId, "IN_PROGRESS");
+        await loadTodaysMeetings();
+      } catch (_) {
+        setSnackbarMessage("Failed to start meeting. Please try again.");
+        setSnackbarOpen(true);
+        return;
+      }
       setMeetingDetails({
-        meetingId,
+        jiomeetId,
         meetingLink,
         roomPIN,
         hostToken,
+        gramSabhaId,
       });
       setShowMeetingDetails(true);
     },
-    []
+    [loadTodaysMeetings]
   );
 
   const copyToClipboard = useCallback(() => {
@@ -692,6 +705,19 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
         console.error("Failed to copy: ", err);
       });
   }, [meetingDetails]);
+
+  const handleEndMeeting = useCallback(async () => {
+    if (!meetingDetails?.gramSabhaId) return;
+    try {
+      await updateGramSabhaStatus(meetingDetails.gramSabhaId, "CONCLUDED");
+      await loadTodaysMeetings();
+    } catch (_) {
+      setSnackbarMessage("Failed to end meeting. Please try again.");
+      setSnackbarOpen(true);
+      return;
+    }
+    setShowMeetingDetails(false);
+  }, [meetingDetails, loadTodaysMeetings]);
 
   // Fetch only settings.camera for config before opening attendance dialog
   const fetchPlatformConfig = useCallback(async () => {
@@ -971,6 +997,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                 color="success"
                 onClick={() =>
                   handleStartRecording(
+                    meeting._id,
                     meeting.jioMeetData.jiomeetId,
                     meeting.meetingLink,
                     meeting.jioMeetData.roomPIN,
@@ -979,9 +1006,8 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                 }
                 startIcon={<VideocamIcon />}
                 disabled={!quorumMet}
-                sx={{ px: 3 }}
               >
-                {isStarting ? "Starting..." : "Show Meeting Details"}
+                {isStarting ? "Starting..." : strings.showMeetingDetails}
               </Button>
             )}
           </Box>
@@ -1021,6 +1047,9 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setShowMeetingDetails(false)}>Close</Button>
+            <Button variant="outlined" color="error" onClick={handleEndMeeting}>
+              End Meeting
+            </Button>
             {meetingDetails.meetingLink && (
               <Button
                 variant="contained"

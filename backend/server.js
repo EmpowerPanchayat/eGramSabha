@@ -53,6 +53,8 @@ const Issue = require("./models/Issue");
 const Ward = require("./models/Ward");
 const { createDefaultRoles } = require("./models/Role");
 
+const { initCronJobs } = require("./utils/cronJobs");
+
 // Swagger documentation setup
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
   customCss: `
@@ -606,3 +608,6 @@ mongoose.connection.once("open", async () => {
   await initializePlatformConfig();
   // ...other startup logic...
 });
+
+// Initialize cron jobs
+initCronJobs();

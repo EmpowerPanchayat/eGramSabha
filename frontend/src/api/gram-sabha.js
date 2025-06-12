@@ -341,3 +341,16 @@ export const getAttendanceStats = async (meetingId) => {
     };
   }
 };
+
+/**
+ * Update only the status of a Gram Sabha meeting
+ */
+export const updateGramSabhaStatus = async (id, status) => {
+    try {
+        const response = await api.patch(`/gram-sabha/${id}`, { status });
+        return response.data;
+    } catch (error) {
+        console.error('API Error in updateGramSabhaStatus:', error);
+        throw error.response?.data || { message: 'Failed to update meeting status' };
+    }
+};

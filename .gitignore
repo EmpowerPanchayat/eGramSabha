@@ -53,3 +53,6 @@ backend/uploads/
 
 # private keys
 backend/keys/RSA-PrivateKey.pem
+
+# swagger files
+backend/swagger-output.json
