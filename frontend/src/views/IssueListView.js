@@ -1,5 +1,5 @@
 // File: frontend/src/views/IssueListView.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Box,
     Typography,
@@ -25,11 +25,9 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
-    Divider,
     TextField,
     Grid,
     InputAdornment,
-    Avatar,
     Stack,
     useTheme,
     useMediaQuery
@@ -37,12 +35,10 @@ import {
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SearchIcon from '@mui/icons-material/Search';
-import FilterListIcon from '@mui/icons-material/FilterList';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import CategoryIcon from '@mui/icons-material/Category';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import FolderIcon from '@mui/icons-material/Folder';
-import AttachmentIcon from '@mui/icons-material/Attachment';
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PersonIcon from '@mui/icons-material/Person';
@@ -50,15 +46,17 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import NoteIcon from '@mui/icons-material/Note';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useLanguage } from '../utils/LanguageContext';
-import { format } from 'date-fns';
 import AttachmentViewer from '../components/AttachmentViewer';
 import AudioPlayer from '../components/AudioPlayer';
-import { useAuth } from '../utils/authContext';
 import IssueStatusDropdown from '../components/IssueStatusDropdown';
 import CategorySubcategorySelector from '../components/IssueCategorySubcategorySelector';
-import filterIssues from '../utils/filterIssues';
+import { getCategoryIcon } from '../utils/issues';
 import { getLabelKeyFromValue } from '../utils/categoryUtils';
+import { fetchAllIssues } from '../api/issues';
 import tokenManager from '../utils/tokenManager';
+import formatDate from '../utils/formatDate';
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const IssueListView = ({ user, onBack, onViewIssue }) => {
     const { strings } = useLanguage();
@@ -70,6 +68,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     const [error, setError] = useState('');
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [totalIssues, setTotalIssues] = useState(0);
     const [selectedIssue, setSelectedIssue] = useState(null);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -77,117 +76,69 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     const [category, setCategory] = useState('');
     const [subcategory, setSubcategory] = useState('');
     const [status, setStatus] = useState('');
+    const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
 
-    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-
-    // Helper to get Authorization header for issues endpoints
-    const getAuthHeaders = () => {
-        console.log('Fetching auth headers');
-        const token = tokenManager.getToken();
-        console.log('Token:', token);
-        return token ? { 'Authorization': `Bearer ${token}` } : {};
-    };
-
-    useEffect(() => {
-        fetchIssues();
-    }, [tabValue]);
-
-    const fetchIssues = async () => {
+    const fetchIssues = useCallback(async () => {
         setLoading(true);
         setError('');
         setRefreshing(true);
 
         try {
-            let url;
+            let params = {
+                page,
+                limit: rowsPerPage,
+                searchText: debouncedSearchTerm,
+                status,
+                category,
+                subcategory
+            };
 
             if (tabValue === 0) {
-                // My Issues
-                // For officials, use linkedCitizenId if available, otherwise use their own id
                 const userId = user.linkedCitizenId || user.id;
-                url = `${API_URL}/issues/user/${userId}`;
+                params = { ...params, userId };
             } else {
-                // All Issues from same panchayat
                 if (!user.panchayatId) {
                     setError('Panchayat ID not available');
                     return;
                 }
-                url = `${API_URL}/issues/panchayat/${user.panchayatId}`;
+                params = { ...params, panchayatId: user.panchayatId };
             }
 
-            // Add Authorization header if token exists
-            const headers = {
-              "Content-Type": "application/json",
-              ...getAuthHeaders(),
-            };
+            const { data, total, retry = false } = await fetchAllIssues(params);
 
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: headers
-            });
-
-            if (!response.ok) {
-                // Handle token expiration
-                if (response.status === 401) {
-                    // Optionally refresh token or redirect to login
-                    if (response.data?.expired) {
-                        // Try to refresh token (or can be handled by axiosConfig interceptors)
-                        const refreshed = await handleTokenRefresh();
-                        if (!refreshed) {
-                            // If refresh failed, redirect to login
-                            onBack(); // Go back to the login page
-                            return;
-                        }
-                    }
-                }
-                throw new Error(strings.errorFetchingIssues);
+            if (retry) {
+                const { data, total } = await fetchAllIssues(params);
+                setIssues(data || []);
+                setTotalIssues(total || 0);
+            } else {
+                setIssues(data || []);
+                setTotalIssues(total || 0);
             }
-
-            const data = await response.json();
-            setIssues(data.issues || []);
         } catch (error) {
-            console.error('Error fetching issues:', error);
-            setError(error.message || strings.errorFetchingIssues);
+            setError(error.message || 'Error fetching issues');
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    };
+    }, [debouncedSearchTerm, page, rowsPerPage, status, category, subcategory, tabValue, user.linkedCitizenId, user.id, user.panchayatId]);
 
-    // Add a token refresh handler function
-    const handleTokenRefresh = async () => {
-        try {
-            const refreshToken = tokenManager.getRefreshToken();
-            if (!refreshToken) {
-                return false;
-            }
+    useEffect(() => {
+        fetchIssues();
+    }, [category, page, rowsPerPage, status, subcategory, tabValue, debouncedSearchTerm, fetchIssues]);
 
-            const response = await fetch(
-              `${API_URL}/auth/citizen/refresh-token`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${localStorage.getItem("token")}`,
-                },
-                body: JSON.stringify({ refreshToken }),
-              }
-            );
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedSearchTerm(searchTerm);
+        }, 500); // debounce delay in ms
 
-            if (!response.ok) {
-                return false;
-            }
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [searchTerm]);
 
-            const data = await response.json();
-            if (data.success && data.data && data.data.token) {
-                tokenManager.setTokens(data.data.token, data.data.refreshToken || refreshToken);
-                return true;
-            }
-
-            return false;
-        } catch (error) {
-            console.error('Error refreshing token:', error);
-            return false;
-        }
+    const handleSearchChange = (event) => {
+        setSearchTerm(event.target.value);
+        setPage(0);
     };
 
     const handleTabChange = (event, newValue) => {
@@ -212,24 +163,6 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     const handleCloseDialog = () => {
         setDialogOpen(false);
     };
-
-    const handleSearchChange = (event) => {
-        setSearchTerm(event.target.value);
-        setPage(0);
-    };
-
-    // Format date to readable string
-    const formatDate = (dateString) => {
-        if (!dateString) return 'N/A';
-        try {
-            return format(new Date(dateString), 'dd/MM/yyyy');
-        } catch (error) {
-            return 'Invalid Date';
-        }
-    };
-
-    // Filter issues based on search term
-    const filteredIssues = filterIssues(issues, { category, subcategory, status, searchTerm });
 
     // Get status chip based on issue status
     const getStatusChip = (status) => {
@@ -283,32 +216,11 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
         );
     };
 
-    // Get category icon based on category name
-    const getCategoryIcon = (category) => {
-        switch (category) {
-            case 'CULTURE_AND_NATURE':
-                return '🌳';
-            case 'INFRASTRUCTURE':
-                return '🏗️';
-            case 'EARNING_OPPORTUNITIES':
-                return '💰';
-            case 'BASIC_AMENITIES':
-                return '🏠';
-            case 'SOCIAL_WELFARE_SCHEMES':
-                return '🤝';
-            case 'OTHER':
-                return '📋';
-            default:
-                return '📋';
-        }
-    };
-
     const handleRefreshClick = () => {
         setSearchTerm("");
         setCategory("");
         setSubcategory("");
         setStatus("");
-        fetchIssues();
     }
 
     return (
@@ -427,7 +339,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                             <Box sx={{ display: 'flex', justifyContent: 'center', my: 8 }}>
                                 <CircularProgress size={60} />
                             </Box>
-                        ) : filteredIssues.length === 0 ? (
+                        ) : totalIssues === 0 ? (
                             <Paper
                                 elevation={1}
                                 sx={{
@@ -466,72 +378,70 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                 </TableRow>
                                             </TableHead>
                                             <TableBody>
-                                                {filteredIssues
-                                                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                                                    .map((issue, index) => (
-                                                        <TableRow
-                                                            key={issue._id}
-                                                            hover
-                                                            onClick={() => handleViewIssue(issue)}
-                                                            sx={{
-                                                                cursor: 'pointer',
-                                                                '&:hover': {
-                                                                    bgcolor: 'action.hover'
-                                                                }
-                                                            }}
-                                                        >
-                                                            <TableCell>{page * rowsPerPage + index + 1}</TableCell>
-                                                            <TableCell>
+                                                {issues.map((issue, index) => (
+                                                    <TableRow
+                                                        key={issue._id}
+                                                        hover
+                                                        onClick={() => handleViewIssue(issue)}
+                                                        sx={{
+                                                            cursor: 'pointer',
+                                                            '&:hover': {
+                                                                bgcolor: 'action.hover'
+                                                            }
+                                                        }}
+                                                    >
+                                                        <TableCell>{page * rowsPerPage + index + 1}</TableCell>
+                                                        <TableCell>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                                <Typography variant="body2" sx={{ mr: 1 }}>
+                                                                    {getCategoryIcon(issue.category)}
+                                                                </Typography>
+                                                                {strings[getLabelKeyFromValue(issue.category)]}
+                                                            </Box>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {strings[getLabelKeyFromValue(issue.subcategory)]}
+                                                        </TableCell>
+                                                        <TableCell>{getStatusChip(issue.status)}</TableCell>
+                                                        <TableCell>{formatDate(issue.createdAt)}</TableCell>
+                                                        <TableCell>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                                <PersonIcon sx={{ mr: 1, fontSize: '1rem' }} />
+                                                                <Typography variant="body2">
+                                                                    {issue.creator?.name || 'Unknown'}
+                                                                </Typography>
+                                                            </Box>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {issue.attachments && issue.attachments.find(att => att.mimeType.startsWith('audio/')) && (
                                                                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                                    <Typography variant="body2" sx={{ mr: 1 }}>
-                                                                        {getCategoryIcon(issue.category)}
-                                                                    </Typography>
-                                                                    {strings[getLabelKeyFromValue(issue.category)]}
+                                                                    <AudioPlayer
+                                                                        audioUrl={`${API_URL}/issues/${issue._id}/attachment/${issue.attachments.find(att => att.mimeType.startsWith('audio/'))._id}`}
+                                                                        authToken={tokenManager.getToken()}
+                                                                    />
                                                                 </Box>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                {strings[getLabelKeyFromValue(issue.subcategory)]}
-                                                            </TableCell>
-                                                            <TableCell>{getStatusChip(issue.status)}</TableCell>
-                                                            <TableCell>{formatDate(issue.createdAt)}</TableCell>
-                                                            <TableCell>
-                                                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                                    <PersonIcon sx={{ mr: 1, fontSize: '1rem' }} />
-                                                                    <Typography variant="body2">
-                                                                        {issue.creator?.name || 'Unknown'}
-                                                                    </Typography>
-                                                                </Box>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                {issue.attachments && issue.attachments.find(att => att.mimeType.startsWith('audio/')) && (
-                                                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                                        <AudioPlayer
-                                                                            audioUrl={`${API_URL}/issues/${issue._id}/attachment/${issue.attachments.find(att => att.mimeType.startsWith('audio/'))._id}`}
-                                                                            authToken={tokenManager.getToken()}
-                                                                        />
-                                                                    </Box>
-                                                                )}
-                                                            </TableCell>
-                                                            <TableCell align="right">
-                                                                <IconButton
-                                                                    size="small"
-                                                                    color="primary"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleViewIssue(issue);
-                                                                    }}
-                                                                >
-                                                                    <VisibilityIcon />
-                                                                </IconButton>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    ))}
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell align="right">
+                                                            <IconButton
+                                                                size="small"
+                                                                color="primary"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleViewIssue(issue);
+                                                                }}
+                                                            >
+                                                                <VisibilityIcon />
+                                                            </IconButton>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
                                             </TableBody>
                                         </Table>
                                         <TablePagination
                                             rowsPerPageOptions={[5, 10, 25]}
                                             component="div"
-                                            count={filteredIssues.length}
+                                            count={totalIssues}
                                             rowsPerPage={rowsPerPage}
                                             page={page}
                                             onPageChange={handleChangePage}
@@ -544,73 +454,71 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                 {/* Mobile View - Card Layout */}
                                 {isMobile && (
                                     <Stack spacing={2}>
-                                        {filteredIssues
-                                            .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                                            .map((issue, index) => (
-                                                <Paper
-                                                    key={issue._id}
-                                                    elevation={1}
-                                                    sx={{
-                                                        p: 2,
-                                                        borderRadius: 2,
-                                                        cursor: 'pointer',
-                                                        transition: 'transform 0.2s ease',
-                                                        '&:hover': {
-                                                            transform: 'translateY(-2px)',
-                                                            boxShadow: 2
-                                                        }
-                                                    }}
-                                                    onClick={() => handleViewIssue(issue)}
-                                                >
-                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                            <Typography variant="body1" sx={{ fontSize: '1.2rem', mr: 1 }}>
-                                                                {getCategoryIcon(issue.category)}
-                                                            </Typography>
-                                                            <Typography variant="subtitle1" noWrap sx={{ maxWidth: 150 }}>
-                                                                {strings[getLabelKeyFromValue(issue.category)]}
-                                                            </Typography>
-                                                        </Box>
-                                                        {getStatusChip(issue.status)}
-                                                    </Box>
-
-                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                            <Typography variant="subtitle1" noWrap sx={{ maxWidth: 150 }}>
-                                                                {strings[getLabelKeyFromValue(issue.subcategory)]}
-                                                            </Typography>
-                                                        </Box>
-                                                    </Box>
-
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                                        <PersonIcon sx={{ mr: 1, fontSize: '1rem' }} />
-                                                        <Typography variant="body2">
-                                                            {issue.creator?.name || 'Unknown'}
+                                        {issues.map((issue, index) => (
+                                            <Paper
+                                                key={issue._id}
+                                                elevation={1}
+                                                sx={{
+                                                    p: 2,
+                                                    borderRadius: 2,
+                                                    cursor: 'pointer',
+                                                    transition: 'transform 0.2s ease',
+                                                    '&:hover': {
+                                                        transform: 'translateY(-2px)',
+                                                        boxShadow: 2
+                                                    }
+                                                }}
+                                                onClick={() => handleViewIssue(issue)}
+                                            >
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                        <Typography variant="body1" sx={{ fontSize: '1.2rem', mr: 1 }}>
+                                                            {getCategoryIcon(issue.category)}
+                                                        </Typography>
+                                                        <Typography variant="subtitle1" noWrap sx={{ maxWidth: 150 }}>
+                                                            {strings[getLabelKeyFromValue(issue.category)]}
                                                         </Typography>
                                                     </Box>
+                                                    {getStatusChip(issue.status)}
+                                                </Box>
 
-                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                        <Box>
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                {formatDate(issue.createdAt)}
-                                                            </Typography>
-                                                        </Box>
-                                                        {issue.attachments && issue.attachments.find(att => att.mimeType.startsWith('audio/')) && (
-                                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                                <AudioPlayer
-                                                                    audioUrl={`${API_URL}/issues/${issue._id}/attachment/${issue.attachments.find(att => att.mimeType.startsWith('audio/'))._id}`}
-                                                                    authToken={tokenManager.getToken()}
-                                                                />
-                                                            </Box>
-                                                        )}
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                        <Typography variant="subtitle1" noWrap sx={{ maxWidth: 150 }}>
+                                                            {strings[getLabelKeyFromValue(issue.subcategory)]}
+                                                        </Typography>
                                                     </Box>
-                                                </Paper>
-                                            ))}
+                                                </Box>
+
+                                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                                    <PersonIcon sx={{ mr: 1, fontSize: '1rem' }} />
+                                                    <Typography variant="body2">
+                                                        {issue.creator?.name || 'Unknown'}
+                                                    </Typography>
+                                                </Box>
+
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <Box>
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            {formatDate(issue.createdAt)}
+                                                        </Typography>
+                                                    </Box>
+                                                    {issue.attachments && issue.attachments.find(att => att.mimeType.startsWith('audio/')) && (
+                                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                            <AudioPlayer
+                                                                audioUrl={`${API_URL}/issues/${issue._id}/attachment/${issue.attachments.find(att => att.mimeType.startsWith('audio/'))._id}`}
+                                                                authToken={tokenManager.getToken()}
+                                                            />
+                                                        </Box>
+                                                    )}
+                                                </Box>
+                                            </Paper>
+                                        ))}
 
                                         <TablePagination
                                             rowsPerPageOptions={[5, 10]}
                                             component="div"
-                                            count={filteredIssues.length}
+                                            count={totalIssues}
                                             rowsPerPage={rowsPerPage}
                                             page={page}
                                             onPageChange={handleChangePage}

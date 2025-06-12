@@ -91,6 +91,7 @@ app.use(
     origin: CORS_ORIGIN,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
+    exposedHeaders: ['x-total-count'],
   })
 );
 
