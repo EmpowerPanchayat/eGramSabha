@@ -69,7 +69,7 @@ def safe_translate_with_status(text: str, target_lang: str = 'en') -> Dict[str, 
 @router.post("/transcription/")
 async def transcription_endpoint(file: UploadFile = File(...)):
     """
-    Transcribe audio/video file and return transcription in original language and English
+    Transcribe audio/video file and return transcription in original language, English, and Hindi
     """
     temp_path = None
     audio_path = None
@@ -113,20 +113,23 @@ async def transcription_endpoint(file: UploadFile = File(...)):
             logger.warning("Transcription resulted in empty text")
             return {
                 "transcription_original": "",
-                "transcription_english": None
+                "transcription_english": None,
+                "transcription_hindi": None
             }
         
         logger.info(f"Transcription completed: {transcription_original[:100]}...")
 
-        # Translate to English with comprehensive error handling
-        translation_result = safe_translate_with_status(transcription_original, 'en')
+        # Translate to English and Hindi
+        translation_en = safe_translate_with_status(transcription_original, 'en')
+        translation_hi = safe_translate_with_status(transcription_original, 'hi')
         
         response = {
             "transcription_original": transcription_original,
-            "transcription_english": translation_result["text"]
+            "transcription_english": translation_en["text"],
+            "transcription_hindi": translation_hi["text"]
         }
         
-        logger.info(f"Translation status: {translation_result['status']}")
+        logger.info(f"Translation status (EN): {translation_en['status']}, (HI): {translation_hi['status']}")
         return response
 
     except HTTPException:
@@ -287,7 +290,7 @@ async def translation_health_check():
 @router.post("/transcription/jio/")
 async def jio_transcription_endpoint(file: UploadFile = File(...)):
     """
-    Transcribe audio using Jio Translate STT API and return transcription in original language and English.
+    Transcribe audio using Jio Translate STT API and return transcription in original language, English, and Hindi.
     """
     import shutil
     temp_path = f"temp_{file.filename}"
@@ -296,11 +299,13 @@ async def jio_transcription_endpoint(file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, buffer)
         # Always use auto language detection
         transcription_original = jio_stt_transcriber.transcribe_audio(temp_path)
-        # Translate to English using your translation service
-        translation_result = safe_translate_with_status(transcription_original, 'en')
+        # Translate to English and Hindi using your translation service
+        translation_en = safe_translate_with_status(transcription_original, 'en')
+        translation_hi = safe_translate_with_status(transcription_original, 'hi')
         return {
             "transcription_original": transcription_original,
-            "transcription_english": translation_result["text"]
+            "transcription_english": translation_en["text"],
+            "transcription_hindi": translation_hi["text"]
         }
     except Exception as e:
         logger.exception("Jio transcription failed")
