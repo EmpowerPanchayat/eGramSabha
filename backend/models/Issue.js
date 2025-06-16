@@ -88,7 +88,7 @@ const issueSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['REPORTED', 'AGENDA_CREATED', 'RESOLVED', 'ESCALATED', 'NO_ACTION_NEEDED'],
+        enum: ['REPORTED', 'PICKED_IN_AGENDA', 'DISCUSSED_IN_GRAM_SABHA', 'TRANSFERRED', 'RESOLVED', 'NO_ACTION_NEEDED'],
         default: 'REPORTED'
     },
     toBeResolvedBefore: {

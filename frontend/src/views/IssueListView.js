@@ -173,17 +173,21 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                 color = 'default';
                 label = strings.statusReported;
                 break;
-            case 'AGENDA_CREATED':
-                color = 'info';
+            case 'PICKED_IN_AGENDA':
+                color = 'info.light';
                 label = strings.statusAgendaCreated;
+                break;
+            case 'DISCUSSED_IN_GRAM_SABHA':
+                color = 'info';
+                label = strings.statusDiscussedInGramSabha;
                 break;
             case 'RESOLVED':
                 color = 'success';
                 label = strings.statusResolved;
                 break;
-            case 'ESCALATED':
+            case 'TRANSFERRED':
                 color = 'warning';
-                label = strings.statusEscalated;
+                label = strings.statusTransferred;
                 break;
             case 'NO_ACTION_NEEDED':
                 color = 'error';

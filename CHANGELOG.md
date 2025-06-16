@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - CSV import to upsert users by voter ID instead of deleting existing records.([#31](https://github.com/EmpowerPanchayat/eGramSabha/issues/31))
 - Fix data issue on update in Registration View ([#69](https://github.com/EmpowerPanchayat/eGramSabha/pull/69))
 
+### Changed
+
+- Issue Life Cycle and it's translations. ([#22](https://github.com/EmpowerPanchayat/eGramSabha/issues/22))
+
 ## [0.2.0] - 2025-05-27
 
 ### Added
