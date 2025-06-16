@@ -10,7 +10,8 @@ logger = logging.getLogger(__name__)
 
 class STTTranscriber:
     def __init__(self):
-        self.api_url = os.getenv("STT_MODEL_ENDPOINT", "https://api-inference.huggingface.co/models/openai/whisper-large-v2")
+        self.model_name = os.getenv("STT_MODEL_NAME", "openai/whisper-large-v3-turbo ")
+        self.api_url = f"https://api-inference.huggingface.co/models/{self.model_name}"
         self.api_key = os.getenv("HF_TOKEN")
 
     def transcribe_audio(self, audio_file_path: str, language: str = None) -> str:
