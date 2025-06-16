@@ -126,9 +126,9 @@ const translations = {
 
     // Issue status
     statusReported: "Reported",
-    statusAgendaCreated: "Agenda Created",
+    statusAgendaCreated: "Picked In Agenda",
     statusResolved: "Resolved",
-    statusEscalated: "Escalated",
+    statusTransferred: "Transferred",
     statusNoActionNeeded: "No Action Needed",
 
     // Categories
@@ -504,9 +504,9 @@ const translations = {
 
     // Issue status
     statusReported: "दर्ज किया गया",
-    statusAgendaCreated: "एजेंडा बनाया गया",
+    statusAgendaCreated: "एजेंडा में चुना गया",
     statusResolved: "हल किया गया",
-    statusEscalated: "आगे बढ़ाया गया",
+    statusTransferred: "आगे बढ़ाया गया",
     statusNoActionNeeded: "कोई कार्रवाई आवश्यक नहीं",
 
     // Categories
