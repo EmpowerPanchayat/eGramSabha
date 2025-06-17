@@ -2,70 +2,70 @@ from typing import List
 import requests
 import os
 import logging
-from dotenv import load_dotenv
-import datetime
+from app.core.config import settings
 
-load_dotenv()
 logger = logging.getLogger(__name__)
 
 class STTTranscriber:
+    """HuggingFace Whisper STT Transcriber"""
+    
     def __init__(self):
-        self.model_name = os.getenv("STT_MODEL_NAME", "openai/whisper-large-v3-turbo ")
-        self.api_url = f"https://api-inference.huggingface.co/models/{self.model_name}"
-        self.api_key = os.getenv("HF_TOKEN")
-
-    def transcribe_audio(self, audio_file_path: str, language: str = None) -> str:
-        logger.info(f"Starting transcription for: {audio_file_path}")
-        headers = {
-            'Authorization': f'Bearer {self.api_key}',
-            'Content-Type': 'audio/wav'
-        }
-        params = {}
-        if language:
-            params['language'] = language
+        self.api_key = settings.HF_TOKEN
+        self.endpoint = settings.STT_MODEL_ENDPOINT
+        logger.info(f"STT Transcriber initialized: {bool(self.api_key)}")
+    
+    def transcribe_audio(self, audio_file_path: str) -> str:
+        """Transcribe audio using HuggingFace Whisper following the direct data post example."""
         try:
-            with open(audio_file_path, 'rb') as audio_file:
-                response = requests.post(
-                    self.api_url,
-                    headers=headers,
-                    params=params,
-                    data=audio_file
-                )
-            logger.info(f"Transcription API response status: {response.status_code}")
+            if not self.api_key or not self.endpoint:
+                logger.error("HuggingFace API not configured")
+                return ""
+            
+            content_type = self._get_content_type(audio_file_path)
+            
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": content_type
+            }
+            
+            with open(audio_file_path, "rb") as f:
+                data = f.read()
+                
+            logger.info(f"Sending {len(data)} bytes of audio data to {self.endpoint} with Content-Type: {content_type}")
+            
+            response = requests.post(
+                self.endpoint,
+                headers=headers,
+                data=data,  # Use data parameter instead of files
+                timeout=180 # Increased timeout for potentially large files
+            )
+            
             if response.status_code == 200:
-                transcription = response.json().get('text', '') or response.json().get('transcription', '')
-                logger.info(f"Transcription successful for {audio_file_path}")
-
-                # --- Save to TXT file ---
-                base = os.path.splitext(os.path.basename(audio_file_path))[0]
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                txt_path = f"{base}_{timestamp}.txt"
-                with open(txt_path, "w", encoding="utf-8") as f:
-                    f.write(transcription)
-                logger.info(f"Transcript saved to {txt_path}")
-
-                # --- Save to DOCX file (optional) ---
-                try:
-                    from docx import Document
-                    doc = Document()
-                    doc.add_paragraph(transcription)
-                    docx_path = f"{base}_{timestamp}.docx"
-                    doc.save(docx_path)
-                    logger.info(f"Transcript also saved to {docx_path}")
-                except ImportError:
-                    logger.warning("python-docx not installed, skipping DOCX save.")
-
-                return transcription
-            else:
-                logger.error(f"Transcription failed: {response.text}")
-                raise Exception(f"Error in transcription: {response.text}")
+                result = response.json()
+                
+                # The direct API often returns just {"text": "..."}
+                transcription = result.get("text", "") if isinstance(result, dict) else ""
+                
+                logger.info("Whisper transcription successful.")
+                return transcription.strip()
+            
+            logger.error(f"Whisper API error: {response.status_code} - {response.text}")
+            return ""
+                
         except Exception as e:
-            logger.exception(f"Exception during transcription for {audio_file_path}")
-            raise
+            logger.error(f"Transcription failed: {e}", exc_info=True)
+            return ""
 
-    def transcribe_multiple_audios(self, audio_file_paths: List[str], language: str) -> List[str]:
-        transcriptions = []
-        for audio_file_path in audio_file_paths:
-            transcription = self.transcribe_audio(audio_file_path, language)
-            transcriptions.append(transcription)
-        return transcriptions
+    def _get_content_type(self, file_path: str) -> str:
+        """Get content type based on file extension"""
+        ext = os.path.splitext(file_path)[1].lower()
+        return {
+            '.wav': 'audio/wav',
+            '.mp3': 'audio/mpeg',
+            '.flac': 'audio/flac',
+            '.m4a': 'audio/mp4',
+            '.ogg': 'audio/ogg'
+        }.get(ext, 'audio/wav') # Default to wav if unknown
+
+# Global instance
+stt_transcriber = STTTranscriber()
