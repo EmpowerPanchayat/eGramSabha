@@ -735,9 +735,94 @@ const CitizenLoginView = ({ onLogin }) => {
         }),
       });
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || strings.faceAuthFailed);
-      if (onLogin) onLogin(data.user);
+      // API call for face authentication using the new token-based system
+      try {
+        // Step 1: Initiate the face login process
+        const initResponse = await fetch(`${API_URL}/auth/citizen/face-login/init`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            voterIdLastFour: voterIdLastFour,
+            panchayatId: selectedPanchayat,
+          }),
+        });
+
+        const initData = await initResponse.json();
+
+        if (!initResponse.ok) {
+          const errorMessageMap = {
+            "Panchayat not found": strings.errorPanchayatNotFound,
+            "No registered users found": strings.errorNoRegisteredUsers,
+            "Face not recognized": strings.errorFaceNotRecognized,
+            "Multiple matches found": strings.errorMultipleMatches,
+            "Invalid voter ID": strings.errorInvalidVoterId,
+          };
+          throw new Error(
+            errorMessageMap[initData.message] || initData.message || strings.faceAuthFailed
+          );
+        }
+
+        // Prepare verify data based on response (single user or multiple potential users)
+        let verifyBody;
+
+        if (initData.data.userId && initData.data.securityToken) {
+          // Single user case
+          verifyBody = {
+            userId: initData.data.userId,
+            securityToken: initData.data.securityToken,
+            faceDescriptor: Array.from(detections.descriptor),
+          };
+        } else if (initData.data.potentialUserIds && initData.data.userSecurityTokens) {
+          // Multiple potential users case
+          verifyBody = {
+            potentialUserIds: initData.data.potentialUserIds,
+            userSecurityTokens: initData.data.userSecurityTokens,
+            faceDescriptor: Array.from(detections.descriptor),
+          };
+        } else {
+          throw new Error('Invalid response from server');
+        }
+
+        // Step 2: Verify with face descriptor
+        const verifyResponse = await fetch(`${API_URL}/auth/citizen/face-login/verify`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(verifyBody),
+        });
+
+        const verifyData = await verifyResponse.json();
+
+        if (!verifyResponse.ok) {
+          const errorMessageMap = {
+            "Face verification failed": strings.errorFaceNotRecognized,
+            "Multiple potential matches found": strings.errorMultipleMatches,
+          };
+          throw new Error(
+            errorMessageMap[verifyData.message] || verifyData.message || strings.faceAuthFailed
+          );
+        }
+
+        // If we got here, authentication succeeded
+        if (onLogin && verifyData.data && verifyData.data.user) {
+          // Call the onLogin handler from CitizenPortal
+          // This will typically store the user data and tokens in state and localStorage
+          if (verifyData.data.token && verifyData.data.refreshToken) {
+            // If using the auth context or token manager
+            onLogin(verifyData.data.user, verifyData.data.token, verifyData.data.refreshToken);
+          } else {
+            // Backward compatibility with previous implementation
+            onLogin(verifyData.data.user);
+          }
+        }
+      } catch (error) {
+        console.error("Login error:", error);
+        setError(error.message || strings.faceNotRecognized);
+        setCapturedImage(null);
+      }
     } catch (error) {
       console.error("Authentication error:", error);
       setError(error.message || strings.faceAuthFailed);

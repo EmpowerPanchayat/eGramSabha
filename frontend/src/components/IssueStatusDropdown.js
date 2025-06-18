@@ -10,7 +10,7 @@ const STATUS_OPTIONS = [
     "statusReported",
     "statusAgendaCreated",
     "statusResolved",
-    "statusEscalated",
+    "statusTransferred",
     "statusNoActionNeeded"
 ];
 

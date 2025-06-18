@@ -1,14 +1,14 @@
 // File: backend/routes/issueRoutes.js
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
+const mongoose = require('mongoose');
 const Issue = require('../models/Issue');
 const User = require('../models/User');
 const Panchayat = require('../models/Panchayat');
+const { anyAuthenticated } = require('../middleware/auth');
 
 // Create a new issue
-router.post('/', async (req, res) => {
+router.post('/', anyAuthenticated, async (req, res) => {
     try {
         const {
             text,
@@ -20,18 +20,15 @@ router.post('/', async (req, res) => {
             remark,
             panchayatId,
             gramSabhaId,
-            creatorId,
             attachments
         } = req.body;
-
         // Validate required fields
-        if (!category || !panchayatId || !creatorId || !subcategory) {
+        if (!category || !panchayatId || !subcategory) {
             return res.status(400).json({
                 success: false,
                 message: 'Missing required fields'
             });
         }
-
         // Verify if panchayat exists
         const panchayat = await Panchayat.findById(panchayatId);
         if (!panchayat) {
@@ -40,7 +37,8 @@ router.post('/', async (req, res) => {
                 message: 'Panchayat not found'
             });
         }
-
+        const user = req.user;
+        const creatorId = user?.linkedCitizenId || user?.id;
         // Verify if creator exists
         const creator = await User.findById(creatorId);
         if (!creator) {
@@ -49,7 +47,6 @@ router.post('/', async (req, res) => {
                 message: 'Creator not found'
             });
         }
-
         // Create issue instance
         const issue = new Issue({
             text,
@@ -65,7 +62,6 @@ router.post('/', async (req, res) => {
             gramSabhaId,
             creatorId
         });
-
         // Save issue to database
         await issue.save();
 
@@ -90,8 +86,137 @@ router.post('/', async (req, res) => {
     }
 });
 
+router.get('/', anyAuthenticated, async (req, res) => {
+    try {
+        const {
+            userId,
+            panchayatId,
+            category,
+            subcategory,
+            status,
+            createdOn,
+            creator,
+            createdFor,
+            searchText,
+            sort = 'desc',
+            sortBy = 'createdAt'
+        } = req.query;
+
+        // Validate page and limit
+        const pageStr = req.query.page ?? '1';
+        const limitStr = req.query.limit ?? '10';
+
+        if (!/^\d+$/.test(pageStr) || parseInt(pageStr, 10) < 1) {
+            return res.status(400).json({ success: false, message: '"page" must be a positive integer' });
+        }
+
+        if (!/^\d+$/.test(limitStr) || parseInt(limitStr, 10) < 1) {
+            return res.status(400).json({ success: false, message: '"limit" must be a positive integer' });
+        }
+
+        const page = parseInt(pageStr, 10);
+        const limit = Math.min(parseInt(limitStr, 10), 100);
+        const skip = (page - 1) * limit;
+
+        // Validate sort
+        const sortOrder = sort.toLowerCase() === 'asc' ? 1 : -1;
+        const sortField = typeof sortBy === 'string' && sortBy.trim() !== '' ? sortBy : 'createdAt';
+
+        // Validate ObjectIds
+        if (!userId && !panchayatId) {
+            return res.status(400).json({ success: false, message: 'Either userId or panchayatId is required.' });
+        }
+
+        if (userId && !mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({ success: false, message: 'Invalid userId' });
+        }
+
+        if (panchayatId && !mongoose.Types.ObjectId.isValid(panchayatId)) {
+            return res.status(400).json({ success: false, message: 'Invalid panchayatId' });
+        }
+
+        // Build query
+        const query = {};
+        if (userId) query.creatorId = userId;
+        if (panchayatId) query.panchayatId = panchayatId;
+        if (subcategory) query.subcategory = subcategory;
+        if (status) query.status = status;
+
+        // Partial match on category (case-insensitive)
+        if (category?.trim()) {
+            query.category = { $regex: new RegExp(category.trim(), 'i') };
+        }
+
+        // Partial match on createdFor (exact field must exist on schema)
+        if (createdFor?.trim()) {
+            query.createdFor = { $regex: new RegExp(createdFor.trim(), 'i') };
+        }
+
+        // Date filter
+        if (createdOn) {
+            const [from, to] = createdOn.split('_to_');
+            if (from && !isNaN(Date.parse(from))) {
+                const fromDate = new Date(from);
+                const toDate = to && !isNaN(Date.parse(to)) ? new Date(to + 'T23:59:59.999Z') : new Date(from + 'T23:59:59.999Z');
+                query.createdAt = { $gte: fromDate, $lte: toDate };
+            }
+        }
+
+        // Filter by creator name (fuzzy)
+        if (creator?.trim()) {
+            const users = await User.find({
+                name: { $regex: new RegExp(creator.trim(), 'i') }
+            }).select('_id');
+
+            const creatorIds = users.map(u => u._id);
+            if (creatorIds.length === 0) {
+                res.set('x-total-count', '0');
+                return res.status(200).json([]);
+            }
+            query.creatorId = { $in: creatorIds };
+        }
+
+        // Search text (optional) on text, category, createdFor etc.
+        if (searchText?.trim()) {
+            const regex = new RegExp(searchText.trim(), 'i');
+            query.$or = [
+                { text: { $regex: regex } },
+                { category: { $regex: regex } },
+                { createdFor: { $regex: regex } },
+            ];
+        }
+
+        // Execute query
+        const [issues, total] = await Promise.all([
+            Issue.find(query)
+                .sort({ [sortField]: sortOrder })
+                .skip(skip)
+                .limit(limit)
+                .select('-attachments.attachment')
+                .populate({ path: 'creatorId', select: 'name' }),
+            Issue.countDocuments(query)
+        ]);
+
+        const formatted = issues.map(issue => ({
+            ...issue.toObject(),
+            creator: { name: issue.creatorId?.name || 'Unknown' }
+        }));
+
+        res.set('x-total-count', total.toString());
+        return res.status(200).json(formatted);
+
+    } catch (error) {
+        console.error('Error fetching issues:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+});
+
 // Get all issues/suggestions for a panchayat
-router.get('/panchayat/:panchayatId', async (req, res) => {
+router.get('/panchayat/:panchayatId', anyAuthenticated, async (req, res) => {
     try {
         const { panchayatId } = req.params;
 
@@ -135,9 +260,10 @@ router.get('/panchayat/:panchayatId', async (req, res) => {
 });
 
 // Get issues/suggestions created by a specific user
-router.get('/user/:userId', async (req, res) => {
+router.get('/user/:userId', anyAuthenticated, async (req, res) => {
     try {
         const { userId } = req.params;
+        console.log('Fetching issues/suggestions for user:', userId);
 
         // Verify if user exists
         const user = await User.findById(userId);
@@ -179,7 +305,7 @@ router.get('/user/:userId', async (req, res) => {
 });
 
 // Get a specific issue/suggestion by ID
-router.get('/:issueId', async (req, res) => {
+router.get('/:issueId', anyAuthenticated, async (req, res) => {
     try {
         const { issueId } = req.params;
 
@@ -218,7 +344,7 @@ router.get('/:issueId', async (req, res) => {
 });
 
 // Get attachment by issue/suggestion ID and attachment ID
-router.get('/:issueId/attachment/:attachmentId', async (req, res) => {
+router.get('/:issueId/attachment/:attachmentId', anyAuthenticated, async (req, res) => {
     try {
         const { issueId, attachmentId } = req.params;
 
@@ -254,7 +380,7 @@ router.get('/:issueId/attachment/:attachmentId', async (req, res) => {
 });
 
 // Route to upload attachments for an issue/suggestion
-router.post('/upload-attachment', async (req, res) => {
+router.post('/upload-attachment', anyAuthenticated, async (req, res) => {
     try {
         const { issueId, attachmentData, filename, mimeType } = req.body;
 

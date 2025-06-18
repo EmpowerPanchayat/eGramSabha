@@ -11,6 +11,7 @@ const Panchayat = require("../models/Panchayat");
 const multer = require("multer");
 const mongoose = require("mongoose");
 const User = require("../models/User");
+const { autoUpdateMeetingStatus } = require('../utils/meetingUtils');
 
 const { JIOMEET_APP_ID, JIOMEET_API, BACKEND_URL } = process.env;
 const privateKey = fs.readFileSync(process.env.PRIVATE_KEY_PATH, "utf8");
@@ -44,7 +45,7 @@ function calculateFaceDistance(descriptor1, descriptor2) {
 // Create a new Gram Sabha meeting with attachments
 router.post(
   "/",
-  auth.isAuthenticated,
+  auth.isOfficial,
   isPanchayatPresident,
   upload.array("attachments"),
   async (req, res) => {
@@ -127,7 +128,7 @@ router.post(
           },
         }
       );
-
+      console.log("request body", req);
       const gramSabha = new GramSabha({
         panchayatId,
         title: generatedTitle,
@@ -157,7 +158,7 @@ router.post(
       console.error("Error creating Gram Sabha:", error);
       res
         .status(500)
-        .json({ success: false, message: "Error creating Gram Sabha" });
+        .json({ success: false, message: "Error creating Gram Sabha", error });
     }
   }
 );
@@ -165,27 +166,17 @@ router.post(
 // Get all Gram Sabha meetings for a panchayat
 router.get("/panchayat/:panchayatId", async (req, res) => {
   try {
-    const gramSabhas = await GramSabha.find({
+    let gramSabhas = await GramSabha.find({
       panchayatId: req.params.panchayatId,
     })
       .populate("scheduledById", "name")
       .sort({ dateTime: -1 });
-    const now = new Date();
 
-    for (const sabha of gramSabhas) {
-      const durationInHours = sabha.scheduledDurationHours;
-      const meetingEndTime = new Date(
-        sabha.dateTime.getTime() + durationInHours * 60 * 60 * 1000
-      );
+    // Auto-update status for each meeting
+    gramSabhas = await Promise.all(
+      gramSabhas.map(meeting => autoUpdateMeetingStatus(meeting))
+    );
 
-      if (
-        (sabha.status === "IN_PROGRESS" || sabha.status === "SCHEDULED") &&
-        now > meetingEndTime
-      ) {
-        sabha.status = "CONCLUDED";
-        await sabha.save();
-      }
-    }
     res.send(gramSabhas);
   } catch (error) {
     res.status(500).send(error);
@@ -210,11 +201,12 @@ router.get("/:id", async (req, res) => {
 // Update a Gram Sabha meeting
 router.patch(
   "/:id",
-  auth.isAuthenticated,
+  auth.isOfficial,
   isPanchayatPresident,
   upload.array("attachments"),
   async (req, res) => {
     try {
+      console.log("Request body:", req.body);
       // Find the existing gram sabha first to verify it exists
       const gramSabha = await GramSabha.findOne({
         _id: req.params.id,
@@ -376,7 +368,7 @@ router.patch(
 // Delete a Gram Sabha meeting
 router.delete(
   "/:id",
-  auth.isAuthenticated,
+  auth.isOfficial,
   isPanchayatPresident,
   async (req, res) => {
     try {
@@ -396,7 +388,7 @@ router.delete(
 );
 
 // Add attendance to a Gram Sabha meeting
-router.post("/:id/attendance", auth.isAuthenticated, async (req, res) => {
+router.post("/:id/attendance", auth.isOfficial, async (req, res) => {
   try {
     const gramSabha = await GramSabha.findById(req.params.id);
     if (!gramSabha) {
@@ -436,7 +428,7 @@ router.get("/:id/attendance", auth.isAuthenticated, async (req, res) => {
 // Add attachment to a Gram Sabha meeting
 router.post(
   "/:id/attachments",
-  auth.isAuthenticated,
+  auth.isOfficial,
   upload.single("file"),
   async (req, res) => {
     try {
@@ -663,7 +655,7 @@ router.get("/:id/rsvp-stats", async (req, res) => {
  * @desc    Mark attendance for a meeting using face recognition
  * @access  Private (Officials only)
  */
-router.post("/:id/mark-attendance", auth.isAuthenticated, async (req, res) => {
+router.post("/:id/mark-attendance", auth.isOfficial, async (req, res) => {
   try {
     const { id } = req.params;
     const { faceDescriptor, voterIdLastFour, panchayatId, verificationMethod } =
@@ -886,13 +878,18 @@ router.get("/panchayat/:panchayatId/today", async (req, res) => {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const gramSabhas = await GramSabha.find({
+    let gramSabhas = await GramSabha.find({
       panchayatId: req.params.panchayatId,
       dateTime: { $gte: today, $lt: tomorrow },
     })
-      .select("-attachments") // Exclude attachments
+      .select("-attachments")
       .populate("scheduledById", "name")
       .sort({ dateTime: 1 });
+
+    // Auto-update status for each meeting
+    gramSabhas = await Promise.all(
+      gramSabhas.map(meeting => autoUpdateMeetingStatus(meeting))
+    );
 
     res.json(gramSabhas);
   } catch (error) {

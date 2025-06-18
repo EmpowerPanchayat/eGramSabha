@@ -1,86 +1,13 @@
-// File: backend/routes/authRoutes.js
+// File: backend/routes/officialAuthRoutes.js
 const express = require('express');
 const router = express.Router();
 const Official = require('../models/Official');
-const { generateToken, generateRefreshToken, verifyRefreshToken } = require('../config/jwt');
-const { isAuthenticated } = require('../middleware/auth');
+const { verifyRefreshToken } = require('../config/jwt');
+const { isOfficial } = require('../middleware/auth');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 
-// Register a new admin (special route for initial setup)
-router.post('/register-admin', async (req, res) => {
-    try {
-        // Check if admin already exists
-        const adminExists = await Official.findOne({ role: 'ADMIN' });
-
-        if (adminExists) {
-            return res.status(403).json({
-                success: false,
-                message: 'Admin already exists. Use the login route.'
-            });
-        }
-
-        const { username, email, password, name, phone } = req.body;
-
-        // Validate input
-        if (!username || !email || !password || !name) {
-            return res.status(400).json({
-                success: false,
-                message: 'Please provide all required fields: username, email, password, name'
-            });
-        }
-
-        // Create new admin
-        const admin = new Official({
-            username,
-            email,
-            password,
-            name,
-            phone,
-            role: 'ADMIN'
-        });
-
-        await admin.save();
-
-        // Generate tokens
-        const token = admin.generateAuthToken();
-        const refreshToken = admin.generateRefreshToken();
-
-        res.status(201).json({
-            success: true,
-            message: 'Admin account created successfully',
-            data: {
-                user: {
-                    id: admin._id,
-                    username: admin.username,
-                    email: admin.email,
-                    name: admin.name,
-                    role: admin.role
-                },
-                token,
-                refreshToken
-            }
-        });
-    } catch (error) {
-        // Handle duplicate key errors
-        if (error.code === 11000) {
-            const field = Object.keys(error.keyValue)[0];
-            return res.status(400).json({
-                success: false,
-                message: `${field} already exists. Please choose another one.`
-            });
-        }
-
-        console.error('Registration error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error creating admin account',
-            error: error.message
-        });
-    }
-});
-
-// Login route
+// Official login
 router.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -93,8 +20,11 @@ router.post('/login', async (req, res) => {
             });
         }
 
-        // Find official by username
-        const official = await Official.findOne({ username });
+        // Find official by username, excluding ADMIN role
+        const official = await Official.findOne({
+            username,
+            role: { $ne: 'ADMIN' }
+        });
 
         if (!official) {
             return res.status(401).json({
@@ -107,7 +37,7 @@ router.post('/login', async (req, res) => {
         if (!official.isActive) {
             return res.status(403).json({
                 success: false,
-                message: 'Account is deactivated. Please contact administrator.'
+                message: 'Official account is deactivated'
             });
         }
 
@@ -129,16 +59,16 @@ router.post('/login', async (req, res) => {
         const token = await official.generateAuthToken();
         const refreshToken = official.generateRefreshToken();
 
-        // Get linked user data if exists
+        // Get linked user data if exists - critical for official functionality
         let linkedUser = null;
         if (official.linkedCitizenId) {
             linkedUser = await mongoose.model('User').findById(official.linkedCitizenId)
-                .select('_id name voterIdNumber panchayatId faceImageId thumbnailImageId');
+                .select('_id name voterIdNumber panchayatId faceImagePath');
         }
 
         res.json({
             success: true,
-            message: 'Login successful',
+            message: 'Official login successful',
             data: {
                 user: {
                     id: official._id,
@@ -154,25 +84,26 @@ router.post('/login', async (req, res) => {
                         name: linkedUser.name,
                         voterIdNumber: linkedUser.voterIdNumber,
                         panchayatId: linkedUser.panchayatId,
-                        faceImageId: linkedUser.faceImageId,
-                        thumbnailImageId: linkedUser.thumbnailImageId,
-                    } : null
+                        faceImagePath: linkedUser.faceImagePath
+                    } : null,
+                    userType: 'OFFICIAL',
+                    wardId: official.wardId
                 },
                 token,
                 refreshToken
             }
         });
     } catch (error) {
-        console.error('Login error:', error);
+        console.error('Official login error:', error);
         res.status(500).json({
             success: false,
-            message: 'Error during login',
+            message: 'Error during official login',
             error: error.message
         });
     }
 });
 
-// Refresh token route
+// Refresh token for official
 router.post('/refresh-token', async (req, res) => {
     try {
         const { refreshToken } = req.body;
@@ -187,13 +118,16 @@ router.post('/refresh-token', async (req, res) => {
         // Verify refresh token
         const decoded = verifyRefreshToken(refreshToken);
 
-        // Find official by id
-        const official = await Official.findById(decoded.id);
+        // Find official by id, excluding ADMIN role
+        const official = await Official.findOne({
+            _id: decoded.id,
+            role: { $ne: 'ADMIN' }
+        });
 
         if (!official) {
             return res.status(401).json({
                 success: false,
-                message: 'Invalid refresh token'
+                message: 'Invalid official refresh token'
             });
         }
 
@@ -201,28 +135,28 @@ router.post('/refresh-token', async (req, res) => {
         if (!official.isActive) {
             return res.status(403).json({
                 success: false,
-                message: 'Account is deactivated'
+                message: 'Official account is deactivated'
             });
         }
 
         // Generate new access token
         const token = await official.generateAuthToken();
-        // Generate new refresh token too (added)
+        // Generate new refresh token too
         const newRefreshToken = official.generateRefreshToken();
 
-        // Get linked user data if exists
+        // Get linked user data if exists - critical for official functionality
         let linkedUser = null;
         if (official.linkedCitizenId) {
             linkedUser = await mongoose.model('User').findById(official.linkedCitizenId)
-                .select('_id name voterIdNumber panchayatId faceImageId thumbnailImageId');
+                .select('_id name voterIdNumber panchayatId faceImagePath');
         }
 
         res.json({
             success: true,
-            message: 'Token refreshed successfully',
+            message: 'Official token refreshed successfully',
             data: {
                 token,
-                refreshToken: newRefreshToken, // Added this to include refresh token in response
+                refreshToken: newRefreshToken,
                 user: {
                     id: official._id,
                     username: official.username,
@@ -237,23 +171,70 @@ router.post('/refresh-token', async (req, res) => {
                         name: linkedUser.name,
                         voterIdNumber: linkedUser.voterIdNumber,
                         panchayatId: linkedUser.panchayatId,
-                        faceImageId: linkedUser.faceImageId,
-                        thumbnailImageId: linkedUser.thumbnailImageId,
-                    } : null
+                        faceImagePath: linkedUser.faceImagePath
+                    } : null,
+                    userType: 'OFFICIAL',
+                    wardId: official.wardId
                 }
             }
         });
     } catch (error) {
-        console.error('Token refresh error:', error);
+        console.error('Official token refresh error:', error);
         res.status(401).json({
             success: false,
-            message: 'Invalid or expired refresh token',
+            message: 'Invalid or expired official refresh token',
             error: error.message
         });
     }
 });
 
-// Forgot password route
+// Get official profile
+router.get('/me', isOfficial, async (req, res) => {
+    try {
+        const official = await Official.findById(req.official.id)
+            .select('-password -passwordResetToken -passwordResetExpires');
+
+        if (!official) {
+            return res.status(404).json({
+                success: false,
+                message: 'Official not found'
+            });
+        }
+
+        // Get linked user data if exists - critical for official functionality
+        let linkedUser = null;
+        if (official.linkedCitizenId) {
+            linkedUser = await mongoose.model('User').findById(official.linkedCitizenId)
+                .select('_id name voterIdNumber panchayatId faceImagePath');
+        }
+
+        res.json({
+            success: true,
+            data: {
+                user: {
+                    ...official._doc,
+                    linkedUser: linkedUser ? {
+                        id: linkedUser._id,
+                        name: linkedUser.name,
+                        voterIdNumber: linkedUser.voterIdNumber,
+                        panchayatId: linkedUser.panchayatId,
+                        faceImagePath: linkedUser.faceImagePath
+                    } : null,
+                    userType: 'OFFICIAL'
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching official profile:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching official profile',
+            error: error.message
+        });
+    }
+});
+
+// Forgot password for officials
 router.post('/forgot-password', async (req, res) => {
     try {
         const { email } = req.body;
@@ -266,7 +247,10 @@ router.post('/forgot-password', async (req, res) => {
         }
 
         // Find official by email
-        const official = await Official.findOne({ email });
+        const official = await Official.findOne({
+            email,
+            role: { $ne: 'ADMIN' } // Make sure this is an official, not an admin
+        });
 
         if (!official) {
             // For security reasons, don't reveal that the email doesn't exist
@@ -282,7 +266,6 @@ router.post('/forgot-password', async (req, res) => {
 
         // In a real application, you would send an email with the reset token
         // For now, just return it in the response
-
         res.json({
             success: true,
             message: 'Password reset token generated',
@@ -301,7 +284,7 @@ router.post('/forgot-password', async (req, res) => {
     }
 });
 
-// Reset password route
+// Reset password route for officials
 router.post('/reset-password/:token', async (req, res) => {
     try {
         const { password } = req.body;
@@ -330,7 +313,8 @@ router.post('/reset-password/:token', async (req, res) => {
         // Find official by reset token and check if it's expired
         const official = await Official.findOne({
             passwordResetToken: hashedToken,
-            passwordResetExpires: { $gt: Date.now() }
+            passwordResetExpires: { $gt: Date.now() },
+            role: { $ne: 'ADMIN' } // Make sure this is an official, not an admin
         });
 
         if (!official) {
@@ -361,8 +345,8 @@ router.post('/reset-password/:token', async (req, res) => {
     }
 });
 
-// Change password route
-router.post('/change-password', isAuthenticated, async (req, res) => {
+// Change password route for officials
+router.post('/change-password', isOfficial, async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
 
@@ -410,36 +394,107 @@ router.post('/change-password', isAuthenticated, async (req, res) => {
     }
 });
 
-// Get current user info
-router.get('/me', isAuthenticated, async (req, res) => {
+// Link an official to a citizen account
+router.post('/link-citizen', isOfficial, async (req, res) => {
     try {
-        const official = await Official.findById(req.official.id).select('-password -passwordResetToken -passwordResetExpires');
+        const { citizenId } = req.body;
+
+        if (!citizenId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Citizen ID is required'
+            });
+        }
+
+        // Find the official to update
+        const official = await Official.findById(req.official.id);
 
         if (!official) {
             return res.status(404).json({
                 success: false,
-                message: 'User not found'
+                message: 'Official not found'
             });
         }
 
+        // Verify that the citizen exists
+        const citizen = await mongoose.model('User').findById(citizenId);
+
+        if (!citizen) {
+            return res.status(404).json({
+                success: false,
+                message: 'Citizen not found'
+            });
+        }
+
+        // Link the citizen to the official
+        official.linkedCitizenId = citizenId;
+        await official.save();
+
+        // Get complete linked user data
+        const linkedUser = await mongoose.model('User').findById(citizenId)
+            .select('_id name voterIdNumber panchayatId faceImagePath');
+
         res.json({
             success: true,
+            message: 'Citizen linked successfully',
             data: {
-                user: official
+                linkedCitizenId: official.linkedCitizenId,
+                linkedUser: linkedUser ? {
+                    id: linkedUser._id,
+                    name: linkedUser.name,
+                    voterIdNumber: linkedUser.voterIdNumber,
+                    panchayatId: linkedUser.panchayatId,
+                    faceImagePath: linkedUser.faceImagePath
+                } : null
             }
         });
     } catch (error) {
-        console.error('Error fetching user info:', error);
+        console.error('Link citizen error:', error);
         res.status(500).json({
             success: false,
-            message: 'Error fetching user information',
+            message: 'Error linking citizen',
             error: error.message
         });
     }
 });
 
-// Logout - client side implementation
-// The server doesn't need to do anything for logout in JWT auth
-// The client will simply remove the tokens from storage
+// Unlink a citizen from an official account
+router.post('/unlink-citizen', isOfficial, async (req, res) => {
+    try {
+        // Find the official to update
+        const official = await Official.findById(req.official.id);
+
+        if (!official) {
+            return res.status(404).json({
+                success: false,
+                message: 'Official not found'
+            });
+        }
+
+        // Check if there's a linked citizen
+        if (!official.linkedCitizenId) {
+            return res.status(400).json({
+                success: false,
+                message: 'No citizen linked to this official'
+            });
+        }
+
+        // Remove the link
+        official.linkedCitizenId = undefined;
+        await official.save();
+
+        res.json({
+            success: true,
+            message: 'Citizen unlinked successfully'
+        });
+    } catch (error) {
+        console.error('Unlink citizen error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error unlinking citizen',
+            error: error.message
+        });
+    }
+});
 
 module.exports = router;

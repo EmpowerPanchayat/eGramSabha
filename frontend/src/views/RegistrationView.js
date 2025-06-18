@@ -44,15 +44,18 @@ import EditIcon from '@mui/icons-material/Edit';
 
 import { getFaceImageUrl, getFaceImage, updateUserProfile } from '../api';
 
-const RegistrationView = ({ user, navigateTo, children }) => {
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+const RegistrationView = ({ user, navigateTo, children, onUserUpdate }) => {
   const [faceImageUrl, setFaceImageUrl] = useState(null);
-  const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
   const [imageModal, setImageModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editedUser, setEditedUser] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success', error: null });
   const [errors, setErrors] = useState({});
+  const [fullImageUrl, setFullImageUrl] = useState(null);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -79,41 +82,37 @@ const RegistrationView = ({ user, navigateTo, children }) => {
 
   useEffect(() => {
     // Try to fetch face image if user is registered
-    if (user && user.isRegistered) {
-      const fetchImage = async () => {
+    async function fetchFaceImage() {
+      if (user && user.voterIdNumber && user.panchayatId) {
         setImageLoading(true);
         setImageError(false);
         try {
-          console.log('Fetching face image for:', user.voterIdNumber);
-          const imageData = await getFaceImage(user.voterIdNumber, user.panchayatId);
-          console.log('Received image data:', imageData);
-
-          if (imageData && imageData.faceImagePath) {
-            // Fix for duplicate uploads path
-            let imageUrl = getFaceImageUrl(imageData.faceImagePath);
-
-            // Check and fix duplicate /uploads/ in the URL
-            if (imageUrl.includes('//uploads')) {
-              imageUrl = imageUrl.replace('//uploads', '/uploads');
-              console.log('Fixed duplicate uploads path in URL:', imageUrl);
+          const res = await fetch(`${API_URL}/users/${user.voterIdNumber}/face?panchayatId=${user.panchayatId}`);
+          const data = await res.json();
+          if (data.success && data.faceImageId) {
+            const thumbRes = await fetch(`${API_URL}/users/${user._id}/thumbnail`);
+            if (thumbRes.ok) {
+              setFaceImageUrl(`${API_URL}/users/${user._id}/thumbnail`);
+            } else {
+              setFaceImageUrl(`${API_URL}/users/face-image/${data.faceImageId}`);
             }
-
-            console.log('Final image URL:', imageUrl);
-            setFaceImageUrl(imageUrl);
+            // Always set full image URL with timestamp
+            setFullImageUrl(`${API_URL}/users/face-image/${data.faceImageId}?t=${Date.now()}`);
           } else {
-            console.error('No faceImagePath in response');
+            console.error('No faceImageId in response');
+            setFaceImageUrl(null);
             setImageError(true);
           }
         } catch (error) {
           console.error('Error fetching face image:', error);
+          setFaceImageUrl(null);
           setImageError(true);
         } finally {
           setImageLoading(false);
         }
-      };
-
-      fetchImage();
+      }
     }
+    fetchFaceImage();
   }, [user]);
 
   if (!user) {
@@ -237,8 +236,9 @@ const RegistrationView = ({ user, navigateTo, children }) => {
         severity: 'success',
         error: null
       });
-      if (typeof children === 'function') {
-        children({ ...response.user });
+      // Call onUserUpdate with updated user data
+      if (onUserUpdate) {
+        onUserUpdate({ ...response.user });
       }
     } catch (error) {
       if (error.message.includes('Voter ID already exists')) {
@@ -296,14 +296,14 @@ const RegistrationView = ({ user, navigateTo, children }) => {
             }}>
               <Box sx={{
                 width: '100%',
-                maxWidth: '500px',
+                maxWidth: 170,
                 position: 'relative'
               }}>
                 {imageLoading ? (
                   <Skeleton
                     variant="rectangular"
-                    width="100%"
-                    height={isMobile ? 320 : 400}
+                    width={170}
+                    height={170}
                     animation="wave"
                   />
                 ) : !imageError && faceImageUrl ? (
@@ -313,8 +313,10 @@ const RegistrationView = ({ user, navigateTo, children }) => {
                       image={faceImageUrl}
                       alt={user.name}
                       onError={handleImageError}
+                      onLoad={() => setImageLoading(false)}
                       sx={{
-                        height: isMobile ? 320 : 400,
+                        width: 170,
+                        height: 170,
                         objectFit: 'cover',
                         objectPosition: 'center top',
                         borderRadius: 2,
@@ -339,7 +341,8 @@ const RegistrationView = ({ user, navigateTo, children }) => {
                   </Box>
                 ) : (
                   <Box sx={{
-                    height: isMobile ? 320 : 400,
+                    width: 170,
+                    height: 170,
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'center',
@@ -360,11 +363,19 @@ const RegistrationView = ({ user, navigateTo, children }) => {
                           setImageError(false);
                           setImageLoading(true);
                           getFaceImage(user.voterIdNumber)
-                            .then(data => {
-                              if (data && data.faceImagePath) {
-                                const imageUrl = getFaceImageUrl(data.faceImagePath);
-                                // Force browser to reload the image by adding a timestamp
-                                setFaceImageUrl(`${imageUrl}?t=${new Date().getTime()}`);
+                            .then(async data => {
+                              if (data && data.faceImageId) {
+                                // Always set full image URL for modal
+                                setFullImageUrl(`${API_URL}/users/face-image/${data.faceImageId}?t=${Date.now()}`);
+                                // Try to load the thumbnail for the main view
+                                const thumbUrl = `${API_URL}/users/${user._id}/thumbnail?t=${Date.now()}`;
+                                const thumbRes = await fetch(thumbUrl);
+                                if (thumbRes.ok) {
+                                  setFaceImageUrl(thumbUrl);
+                                } else {
+                                  // Fallback to full image if thumbnail fails
+                                  setFaceImageUrl(`${API_URL}/users/face-image/${data.faceImageId}?t=${Date.now()}`);
+                                }
                               } else {
                                 setImageError(true);
                               }
@@ -733,7 +744,7 @@ const RegistrationView = ({ user, navigateTo, children }) => {
       </Container>
 
       {/* Image Modal */}
-      {imageModal && faceImageUrl && (
+      {imageModal && fullImageUrl && (
         <Box
           sx={{
             position: 'fixed',
@@ -752,7 +763,7 @@ const RegistrationView = ({ user, navigateTo, children }) => {
           <Box sx={{ position: 'relative', maxWidth: '90%', maxHeight: '90%' }}>
             <Box
               component="img"
-              src={faceImageUrl}
+              src={fullImageUrl}
               alt={user.name}
               sx={{
                 maxWidth: '100%',

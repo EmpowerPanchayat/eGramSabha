@@ -275,6 +275,7 @@ export const getRSVPStats = async (meetingId) => {
  */
 export const fetchTodaysMeetings = async (panchayatId) => {
     try {
+        console.log('Fetching today\'s meetings for Panchayat ID:', panchayatId);
         const response = await api.get(`/gram-sabha/panchayat/${panchayatId}/today`);
         return response.data;
     } catch (error) {
@@ -339,4 +340,17 @@ export const getAttendanceStats = async (meetingId) => {
       quorumMet: false,
     };
   }
+};
+
+/**
+ * Update only the status of a Gram Sabha meeting
+ */
+export const updateGramSabhaStatus = async (id, status) => {
+    try {
+        const response = await api.patch(`/gram-sabha/${id}`, { status });
+        return response.data;
+    } catch (error) {
+        console.error('API Error in updateGramSabhaStatus:', error);
+        throw error.response?.data || { message: 'Failed to update meeting status' };
+    }
 };

@@ -8,6 +8,7 @@ const mongoose = require("mongoose");
 const PlatformConfiguration = require("./models/PlatformConfiguration");
 const defaultSettings = require("./defaults/defaultPlatformSettings");
 const path = require("path");
+const storageService = require('./storage/storageService');
 
 const dotenv = require("dotenv");
 const helmet = require("helmet");
@@ -15,6 +16,7 @@ const xss = require("xss-clean");
 const hpp = require("hpp");
 const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
+const auth = require("./middleware/auth");
 
 // Load environment variables
 dotenv.config();
@@ -33,14 +35,16 @@ const swaggerDocument = require('./swagger-output.json');
 const configureSecurityMiddleware = require("./middleware/securityMiddleware");
 
 // Import routes
-const panchayatRoutes = require("./routes/panchayatRoutes");
-const userRoutes = require("./routes/userRoutes");
-const issueRoutes = require("./routes/issueRoutes");
-const citizenRoutes = require("./routes/citizenRoutes");
-const authRoutes = require("./routes/authRoutes");
-const officialRoutes = require("./routes/officialRoutes");
-const gramSabhaRoutes = require("./routes/gramSabhaRoutes");
-const platformConfigRoutes = require("./routes/platformConfigRoutes");
+const panchayatRoutes = require('./routes/panchayatRoutes');
+const userRoutes = require('./routes/userRoutes');
+const issueRoutes = require('./routes/issueRoutes');
+const citizenRoutes = require('./routes/citizenRoutes');
+const adminAuthRoutes = require('./routes/adminAuthRoutes');
+const officialAuthRoutes = require('./routes/officialAuthRoutes');
+const citizenAuthRoutes = require('./routes/citizenAuthRoutes');
+const officialRoutes = require('./routes/officialRoutes');
+const gramSabhaRoutes = require('./routes/gramSabhaRoutes');
+const platformConfigRoutes = require('./routes/platformConfigRoutes');
 
 // Import models
 const User = require("./models/User");
@@ -48,6 +52,8 @@ const Panchayat = require("./models/Panchayat");
 const Issue = require("./models/Issue");
 const Ward = require("./models/Ward");
 const { createDefaultRoles } = require("./models/Role");
+
+const { initCronJobs } = require("./utils/cronJobs");
 
 // Swagger documentation setup
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
@@ -87,6 +93,7 @@ app.use(
     origin: CORS_ORIGIN,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
+    exposedHeaders: ['x-total-count'],
   })
 );
 
@@ -100,26 +107,6 @@ const uploadsDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
-
-// Serve static files from the uploads directory
-app.use(
-  "/uploads",
-  (req, res, next) => {
-    res.header("Access-Control-Allow-Origin", CORS_ORIGIN);
-    res.header("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.header(
-      "Access-Control-Allow-Headers",
-      "Origin, X-Requested-With, Content-Type, Accept"
-    );
-    res.header("Access-Control-Allow-Credentials", "true");
-    if (req.method === "OPTIONS") {
-      return res.sendStatus(200);
-    }
-    next();
-  },
-  express.static(uploadsDir)
-);
-app.use("/static", express.static(path.join(__dirname, "public")));
 
 // MongoDB Connection
 const MONGODB_URI =
@@ -199,7 +186,7 @@ app.get("/api/liveliness", (req, res) => {
 });
 
 // Import users from CSV
-app.post("/api/import-csv", upload.single("file"), async (req, res) => {
+app.post('/api/import-csv', auth.isAdmin, upload.single('file'), async (req, res) => {
   try {
     // Get panchayatId from the request
     const { panchayatId } = req.body;
@@ -347,7 +334,7 @@ app.post("/api/import-csv", upload.single("file"), async (req, res) => {
 });
 
 // Get registration statistics with optional panchayatId filter
-app.get("/api/stats", async (req, res) => {
+app.get('/api/stats', auth.isAdmin, async (req, res) => {
   try {
     const { panchayatId } = req.query;
     const filter = panchayatId ? { panchayatId } : {};
@@ -392,7 +379,7 @@ app.get("/api/stats", async (req, res) => {
 });
 
 // Direct endpoint for backward compatibility
-app.post("/api/register-face", async (req, res) => {
+app.post('/api/register-face', auth.isAdmin, async (req, res) => {
   try {
     const { voterId, faceDescriptor, faceImage, panchayatId } = req.body;
     console.log("Legacy register-face endpoint called with voterId:", voterId);
@@ -464,65 +451,42 @@ app.post("/api/register-face", async (req, res) => {
 
     console.log("Attempting to save face image...");
     // Save face image if provided
-    let faceImagePath = null;
+    let faceImageId = null;
     if (faceImage) {
       // Remove header from base64 string
       const base64Data = faceImage.replace(/^data:image\/\w+;base64,/, "");
-
-      // Create a faces subdirectory within panchayat directory if it doesn't exist
-      const panchayatDir = path.join(
-        __dirname,
-        "uploads",
-        panchayatId.toString()
-      );
-      const facesDir = path.join(panchayatDir, "faces");
-
-      if (!fs.existsSync(panchayatDir)) {
-        fs.mkdirSync(panchayatDir, { recursive: true });
-      }
-
-      if (!fs.existsSync(facesDir)) {
-        fs.mkdirSync(facesDir, { recursive: true });
-      }
-
-      // Create a safe filename based on voter ID (removing any slashes or problematic characters)
-      const safeVoterId = voterId.replace(/[\/\\:*?"<>|]/g, "_");
+      const buffer = Buffer.from(base64Data, 'base64');
       const filename = `${safeVoterId}_${Date.now()}.jpg`;
 
-      // Use a path format that works with our static file serving
-      faceImagePath = `/uploads/${panchayatId}/faces/${filename}`;
+      // Upload original image
+      const faceImageId = await storageService.uploadImage(buffer, filename, {
+        userId: user._id,
+        voterId,
+        panchayatId,
+        type: 'profile'
+      });
 
-      // Save the image
-      try {
-        fs.writeFileSync(path.join(facesDir, filename), base64Data, "base64");
-        console.log(`Face image saved at: ${faceImagePath}`);
-      } catch (error) {
-        console.error("Error saving face image:", error);
-        throw new Error("Failed to save face image: " + error.message);
-      }
-    }
+      // Create thumbnail
+      const sharp = require('sharp');
+      const thumbBuffer = await sharp(buffer).resize(100, 100).jpeg({ quality: 80 }).toBuffer();
+      const thumbFilename = `${safeVoterId}_thumb_${Date.now()}.jpg`;
+      const thumbImageId = await storageService.uploadImage(thumbBuffer, thumbFilename, {
+        userId: user._id,
+        voterId,
+        panchayatId,
+        type: 'thumbnail',
+        originalImageId: faceImageId
+      });
 
-    // Helper function for face comparison
-    function calculateFaceDistance(descriptor1, descriptor2) {
-      if (
-        !descriptor1 ||
-        !descriptor2 ||
-        descriptor1.length !== descriptor2.length
-      ) {
-        return Infinity;
-      }
-
-      let sum = 0;
-      for (let i = 0; i < descriptor1.length; i++) {
-        sum += Math.pow(descriptor1[i] - descriptor2[i], 2);
-      }
-      return Math.sqrt(sum);
+      user.faceImageId = faceImageId;
+      user.thumbnailImageId = thumbImageId;
+      await user.save();
     }
 
     // Update user
     user.faceDescriptor = faceDescriptor;
-    user.faceImagePath = faceImagePath;
     user.isRegistered = true;
+    if (faceImageId) user.faceImageId = faceImageId;
     user.registrationDate = new Date();
     await user.save();
 
@@ -534,7 +498,8 @@ app.post("/api/register-face", async (req, res) => {
         voterIdNumber: user.voterIdNumber,
         panchayatId: user.panchayatId,
         isRegistered: user.isRegistered,
-        faceImagePath: user.faceImagePath,
+        faceImageId: user.faceImageId,
+        thumbnailImageId: user.thumbnailImageId,
       },
     });
   } catch (error) {
@@ -549,14 +514,22 @@ app.post("/api/register-face", async (req, res) => {
 });
 
 // Routes
-app.use("/api/panchayats", panchayatRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/issues", issueRoutes);
-app.use("/api/citizens", citizenRoutes);
-app.use("/api/auth", authRoutes);
-app.use("/api/officials", officialRoutes);
-app.use("/api/gram-sabha", gramSabhaRoutes);
-app.use("/api/platform-configurations", platformConfigRoutes);
+app.use('/api/panchayats', panchayatRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/issues', issueRoutes);
+app.use('/api/citizens', citizenRoutes);
+
+// Authentication routes
+app.use('/api/auth/admin', adminAuthRoutes);
+app.use('/api/auth/official', officialAuthRoutes);
+app.use('/api/auth/citizen', citizenAuthRoutes);
+
+// Deprecated - will be removed in future versions
+app.use('/api/auth', require('./routes/authRoutes'));
+
+app.use('/api/officials', officialRoutes);
+app.use('/api/gram-sabha', gramSabhaRoutes);
+app.use('/api/platform-configurations', platformConfigRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
@@ -604,6 +577,23 @@ app.listen(PORT, () => {
   console.log(`Swagger docs at ${BACKEND_URL}/api-docs`);
 });
 
+// Helper function for face comparison
+    function calculateFaceDistance(descriptor1, descriptor2) {
+      if (
+        !descriptor1 ||
+        !descriptor2 ||
+        descriptor1.length !== descriptor2.length
+      ) {
+        return Infinity;
+      }
+
+      let sum = 0;
+      for (let i = 0; i < descriptor1.length; i++) {
+        sum += Math.pow(descriptor1[i] - descriptor2[i], 2);
+      }
+      return Math.sqrt(sum);
+    }
+
 // Ensure platform config is initialized at server start
 async function initializePlatformConfig() {
   const config = await PlatformConfiguration.findOne();
@@ -618,3 +608,6 @@ mongoose.connection.once("open", async () => {
   await initializePlatformConfig();
   // ...other startup logic...
 });
+
+// Initialize cron jobs
+initCronJobs();

@@ -19,6 +19,8 @@ import CitizenDashboard from './CitizenDashboard';
 import IssueCreationView from './IssueCreationView';
 import IssueListView from './IssueListView';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import tokenManager from '../utils/tokenManager';
+import { getCitizenProfile } from '../api/profile';
 
 // View states
 const VIEWS = {
@@ -45,47 +47,83 @@ const CitizenPortalContent = () => {
     useEffect(() => {
         const checkStoredSession = async () => {
             setLoading(true);
-            const storedUser = localStorage.getItem('citizenUser');
-
-            if (storedUser) {
-                try {
-                    const parsedUser = JSON.parse(storedUser);
-
-                    // Optional: Validate the stored user data with the backend
-                    // This ensures the session is still valid
+            try {
+                // Check if we have tokens
+                if (tokenManager.hasTokens()) {
                     try {
-                        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/citizens/profile/${parsedUser._id}`);
-                        if (response.ok) {
-                            setUser(parsedUser);
+                        // Get user profile using the token
+                        const response = await getCitizenProfile();
+
+                        if (response.success && response.data && response.data.user) {
+                            setUser(response.data.user);
+                            // Update stored user data with fresh data
+                            localStorage.setItem('citizenUser', JSON.stringify(response.data.user));
                             setCurrentView(VIEWS.DASHBOARD);
                         } else {
-                            // If the user session is invalid, clear it
+                            // If profile fetch fails, try the stored user as fallback
+                            const storedUser = localStorage.getItem('citizenUser');
+                            if (storedUser) {
+                                setUser(JSON.parse(storedUser));
+                                setCurrentView(VIEWS.DASHBOARD);
+                            } else {
+                                // Clear everything if no stored user either
+                                tokenManager.clearTokens();
+                                setCurrentView(VIEWS.LOGIN);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error fetching profile:', error);
+                        // If token is invalid, auth interceptor should handle logout
+                        // For other errors, fall back to stored user data if available
+                        const storedUser = localStorage.getItem('citizenUser');
+                        if (storedUser) {
+                            setUser(JSON.parse(storedUser));
+                            setCurrentView(VIEWS.DASHBOARD);
+                        } else {
+                            tokenManager.clearTokens();
+                            setCurrentView(VIEWS.LOGIN);
+                        }
+                    }
+                } else {
+                    // No tokens - check for stored user as fallback
+                    const storedUser = localStorage.getItem('citizenUser');
+                    if (storedUser) {
+                        try {
+                            const parsedUser = JSON.parse(storedUser);
+                            setUser(parsedUser);
+                            setCurrentView(VIEWS.DASHBOARD);
+                        } catch (error) {
+                            console.error('Error parsing stored user:', error);
                             localStorage.removeItem('citizenUser');
                             setCurrentView(VIEWS.LOGIN);
                         }
-                    } catch (error) {
-                        console.warn('Could not validate user session:', error);
-                        // Fall back to stored user data if server validation fails
-                        setUser(parsedUser);
-                        setCurrentView(VIEWS.DASHBOARD);
+                    } else {
+                        setCurrentView(VIEWS.LOGIN);
                     }
-                } catch (error) {
-                    console.error('Error parsing stored user:', error);
-                    // Clear invalid storage
-                    localStorage.removeItem('citizenUser');
                 }
+            } catch (error) {
+                console.error('Session check error:', error);
+                setCurrentView(VIEWS.LOGIN);
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
 
         checkStoredSession();
     }, []);
 
     // Handle user login
-    const handleLogin = (userData) => {
-        console.log({ userData });
+    const handleLogin = (userData, token, refreshToken) => {
+        console.log({ userData, token, refreshToken });
+
+        // Store tokens using token manager if provided
+        if (token && refreshToken) {
+            tokenManager.setTokens(token, refreshToken);
+        }
+
         setUser(userData);
-        // Store user data in local storage for session persistence
+
+        // Store minimal user data for UI needs - storing the full user object including ID
         localStorage.setItem('citizenUser', JSON.stringify(userData));
         setCurrentView(VIEWS.DASHBOARD);
         showNotification('Login successful', 'success');

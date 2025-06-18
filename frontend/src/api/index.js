@@ -4,6 +4,25 @@
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 const BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
 
+// Helper to get admin token from localStorage
+const getAdminToken = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user'));
+    if (user && user.userType === 'ADMIN') {
+      return localStorage.getItem('token');
+    }
+  } catch (e) {}
+  return null;
+};
+
+// Helper to get any available token (admin, official, or citizen)
+const getAnyToken = () => {
+  try {
+    return localStorage.getItem('token');
+  } catch (e) {}
+  return null;
+};
+
 /**
  * Fetches all panchayats
  * @returns {Promise<Array>} List of panchayats
@@ -234,7 +253,11 @@ export const fetchStats = async (panchayatId = null) => {
       ? `${API_URL}/stats?panchayatId=${encodeURIComponent(panchayatId)}`
       : `${API_URL}/stats`;
 
-    const response = await fetch(url);
+    const adminToken = getAdminToken();
+
+    const response = await fetch(url, {
+      headers: adminToken ? { 'Authorization': `Bearer ${adminToken}` } : undefined
+    });
     if (!response.ok) {
       throw new Error('Failed to fetch statistics');
     }
@@ -286,9 +309,12 @@ export const importCsv = async (formData, panchayatId) => {
     // Append panchayatId to formData
     formData.append('panchayatId', panchayatId);
 
+    const adminToken = getAdminToken();
+
     const response = await fetch(`${API_URL}/import-csv`, {
       method: 'POST',
-      body: formData
+      body: formData,
+      headers: adminToken ? { 'Authorization': `Bearer ${adminToken}` } : undefined
     });
 
     const data = await response.json();
@@ -362,10 +388,12 @@ export const getFaceImageUrl = (imagePath) => {
 export const registerFace = async (voterId, faceDescriptor, faceImage, panchayatId) => {
   try {
     // Use the users/register-face endpoint (the new correct one)
+    const adminToken = getAdminToken();
     const response = await fetch(`${API_URL}/users/register-face`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {})
       },
       body: JSON.stringify({
         voterId,
@@ -450,10 +478,12 @@ export const getCitizenProfile = async (userId) => {
  */
 export const createIssue = async (issueData) => {
   try {
+    const token = getAnyToken();
     const response = await fetch(`${API_URL}/issues`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
       },
       body: JSON.stringify(issueData)
     });
@@ -481,10 +511,12 @@ export const createIssue = async (issueData) => {
  */
 export const uploadAttachment = async (issueId, attachmentData, filename, mimeType) => {
   try {
+    const token = getAnyToken();
     const response = await fetch(`${API_URL}/issues/upload-attachment`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
       },
       body: JSON.stringify({
         issueId,
@@ -514,7 +546,10 @@ export const uploadAttachment = async (issueId, attachmentData, filename, mimeTy
  */
 export const fetchPanchayatIssues = async (panchayatId) => {
   try {
-    const response = await fetch(`${API_URL}/issues/panchayat/${panchayatId}`);
+    const token = getAnyToken();
+    const response = await fetch(`${API_URL}/issues/panchayat/${panchayatId}`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+    });
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -535,7 +570,10 @@ export const fetchPanchayatIssues = async (panchayatId) => {
  */
 export const fetchUserIssues = async (userId) => {
   try {
-    const response = await fetch(`${API_URL}/issues/user/${userId}`);
+    const token = getAnyToken();
+    const response = await fetch(`${API_URL}/issues/user/${userId}`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+    });
 
     if (!response.ok) {
       const errorData = await response.json();
