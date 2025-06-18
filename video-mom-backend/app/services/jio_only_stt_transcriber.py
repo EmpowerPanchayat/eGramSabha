@@ -17,7 +17,7 @@ class JioTranslateSTTTranscriber:
     def __init__(self):
         self.api_key = settings.JIO_API_KEY
         self.endpoint = "https://sit.translate.jio/translator/stt"
-        self.chunk_length_ms = 30 * 1000
+        self.chunk_length_ms = 60 * 1000
         self.overlap_ms = 3 * 1000
         logger.info(f"Jio STT initialized: API key loaded -> {bool(self.api_key)}")
     
