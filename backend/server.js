@@ -18,6 +18,8 @@ const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
 const auth = require("./middleware/auth");
 
+const { startCronJobs } = require("./utils/cronJobs");
+
 // Load environment variables
 dotenv.config();
 
@@ -52,8 +54,6 @@ const Panchayat = require("./models/Panchayat");
 const Issue = require("./models/Issue");
 const Ward = require("./models/Ward");
 const { createDefaultRoles } = require("./models/Role");
-
-const { initCronJobs } = require("./utils/cronJobs");
 
 // Swagger documentation setup
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
@@ -610,4 +610,13 @@ mongoose.connection.once("open", async () => {
 });
 
 // Initialize cron jobs
-initCronJobs();
+try {
+    console.log(`[Server] Initializing cron jobs at ${new Date().toISOString()}`);
+    startCronJobs();
+    console.log(`[Server] Cron jobs initialized successfully`);
+} catch (error) {
+    console.error(`[Server] Error initializing cron jobs:`, {
+        error: error.message,
+        stack: error.stack
+    });
+}

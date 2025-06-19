@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Migrated user face images storage from local `/uploads` folder to MongoDB GridFS for improved scalability and reliability with thumbnail functionality. ([#17](https://github.com/EmpowerPanchayat/eGramSabha/issues/17))
 - add issues with filters, pagination, sorting, and search. ([#45](https://github.com/EmpowerPanchayat/eGramSabha/issues/45))
 - Implement End Meeting button and Cron Job for status change.([#71](https://github.com/EmpowerPanchayat/eGramSabha/pull/71))
+- Added transcription for issue audio and meeting video.([#68](https://github.com/EmpowerPanchayat/eGramSabha/issues/68))
+- Added issue summary generation and updation from issues using LLM.([#67](https://github.com/EmpowerPanchayat/eGramSabha/issues/67))
+- Added MoM generation using LLM.([#65](https://github.com/EmpowerPanchayat/eGramSabha/issues/65))
+- Added Issue Transcription Implementation.([#65](https://github.com/EmpowerPanchayat/eGramSabha/issues/65))
 
 ### Removed
 
