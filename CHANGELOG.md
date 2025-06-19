@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Added transcription for issue audio and meeting video.([#68](https://github.com/EmpowerPanchayat/eGramSabha/issues/68))
 - Added issue summary generation and updation from issues using LLM.([#67](https://github.com/EmpowerPanchayat/eGramSabha/issues/67))
 - Added MoM generation using LLM.([#65](https://github.com/EmpowerPanchayat/eGramSabha/issues/65))
+- Added Issue Transcription Implementation.([#65](https://github.com/EmpowerPanchayat/eGramSabha/issues/65))
 
 ### Removed
 
