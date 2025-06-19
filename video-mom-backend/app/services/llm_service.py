@@ -30,7 +30,7 @@ class LLMService:
             "Content-Type": "application/json"
         }
     
-    def _make_chat_request(self, messages: list, max_tokens: int = 25000) -> Optional[Dict]:
+    def _make_chat_request(self, messages: list, max_tokens: int = 8000) -> Optional[Dict]:
         """Make request to Hugging Face chat completions API with proper token validation"""
         if not self.api_key:
             logger.error("HF_TOKEN not configured - cannot make API requests")
@@ -487,7 +487,7 @@ class LLMService:
         
         try:
             # Use conservative token limit to avoid truncation
-            result = self._make_chat_request(messages, max_tokens=2000)
+            result = self._make_chat_request(messages, max_tokens=8000)
                    
             if result and "choices" in result and len(result["choices"]) > 0:
                 choice = result["choices"][0]
@@ -529,7 +529,7 @@ class LLMService:
                 "error": f"Processing exception: {str(e)}"
             }
 
-    def _make_chat_request(self, messages: list, max_tokens: int = 25000) -> Optional[Dict]:
+    def _make_chat_request(self, messages: list, max_tokens: int = 8000) -> Optional[Dict]:
         """Make request to Hugging Face chat completions API with proper token validation"""
         if not self.api_key:
             logger.error("HF_TOKEN not configured - cannot make API requests")
@@ -734,7 +734,7 @@ class LLMService:
         ]
 
         try:
-            result = self._make_chat_request(messages, max_tokens=2500)
+            result = self._make_chat_request(messages, max_tokens=8000)
             
             # DEBUG: Save LLM result to file for synthesis step too
             self._save_llm_debug_result(result, combined_summary, primary_language, "mom_synthesis")
@@ -922,7 +922,7 @@ Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda 
         ]
 
         try:
-            result = self._make_chat_request(messages, max_tokens=3000)
+            result = self._make_chat_request(messages, max_tokens=8000)
             
             if result and "choices" in result and len(result["choices"]) > 0:
                 content = result["choices"][0]["message"]["content"].strip()
@@ -1042,7 +1042,7 @@ Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda 
         ]
 
         try:
-            result = self._make_chat_request(messages, max_tokens=2000)
+            result = self._make_chat_request(messages, max_tokens=8000)
             
             if result and "choices" in result and len(result["choices"]) > 0:
                 content = result["choices"][0]["message"]["content"].strip()
