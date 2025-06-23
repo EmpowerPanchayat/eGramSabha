@@ -9,6 +9,7 @@ import { useLanguage } from '../utils/LanguageContext';
 const STATUS_OPTIONS = [
     "statusReported",
     "statusAgendaCreated",
+    "statusDiscussedInGramSabha",
     "statusResolved",
     "statusTransferred",
     "statusNoActionNeeded"

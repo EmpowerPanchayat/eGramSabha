@@ -55,6 +55,7 @@ import { getLabelKeyFromValue } from '../utils/categoryUtils';
 import { fetchAllIssues, getTranscriptionStatus, retryTranscription } from '../api/issues';
 import tokenManager from '../utils/tokenManager';
 import formatDate from '../utils/formatDate';
+import STATUS_KEY_VALUE_MAP from "../constants/issueStatus";
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -90,7 +91,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                 page,
                 limit: rowsPerPage,
                 searchText: debouncedSearchTerm,
-                status,
+                status: STATUS_KEY_VALUE_MAP[status],
                 category,
                 subcategory
             };
