@@ -16,7 +16,7 @@ router.post('/', anyAuthenticated, async (req, res) => {
             category,
             subcategory,
             priority,
-            createdFor,
+            createdForId,
             toBeResolvedBefore,
             remark,
             panchayatId,
@@ -25,7 +25,7 @@ router.post('/', anyAuthenticated, async (req, res) => {
         } = req.body;
         
         // Validate required fields
-        if (!category || !panchayatId || !subcategory) {
+        if (!category || !panchayatId || !subcategory || !createdForId) {
             return res.status(400).json({
                 success: false,
                 message: 'Missing required fields'
@@ -52,14 +52,20 @@ router.post('/', anyAuthenticated, async (req, res) => {
                 message: 'Creator not found'
             });
         }
-        
+        const createdFor = await User.findById(createdForId);
+        if (!createdFor) {
+            return res.status(404).json({
+                success: false,
+                message: 'CreatedFor not found'
+            });
+        }
         // Create issue instance
         const issue = new Issue({
             text,
             category,
             subcategory,
             priority: priority || 'NORMAL',
-            createdFor,
+            createdForId,
             status: 'REPORTED',
             toBeResolvedBefore: toBeResolvedBefore ? new Date(toBeResolvedBefore) : null,
             remark,
@@ -104,6 +110,7 @@ router.get('/', anyAuthenticated, async (req, res) => {
             createdOn,
             creator,
             createdFor,
+            createdForId,
             searchText,
             sort = 'desc',
             sortBy = 'createdAt'
@@ -148,15 +155,11 @@ router.get('/', anyAuthenticated, async (req, res) => {
         if (panchayatId) query.panchayatId = panchayatId;
         if (subcategory) query.subcategory = subcategory;
         if (status) query.status = status;
+        if (createdForId) query.createdForId = createdForId;
 
         // Partial match on category (case-insensitive)
         if (category?.trim()) {
             query.category = { $regex: new RegExp(category.trim(), 'i') };
-        }
-
-        // Partial match on createdFor (exact field must exist on schema)
-        if (createdFor?.trim()) {
-            query.createdFor = { $regex: new RegExp(createdFor.trim(), 'i') };
         }
 
         // Date filter
@@ -169,30 +172,14 @@ router.get('/', anyAuthenticated, async (req, res) => {
             }
         }
 
-        // Filter by creator name (fuzzy)
-        if (creator?.trim()) {
-            const users = await User.find({
-                name: { $regex: new RegExp(creator.trim(), 'i') }
-            }).select('_id');
-
-            const creatorIds = users.map(u => u._id);
-            if (creatorIds.length === 0) {
-                res.set('x-total-count', '0');
-                return res.status(200).json([]);
-            }
-            query.creatorId = { $in: creatorIds };
-        }
-
-        // Search text (optional) on text, category, createdFor etc.
+        // Search text (optional) on text, category etc.
         if (searchText?.trim()) {
             const regex = new RegExp(searchText.trim(), 'i');
             query.$or = [
                 { text: { $regex: regex } },
-                { category: { $regex: regex } },
-                { createdFor: { $regex: regex } },
+                { category: { $regex: regex } }
             ];
         }
-
         // Execute query
         const [issues, total] = await Promise.all([
             Issue.find(query)
@@ -200,13 +187,17 @@ router.get('/', anyAuthenticated, async (req, res) => {
                 .skip(skip)
                 .limit(limit)
                 .select('-attachments.attachment')
-                .populate({ path: 'creatorId', select: 'name' }),
+                .populate([
+                    { path: 'creatorId', select: 'name' },
+                    { path: 'createdForId', select: 'name' }
+                ]),
             Issue.countDocuments(query)
         ]);
 
         const formatted = issues.map(issue => ({
             ...issue.toObject(),
-            creator: { name: issue.creatorId?.name || 'Unknown' }
+            creator: { name: issue.creatorId?.name || 'Unknown' },
+            createdFor: { name: issue.createdForId?.name || 'Unknown' }
         }));
 
         res.set('x-total-count', total.toString());
@@ -239,16 +230,19 @@ router.get('/panchayat/:panchayatId', anyAuthenticated, async (req, res) => {
         const issues = await Issue.find({ panchayatId })
             .sort({ createdAt: -1 })
             .select('-attachments.attachment') // Exclude attachment data to reduce payload size
-            .populate({
-                path: 'creatorId',
-                select: 'name'
-            });
+            .populate([
+                { path: 'creatorId', select: 'name' },
+                { path: 'createdForId', select: 'name' }
+            ]);
 
         // Transform the response to include creator name
         const transformedIssues = issues.map(issue => ({
             ...issue.toObject(),
             creator: {
                 name: issue.creatorId?.name || 'Unknown'
+            },
+            createdFor: {
+                name: issue.createdForId?.name || 'Unknown'
             }
         }));
 
@@ -281,19 +275,22 @@ router.get('/user/:userId', anyAuthenticated, async (req, res) => {
             });
         }
 
-        const issues = await Issue.find({ creatorId: userId })
+        const issues = await Issue.find({ creatorId: userId },{createdForId: createdForId})
             .sort({ createdAt: -1 })
             .select('-attachments.attachment') // Exclude attachment data to reduce payload size
-            .populate({
-                path: 'creatorId',
-                select: 'name'
-            });
+            .populate([
+                { path: 'creatorId', select: 'name' },
+                { path: 'createdForId', select: 'name' }
+            ]);
 
         // Transform the response to include creator name
         const transformedIssues = issues.map(issue => ({
             ...issue.toObject(),
             creator: {
                 name: issue.creatorId?.name || 'Unknown'
+            },
+            createdFor: {
+                name: issue.createdForId?.name || 'Unknown'
             }
         }));
 
@@ -317,10 +314,10 @@ router.get('/:issueId', anyAuthenticated, async (req, res) => {
         const { issueId } = req.params;
 
         const issue = await Issue.findById(issueId)
-            .populate({
-                path: 'creatorId',
-                select: 'name'
-            });
+            .populate([
+                { path: 'creatorId', select: 'name' },
+                { path: 'createdForId', select: 'name' }
+            ]);
 
         if (!issue) {
             return res.status(404).json({
@@ -334,6 +331,9 @@ router.get('/:issueId', anyAuthenticated, async (req, res) => {
             ...issue.toObject(),
             creator: {
                 name: issue.creatorId?.name || 'Unknown'
+            },
+            createdFor: {
+                name: issue.createdForId?.name || 'Unknown'
             }
         };
 

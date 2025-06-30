@@ -103,9 +103,9 @@ const translations = {
     stopRecording: "Stop Recording",
     audioRecorded: "Audio recorded successfully",
     issueReported: "Issue/Suggestion reported successfully",
-    createdFor: "Created for (optional)",
+    createdFor: "Created for",
     createdForDesc:
-      "Who is this issue/suggestion for? (Leave blank if for yourself)",
+      "Who is this issue/suggestion for?",
     attachments: "Attachments",
     fileAttachments: "File Attachments",
     remark: "Additional Remarks",
@@ -506,9 +506,9 @@ const translations = {
     stopRecording: "रिकॉर्डिंग बंद करें",
     audioRecorded: "ऑडियो सफलतापूर्वक रिकॉर्ड किया गया",
     issueReported: "मुद्दा/सुझाव सफलतापूर्वक दर्ज किया गया",
-    createdFor: "किसके लिए (वैकल्पिक)",
+    createdFor: "किसके लिए",
     createdForDesc:
-      "यह मुद्दा/सुझाव किसके लिए है? (अगर खुद के लिए है तो खाली छोड़ें)",
+      "यह मुद्दा/सुझाव किसके लिए है?",
     attachments: "अटैचमेंट",
     fileAttachments: "फ़ाइल अटैचमेंट",
     remark: "अतिरिक्त टिप्पणी",

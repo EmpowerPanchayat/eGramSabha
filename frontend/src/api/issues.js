@@ -65,6 +65,7 @@ export const fetchAllIssues = async (params = {}) => {
         createdOn,
         creator,
         createdFor,
+        createdForId,
         searchText,
     } = params;
 
@@ -82,6 +83,7 @@ export const fetchAllIssues = async (params = {}) => {
         createdOn,
         creator,
         createdFor,
+        createdForId,
         searchText,
     };
 
