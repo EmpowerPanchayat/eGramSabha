@@ -30,7 +30,10 @@ import {
     InputAdornment,
     Stack,
     useTheme,
-    useMediaQuery
+    useMediaQuery,
+    FormControl,
+    Select,
+    MenuItem
 } from '@mui/material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -80,6 +83,46 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
     const [transcriptionData, setTranscriptionData] = useState(null);
     const [transcriptionLoading, setTranscriptionLoading] = useState(false);
+    const [creatorId, setCreatedById] = useState('');
+    const [createdForId, setCreatedForId] = useState('');
+    const [users, setUsers] = useState([]);
+    const [loadingUsers, setLoadingUsers] = useState(false);
+
+    // Helper to get Authorization header for issues endpoints
+    const getAuthHeaders = () => {
+        const token = tokenManager.getToken();
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
+    };
+
+    useEffect(() => {
+        const fetchUsers = async () => {
+            if (user.role && ['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY'].includes(user.role)) {
+                setLoadingUsers(true);
+                try {
+                  // Add Authorization header if token exists
+                  const headers = {
+                    "Content-Type": "application/json",
+                    ...getAuthHeaders(),
+                  };
+
+                  const response = await fetch(
+                    `${API_URL}/users/panchayat/${user.panchayatId}`,
+                    { method: 'GET', headers }
+                  );
+                  if (response.ok) {
+                    const data = await response.json();
+                    setUsers(data.users || []);
+                  }
+                } catch (error) {
+                    console.error('Error fetching users:', error);
+                } finally {
+                    setLoadingUsers(false);
+                }
+            }
+        };
+
+        fetchUsers();
+    }, [user.role, user.panchayatId]);
 
     const fetchIssues = useCallback(async () => {
         setLoading(true);
@@ -93,8 +136,20 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                 searchText: debouncedSearchTerm,
                 status: STATUS_KEY_VALUE_MAP[status],
                 category,
-                subcategory
+                subcategory,
+                creatorId,
+                createdForId
             };
+
+            if (creatorId) {
+                console.log({creatorId});
+                params.userId = creatorId;
+            }
+
+            if (createdForId) {
+                console.log({createdForId});
+                params.createdForId = createdForId;
+            }
 
             if (tabValue === 0) {
                 const userId = user.linkedCitizenId || user.id;
@@ -123,11 +178,11 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [debouncedSearchTerm, page, rowsPerPage, status, category, subcategory, tabValue, user.linkedCitizenId, user.id, user.panchayatId]);
+    }, [debouncedSearchTerm, page, rowsPerPage, status, category, subcategory, creatorId, createdForId, tabValue, user.linkedCitizenId, user.id, user.panchayatId]);
 
     useEffect(() => {
         fetchIssues();
-    }, [category, page, rowsPerPage, status, subcategory, tabValue, debouncedSearchTerm, fetchIssues]);
+    }, [category, page, rowsPerPage, status, subcategory, creatorId, createdForId, tabValue, debouncedSearchTerm, fetchIssues]);
 
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -323,6 +378,8 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
         setCategory("");
         setSubcategory("");
         setStatus("");
+        setCreatedById("");
+        setCreatedForId("");
     }
 
     return (
@@ -419,6 +476,60 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
 
                             <IssueStatusDropdown status={status} setStatus={setStatus} />
 
+                            <FormControl size="small">
+                                <Select
+                                    value={creatorId}
+                                    onChange={(e) => {
+                                        setCreatedById(e.target.value);
+                                    }}
+                                    displayEmpty
+                                    fullWidth
+                                    >
+                                    <MenuItem value="" disabled>{strings.creator}</MenuItem>
+                                    {loadingUsers ? (
+                                        <MenuItem disabled>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                                                <CircularProgress size={20} sx={{ mr: 1 }} />
+                                                <Typography>Loading users...</Typography>
+                                            </Box>
+                                        </MenuItem>
+                                    ) : (
+                                        users.map((user) => (
+                                            <MenuItem key={user._id} value={user._id}>
+                                                {user.name} (Voter ID: {user.voterIdNumber})
+                                            </MenuItem>
+                                        ))
+                                    )}
+                                </Select>
+                            </FormControl>
+
+                            <FormControl size="small">
+                                <Select
+                                    value={createdForId}
+                                    onChange={(e) => {
+                                        setCreatedForId(e.target.value);
+                                    }}
+                                    displayEmpty
+                                    fullWidth
+                                    >
+                                    <MenuItem value="" disabled>{strings.createdFor}</MenuItem>
+                                    {loadingUsers ? (
+                                        <MenuItem disabled>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                                                <CircularProgress size={20} sx={{ mr: 1 }} />
+                                                <Typography>Loading users...</Typography>
+                                            </Box>
+                                        </MenuItem>
+                                    ) : (
+                                        users.map((user) => (
+                                            <MenuItem key={user._id} value={user._id}>
+                                                {user.name} (Voter ID: {user.voterIdNumber})
+                                            </MenuItem>
+                                        ))
+                                    )}
+                                </Select>
+                            </FormControl>
+
                             <Button
                                 variant="outlined"
                                 color="primary"
@@ -475,6 +586,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                     <TableCell sx={{ fontWeight: 'bold' }}>{strings.issueStatus}</TableCell>
                                                     <TableCell sx={{ fontWeight: 'bold' }}>{strings.createdOn}</TableCell>
                                                     <TableCell sx={{ fontWeight: 'bold' }}>{strings.creator}</TableCell>
+                                                    <TableCell sx={{ fontWeight: 'bold' }}>{strings.createdFor}</TableCell>
                                                     <TableCell sx={{ fontWeight: 'bold', width: '100px' }}>{strings.recording}</TableCell>
                                                     <TableCell sx={{ fontWeight: 'bold', width: '80px' }} align="right">{strings.actions}</TableCell>
                                                 </TableRow>
@@ -511,6 +623,14 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                                 <PersonIcon sx={{ mr: 1, fontSize: '1rem' }} />
                                                                 <Typography variant="body2">
                                                                     {issue.creator?.name || 'Unknown'}
+                                                                </Typography>
+                                                            </Box>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                                <PersonIcon sx={{ mr: 1, fontSize: '1rem' }} />
+                                                                <Typography variant="body2">
+                                                                    {issue.createdFor?.name || 'Unknown'}
                                                                 </Typography>
                                                             </Box>
                                                         </TableCell>
@@ -773,7 +893,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                         {strings.additionalInformation}
                                     </Typography>
                                     <Grid container spacing={3}>
-                                        {selectedIssue.createdFor && (
+                                        {selectedIssue.createdForId && (
                                             <Grid item xs={12} sm={6}>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                                                     <PersonIcon sx={{ mr: 1, color: 'primary.main' }} />
@@ -782,7 +902,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                     </Typography>
                                                 </Box>
                                                 <Typography variant="body1">
-                                                    {selectedIssue.createdFor}
+                                                    {selectedIssue.createdForId?.name}
                                                 </Typography>
                                             </Grid>
                                         )}
