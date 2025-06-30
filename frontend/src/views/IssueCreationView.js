@@ -1,4 +1,3 @@
-// File: frontend/src/views/IssueCreationView.js
 import React, { useState, useEffect } from 'react';
 import {
     Box,
@@ -45,7 +44,6 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
         category: '',
         subcategory: '',
         priority: 'NORMAL',
-        createdFor: 'Self',
         toBeResolvedBefore: '',
         remark: '',
     });
@@ -171,6 +169,7 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                     ...formattedData,
                     panchayatId: user.panchayatId,
                     creatorId: user.linkedUser?.id || user._id,
+                    createdForId: formattedData.createdFor,
                     status: 'REPORTED'
                 })
             });
@@ -287,7 +286,6 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                 category: '',
                 subcategory: '',
                 priority: 'NORMAL',
-                createdFor: 'Self',
                 toBeResolvedBefore: '',
                 remark: '',
             });
@@ -417,15 +415,16 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                             {user.role && ['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY'].includes(user.role) && (
                                 <Box>
                                     <Typography variant="subtitle1" gutterBottom fontWeight="500">
-                                        {strings.createdFor}
+                                        {strings.createdFor}<span style={{ color: 'red' }}>*</span>
                                     </Typography>
                                     <FormControl fullWidth>
                                         <Select
                                             name="createdFor"
-                                            value={issueData.createdFor}
+                                            value={issueData.createdForId?.name}
                                             onChange={handleInputChange}
+                                            displayEmpty
                                         >
-                                            <MenuItem value="Self">Self</MenuItem>
+                                            <MenuItem value="" disabled></MenuItem>
                                             {loadingUsers ? (
                                                 <MenuItem disabled>
                                                     <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>

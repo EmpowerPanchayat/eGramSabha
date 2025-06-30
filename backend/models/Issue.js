@@ -82,9 +82,10 @@ const issueSchema = new mongoose.Schema({
         enum: ['URGENT', 'NORMAL'],
         default: 'NORMAL'
     },
-    createdFor: {
-        type: String,
-        maxlength: 255
+    createdForId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
     },
     status: {
         type: String,

@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Added issue summary generation and updation from issues using LLM.([#67](https://github.com/EmpowerPanchayat/eGramSabha/issues/67))
 - Added MoM generation using LLM.([#65](https://github.com/EmpowerPanchayat/eGramSabha/issues/65))
 - Added Issue Transcription Implementation.([#65](https://github.com/EmpowerPanchayat/eGramSabha/issues/65))
+- Filters for createdFor and createdBy on Issue Creation Page.([#85](https://github.com/EmpowerPanchayat/eGramSabha/issues/85))
 
 ### Removed
 
@@ -36,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Issue Life Cycle and it's translations. ([#22](https://github.com/EmpowerPanchayat/eGramSabha/issues/22))
+- createdFor field with createdForId and update related logic in IssueCreationView and IssueListView.([#85](https://github.com/EmpowerPanchayat/eGramSabha/issues/85))
 
 ## [0.2.0] - 2025-05-27
 
