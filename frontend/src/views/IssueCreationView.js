@@ -1,4 +1,3 @@
-// File: frontend/src/views/IssueCreationView.js
 import React, { useState, useEffect } from 'react';
 import {
     Box,
@@ -45,7 +44,6 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
         category: '',
         subcategory: '',
         priority: 'NORMAL',
-        createdFor: 'Self',
         toBeResolvedBefore: '',
         remark: '',
     });
@@ -171,6 +169,7 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                     ...formattedData,
                     panchayatId: user.panchayatId,
                     creatorId: user.linkedUser?.id || user._id,
+                    createdForId: formattedData.createdFor,
                     status: 'REPORTED'
                 })
             });
@@ -185,11 +184,18 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
 
             // Process audio attachment if exists
             if (audioBlob) {
+                console.log(`[IssueCreationView] Processing audio attachment for issue: ${issueId}`);
                 const reader = new FileReader();
                 reader.readAsDataURL(audioBlob);
                 reader.onloadend = async () => {
                     try {
-                        await fetch(`${API_URL}/issues/upload-attachment`, {
+                        console.log(`[IssueCreationView] Uploading audio attachment:`, {
+                            issueId,
+                            audioSize: audioBlob.size,
+                            mimeType: audioBlob.type
+                        });
+                        
+                        const uploadResponse = await fetch(`${API_URL}/issues/upload-attachment`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -202,8 +208,20 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                                 mimeType: 'audio/wav'
                             })
                         });
+                        
+                        const uploadData = await uploadResponse.json();
+                        console.log(`[IssueCreationView] Audio attachment upload response:`, {
+                            issueId,
+                            success: uploadData.success,
+                            attachmentId: uploadData.attachmentId
+                        });
+                        
                     } catch (error) {
-                        console.error('Error uploading audio:', error);
+                        console.error(`[IssueCreationView] Error uploading audio attachment:`, {
+                            issueId,
+                            error: error.message,
+                            stack: error.stack
+                        });
                     }
                 };
             }
@@ -211,7 +229,14 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
             // Process file attachments
             for (const file of attachments) {
                 try {
-                    await fetch(`${API_URL}/issues/upload-attachment`, {
+                    console.log(`[IssueCreationView] Uploading file attachment:`, {
+                        issueId,
+                        filename: file.name,
+                        fileSize: file.size,
+                        mimeType: file.type
+                    });
+                    
+                    const uploadResponse = await fetch(`${API_URL}/issues/upload-attachment`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -224,8 +249,22 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                             mimeType: file.type
                         })
                     });
+                    
+                    const uploadData = await uploadResponse.json();
+                    console.log(`[IssueCreationView] File attachment upload response:`, {
+                        issueId,
+                        filename: file.name,
+                        success: uploadData.success,
+                        attachmentId: uploadData.attachmentId
+                    });
+                    
                 } catch (error) {
-                    console.error('Error uploading attachment:', error);
+                    console.error(`[IssueCreationView] Error uploading file attachment:`, {
+                        issueId,
+                        filename: file.name,
+                        error: error.message,
+                        stack: error.stack
+                    });
                 }
             }
 
@@ -247,7 +286,6 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                 category: '',
                 subcategory: '',
                 priority: 'NORMAL',
-                createdFor: 'Self',
                 toBeResolvedBefore: '',
                 remark: '',
             });
@@ -377,15 +415,16 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                             {user.role && ['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY'].includes(user.role) && (
                                 <Box>
                                     <Typography variant="subtitle1" gutterBottom fontWeight="500">
-                                        {strings.createdFor}
+                                        {strings.createdFor}<span style={{ color: 'red' }}>*</span>
                                     </Typography>
                                     <FormControl fullWidth>
                                         <Select
                                             name="createdFor"
-                                            value={issueData.createdFor}
+                                            value={issueData.createdForId?.name}
                                             onChange={handleInputChange}
+                                            displayEmpty
                                         >
-                                            <MenuItem value="Self">Self</MenuItem>
+                                            <MenuItem value="" disabled></MenuItem>
                                             {loadingUsers ? (
                                                 <MenuItem disabled>
                                                     <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>

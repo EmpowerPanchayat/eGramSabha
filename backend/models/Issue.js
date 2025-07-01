@@ -82,9 +82,10 @@ const issueSchema = new mongoose.Schema({
         enum: ['URGENT', 'NORMAL'],
         default: 'NORMAL'
     },
-    createdFor: {
-        type: String,
-        maxlength: 255
+    createdForId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
     },
     status: {
         type: String,
@@ -114,6 +115,69 @@ const issueSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
+    },
+    transcription: {
+        requestId: {
+            type: String,
+            default: null
+        },
+        status: {
+            type: String,
+            enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'],
+            default: null
+        },
+        text: {
+            type: String,
+            default: null
+        },
+        originalTranscription: {
+            type: String,
+            default: null
+        },
+        enhancedEnglishTranscription: {
+            type: String,
+            default: null
+        },
+        enhancedHindiTranscription: {
+            type: String,
+            default: null
+        },
+        language: {
+            type: String,
+            default: 'Hindi'
+        },
+        processingMode: {
+            type: String,
+            default: null
+        },
+        transcriptionProvider: {
+            type: String,
+            default: null
+        },
+        providerInfo: {
+            type: Object,
+            default: null
+        },
+        llmEnhancementStatus: {
+            type: Object,
+            default: null
+        },
+        requestedAt: {
+            type: Date,
+            default: null
+        },
+        completedAt: {
+            type: Date,
+            default: null
+        },
+        retryCount: {
+            type: Number,
+            default: 0
+        },
+        lastError: {
+            type: String,
+            default: null
+        }
     },
     createdAt: {
         type: Date,

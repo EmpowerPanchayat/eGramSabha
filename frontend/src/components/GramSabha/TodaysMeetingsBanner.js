@@ -1258,7 +1258,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                   variant="determinate"
                   value={
                     attendanceStats.quorum > 0
-                      ? (attendanceStats.present / attendanceStats.quorum) * 100
+                      ? Math.min((attendanceStats.present / attendanceStats.quorum) * 100, 100)
                       : 0
                   }
                   sx={{ height: 8, borderRadius: 4, mb: 1 }}
@@ -1270,8 +1270,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                   alignItems="center"
                 >
                   <Typography variant="caption" color="text.secondary">
-                    {attendanceStats.present} / {attendanceStats.quorum}{" "}
-                    {strings.attendeesNeeded}
+                    {attendanceStats.present} {strings.attendeesPresent} ({strings.quorumIs} {attendanceStats.quorum})
                   </Typography>
                   <Chip
                     label={
