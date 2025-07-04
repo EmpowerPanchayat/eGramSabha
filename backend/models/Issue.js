@@ -142,6 +142,10 @@ const issueSchema = new mongoose.Schema({
             type: String,
             default: null
         },
+        description: {
+            type: Object,
+            default: {}
+        },
         language: {
             type: String,
             default: 'Hindi'
@@ -178,6 +182,10 @@ const issueSchema = new mongoose.Schema({
             type: String,
             default: null
         }
+    },
+    isSummarized: {
+        type: Boolean,
+        default: false
     },
     createdAt: {
         type: Date,

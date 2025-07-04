@@ -8,6 +8,8 @@ const RSVP = require("../models/rsvp");
 const auth = require("../middleware/auth");
 const { isPanchayatPresident } = require("../middleware/roleCheck");
 const Panchayat = require("../models/Panchayat");
+const IssueSummary = require("../models/IssueSummary");
+const Issue = require("../models/Issue");
 const multer = require("multer");
 const mongoose = require("mongoose");
 const User = require("../models/User");
@@ -42,6 +44,87 @@ function calculateFaceDistance(descriptor1, descriptor2) {
   return Math.sqrt(sum);
 }
 
+// Helper function to update issue summary and linked issues
+async function updateIssueSummaryForSelectedAgenda(panchayatId, selectedAgendaItems, currentMeetingAgenda = []) {
+  try {
+    let parsedSelectedItems = selectedAgendaItems || [];
+    let parsedCurrentAgenda = currentMeetingAgenda || [];
+    
+    if (typeof selectedAgendaItems === 'string') {
+      parsedSelectedItems = JSON.parse(selectedAgendaItems);
+    }
+    
+    if (typeof currentMeetingAgenda === 'string') {
+      parsedCurrentAgenda = JSON.parse(currentMeetingAgenda);
+    }
+    
+    // Get the current issue summary
+    const issueSummary = await IssueSummary.findOne({ panchayatId });
+    if (!issueSummary) {
+      return;
+    }
+    
+    // Step 1: Add back unselected items from the current meeting agenda to the summary
+    const selectedIds = parsedSelectedItems.map(item => (item._id ? item._id.toString() : null)).filter(Boolean);
+    const itemsToAddBack = parsedCurrentAgenda.filter(item => !selectedIds.includes(item._id?.toString()));
+    
+    // Step 2: Remove newly selected items from the summary
+    const itemsToRemove = parsedSelectedItems.filter(item => {
+      const itemId = item._id?.toString();
+      return itemId && !parsedCurrentAgenda.some(current => current._id?.toString() === itemId);
+    });
+    
+    const itemsToRemoveIds = itemsToRemove.map(item => item._id?.toString()).filter(Boolean);
+    
+    // Step 3: Update the issue summary
+    const updatedAgendaItems = [
+      ...issueSummary.agendaItems.filter(item => !itemsToRemoveIds.includes(item._id?.toString())),
+      ...itemsToAddBack
+    ];
+    
+    // Step 4: Update linked issues
+    const linkedIssuesToRemove = itemsToRemove.flatMap(item => (item.linkedIssues || []).map(id => id.toString()));
+    const linkedIssuesToAddBack = itemsToAddBack.flatMap(item => (item.linkedIssues || []).map(id => id.toString()));
+    
+    const existingIssueIds = issueSummary.issues.map(id => id.toString());
+    const updatedIssueIds = [
+      ...existingIssueIds.filter(id => !linkedIssuesToRemove.includes(id)),
+      ...linkedIssuesToAddBack.filter(id => !existingIssueIds.includes(id))
+    ];
+    
+    // Update the issue summary
+    const updateResult = await IssueSummary.findOneAndUpdate(
+      { panchayatId },
+      {
+        $set: {
+          agendaItems: updatedAgendaItems,
+          issues: updatedIssueIds.map(id => new mongoose.Types.ObjectId(id))
+        }
+      },
+      { new: true }
+    );
+    
+    if (updateResult) {
+      // Update status of linked issues
+      if (linkedIssuesToRemove.length > 0) {
+        await Issue.updateMany(
+          { _id: { $in: linkedIssuesToRemove } },
+          { $set: { status: 'PICKED_IN_AGENDA' } }
+        );
+      }
+      
+      if (linkedIssuesToAddBack.length > 0) {
+        await Issue.updateMany(
+          { _id: { $in: linkedIssuesToAddBack } },
+          { $set: { status: 'REPORTED' } }
+        );
+      }
+    }
+  } catch (error) {
+    throw error;
+  }
+}
+
 // Create a new Gram Sabha meeting with attachments
 router.post(
   "/",
@@ -60,7 +143,66 @@ router.post(
         agenda,
         description,
         scheduledDurationHours,
+        selectedAgendaItems,
       } = req.body;
+
+      // Validate that either agenda or selectedAgendaItems is provided
+      let parsedAgenda = agenda || [];
+      let parsedSelectedItems = [];
+      
+      if (selectedAgendaItems) {
+        try {
+          parsedSelectedItems = typeof selectedAgendaItems === 'string' 
+            ? JSON.parse(selectedAgendaItems) 
+            : selectedAgendaItems;
+        } catch (err) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid selectedAgendaItems format. Must be a JSON array.",
+          });
+        }
+      }
+
+      // If no agenda is provided but selectedAgendaItems is, create agenda from selected items
+      if ((!agenda || agenda.length === 0) && parsedSelectedItems.length > 0) {
+        parsedAgenda = parsedSelectedItems.map(item => ({
+          title: item.title,
+          description: item.description,
+          linkedIssues: item.linkedIssues || []
+        }));
+      }
+
+      // Validate that we have some agenda content
+      if ((!parsedAgenda || parsedAgenda.length === 0) && parsedSelectedItems.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Either agenda or selectedAgendaItems must be provided.",
+        });
+      }
+
+      try {
+        if (typeof parsedAgenda === 'string') {
+          parsedAgenda = JSON.parse(parsedAgenda);
+          if (!Array.isArray(parsedAgenda)) {
+            return res.status(400).json({
+              success: false,
+              message: "Agenda must be an array.",
+            });
+          }
+        }
+      } catch (err) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid agenda format. Must be a JSON array.",
+        });
+      }
+
+      // Ensure agenda is an array of objects with title, description, linkedIssues
+      parsedAgenda = parsedAgenda.map(item => ({
+        title: item.title,
+        description: item.description,
+        linkedIssues: item.linkedIssues || []
+      }));
 
       // Generate default title if not provided
       let generatedTitle = title;
@@ -107,43 +249,64 @@ router.post(
         endTime.getMinutes() + parseInt(scheduledDurationHours * 60)
       );
 
-      const jioMeetRequestBody = {
-        topic: generatedTitle,
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString(),
-        // isAutoRecordingEnabled: true,
-      };
-      const payload = { app: JIOMEET_APP_ID, timestamp: Date.now() };
-      const jioMeetToken = jwt.sign(payload, privateKey, {
-        algorithm: "RS256",
-      });
-      // Adding JioMeet API call
-      const response = await axios.post(
-        `${JIOMEET_API}/schedule/meeting`,
-        jioMeetRequestBody,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${jioMeetToken}`,
-          },
+      // Initialize JioMeet data as null
+      let jioMeetData = null;
+      let meetingLink = null;
+
+      // Try to create JioMeet meeting if configuration is available
+      if (JIOMEET_APP_ID && JIOMEET_API && process.env.PRIVATE_KEY_PATH) {
+        try {
+          const jioMeetRequestBody = {
+            topic: generatedTitle,
+            startTime: startTime.toISOString(),
+            endTime: endTime.toISOString(),
+            // isAutoRecordingEnabled: true,
+          };
+          const payload = { app: JIOMEET_APP_ID, timestamp: Date.now() };
+          const jioMeetToken = jwt.sign(payload, privateKey, {
+            algorithm: "RS256",
+          });
+          
+          // Adding JioMeet API call
+          const response = await axios.post(
+            `${JIOMEET_API}/schedule/meeting`,
+            jioMeetRequestBody,
+            {
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${jioMeetToken}`,
+              },
+            }
+          );
+          
+          jioMeetData = response.data;
+          meetingLink = response.data.hostUrl;
+        } catch (jioMeetError) {
+          // Continue without JioMeet - meeting will be created without video link
         }
-      );
-      console.log("request body", req);
+      }
+
       const gramSabha = new GramSabha({
         panchayatId,
         title: generatedTitle,
         dateTime,
         location,
-        agenda,
+        agenda: parsedAgenda,
         description,
         scheduledById: req.official.id,
         scheduledDurationHours,
-        jioMeetData: response.data,
-        meetingLink: response.data.hostUrl,
+        jioMeetData,
+        meetingLink,
         attachments,
       });
 
       await gramSabha.save();
+
+      // Update issue summary and linked issues if selected agenda items are provided
+      if (parsedSelectedItems.length > 0) {
+        await updateIssueSummaryForSelectedAgenda(panchayatId, parsedSelectedItems, []);
+      }
+
       res.status(201).json({
         success: true,
         data: {
@@ -155,10 +318,9 @@ router.post(
         },
       });
     } catch (error) {
-      console.error("Error creating Gram Sabha:", error);
       res
         .status(500)
-        .json({ success: false, message: "Error creating Gram Sabha", error });
+        .json({ success: false, message: "Error creating Gram Sabha", error: error.message });
     }
   }
 );
@@ -188,10 +350,24 @@ router.get("/:id", async (req, res) => {
   try {
     const gramSabha = await GramSabha.findById(req.params.id)
       .populate("scheduledById", "name")
-      .populate("panchayatId", "name");
+      .populate("panchayatId", "name")
+      .lean(); // Convert to plain JS object
+
     if (!gramSabha) {
       return res.status(404).send();
     }
+    
+    // Manual population of linkedIssues
+    for (const agendaItem of gramSabha.agenda || []) {
+      if (Array.isArray(agendaItem.linkedIssues) && agendaItem.linkedIssues.length > 0) {
+        const issues = await Issue.find({ _id: { $in: agendaItem.linkedIssues } })
+          .select('transcription creatorId')
+          .populate('creatorId', 'name')
+          .lean();
+        agendaItem.linkedIssues = issues;
+      }
+    }
+
     res.send(gramSabha);
   } catch (error) {
     res.status(500).send(error);
@@ -206,7 +382,6 @@ router.patch(
   upload.array("attachments"),
   async (req, res) => {
     try {
-      console.log("Request body:", req.body);
       // Find the existing gram sabha first to verify it exists
       const gramSabha = await GramSabha.findOne({
         _id: req.params.id,
@@ -220,8 +395,57 @@ router.patch(
         });
       }
 
+      // Handle selectedAgendaItems if provided
+      let parsedSelectedItems = [];
+      let originalAgenda = []; // Capture original agenda before any updates
+      
+      if (req.body.selectedAgendaItems) {
+        try {
+          parsedSelectedItems = typeof req.body.selectedAgendaItems === 'string' 
+            ? JSON.parse(req.body.selectedAgendaItems) 
+            : req.body.selectedAgendaItems;
+          
+          // Capture the original agenda before updating
+          originalAgenda = gramSabha.agenda || [];
+          
+          // Update the meeting's agenda with the selected items
+          if (parsedSelectedItems.length > 0) {
+            gramSabha.agenda = parsedSelectedItems.map(item => ({
+              title: item.title,
+              description: item.description,
+              linkedIssues: item.linkedIssues || [],
+              _id: item._id // Preserve the _id for proper matching
+            }));
+          } else {
+            // If no items selected, clear the agenda
+            gramSabha.agenda = [];
+          }
+        } catch (err) {
+          return res.status(400).send({
+            error: "Invalid selectedAgendaItems format. Must be a JSON array.",
+          });
+        }
+      }
+
+      // Parse agenda string if needed
+      if (req.body.agenda && typeof req.body.agenda === 'string') {
+        try {
+          req.body.agenda = JSON.parse(req.body.agenda);
+          if (!Array.isArray(req.body.agenda)) {
+            return res.status(400).send({
+              error: "Agenda must be an array.",
+            });
+          }
+        } catch (e) {
+          return res.status(400).send({
+            error: "Invalid JSON in agenda field.",
+          });
+        }
+      }
+
       // Get the updates from the request body
       const updates = Object.keys(req.body);
+
       const allowedUpdates = [
         "title",
         "agenda",
@@ -273,53 +497,40 @@ router.patch(
 
         gramSabha.attachments = [...gramSabha.attachments, ...newAttachments];
       }
+      
+      // Handle JioMeet updates if configuration is available
       if (
-        updates.includes("title") ||
+        (updates.includes("title") ||
         updates.includes("dateTime") ||
         updates.includes("date") ||
         updates.includes("time") ||
-        updates.includes("scheduledDurationHours")
+        updates.includes("scheduledDurationHours")) &&
+        JIOMEET_APP_ID && 
+        JIOMEET_API && 
+        process.env.PRIVATE_KEY_PATH
       ) {
-        // Calculate end time based on dateTime and duration
-        const startTime = new Date(req.body.dateTime || gramSabha.dateTime);
-        const endTime = new Date(startTime);
-        const duration =
-          req.body.scheduledDurationHours || gramSabha.scheduledDurationHours;
-        endTime.setMinutes(endTime.getMinutes() + parseInt(duration * 60));
-
-        // Prepare JioMeet API request body
-        const jioMeetRequestBody = {
-          // meetingId: gramSabha.jioMeetData?.meetingId,
-          topic: req.body.title || gramSabha.title,
-          startTime: startTime.toISOString(),
-          endTime: endTime.toISOString(),
-          // isAutoRecordingEnabled: true,
-        };
-
-        // if (!gramSabha.jioMeetData?.meetingId) {
-        //   delete jioMeetRequestBody.meetingId;
-        // }
-
-        const payload = { app: JIOMEET_APP_ID, timestamp: Date.now() };
-        const jioMeetToken = jwt.sign(payload, privateKey, {
-          algorithm: "RS256",
-        });
-        // Update the meeting in JioMeet
         try {
-          // let response = {};
-          // if(gramSabha.jioMeetData?.meetingId)
-          //   response = await axios.put(
-          //     `${JIOMEET_API}/schedule/meeting`,
-          //     jioMeetRequestBody,
-          //     {
-          //       headers: {
-          //         "Content-Type": "application/json",
-          //         Authorization: `Bearer ${jioMeetToken}`,
-          //       },
-          //     }
-          //   );
-          // else
-          response = await axios.post(
+          // Calculate end time based on dateTime and duration
+          const startTime = new Date(req.body.dateTime || gramSabha.dateTime);
+          const endTime = new Date(startTime);
+          const duration =
+            req.body.scheduledDurationHours || gramSabha.scheduledDurationHours;
+          endTime.setMinutes(endTime.getMinutes() + parseInt(duration * 60));
+
+          // Prepare JioMeet API request body
+          const jioMeetRequestBody = {
+            topic: req.body.title || gramSabha.title,
+            startTime: startTime.toISOString(),
+            endTime: endTime.toISOString(),
+          };
+
+          const payload = { app: JIOMEET_APP_ID, timestamp: Date.now() };
+          const jioMeetToken = jwt.sign(payload, privateKey, {
+            algorithm: "RS256",
+          });
+          
+          // Update the meeting in JioMeet
+          const response = await axios.post(
             `${JIOMEET_API}/schedule/meeting`,
             jioMeetRequestBody,
             {
@@ -329,20 +540,23 @@ router.patch(
               },
             }
           );
+          
           // Update JioMeet data in the database
           gramSabha.jioMeetData = response.data;
           gramSabha.meetingLink = response.data.hostUrl;
           gramSabha.meetingId = response.data.meetingId;
         } catch (error) {
-          console.error(
-            "JioMeet API Error:",
-            error.response?.data || error.message
-          );
+          // Continue without JioMeet - it's optional
         }
       }
 
       // Save the updated gram sabha
       await gramSabha.save();
+
+      // Update issue summary and linked issues if selected agenda items are provided
+      if (parsedSelectedItems.length > 0 || req.body.selectedAgendaItems) {
+        await updateIssueSummaryForSelectedAgenda(gramSabha.panchayatId, parsedSelectedItems, originalAgenda);
+      }
 
       // Return the updated gram sabha with attachment data URLs for frontend
       const responseData = {
@@ -357,7 +571,6 @@ router.patch(
 
       res.send(responseData);
     } catch (error) {
-      console.error("Error updating Gram Sabha:", error);
       res
         .status(400)
         .send({ error: error.message || "Error updating Gram Sabha" });
@@ -471,7 +684,6 @@ router.post(
         },
       });
     } catch (error) {
-      console.error("Error adding attachment:", error);
       res
         .status(400)
         .json({ success: false, message: "Failed to add attachment" });
@@ -523,7 +735,6 @@ router.get("/panchayat/:panchayatId/upcoming", async (req, res) => {
 
     res.json(meetingsWithRSVP);
   } catch (error) {
-    console.error("Error fetching upcoming meetings:", error);
     res
       .status(500)
       .json({ success: false, message: "Failed to fetch upcoming meetings" });
@@ -544,7 +755,6 @@ router.get("/panchayat/:panchayatId/past", async (req, res) => {
 
     res.json(gramSabhas);
   } catch (error) {
-    console.error("Error fetching past meetings:", error);
     res
       .status(500)
       .json({ success: false, message: "Failed to fetch past meetings" });
@@ -581,7 +791,6 @@ router.post("/:id/rsvp/:usedId", async (req, res) => {
 
     res.json({ success: true, data: rsvp });
   } catch (error) {
-    console.error("Error handling RSVP:", error);
     res.status(500).json({ success: false, message: "Failed to handle RSVP" });
   }
 });
@@ -589,7 +798,6 @@ router.post("/:id/rsvp/:usedId", async (req, res) => {
 // Get RSVP status for a user
 router.get("/:id/rsvp/:usedId", async (req, res) => {
   try {
-    console.log({ req });
     const rsvp = await RSVP.findOne({
       gramSabhaId: req.params.id,
       userId: req.params.usedId,
@@ -597,7 +805,6 @@ router.get("/:id/rsvp/:usedId", async (req, res) => {
 
     res.json({ success: true, data: rsvp });
   } catch (error) {
-    console.error("Error fetching RSVP status:", error);
     res
       .status(500)
       .json({ success: false, message: "Failed to fetch RSVP status" });
@@ -643,7 +850,6 @@ router.get("/:id/rsvp-stats", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error fetching RSVP statistics:", error);
     res
       .status(500)
       .json({ success: false, message: "Failed to fetch RSVP statistics" });
@@ -713,7 +919,6 @@ router.post("/:id/mark-attendance", auth.isOfficial, async (req, res) => {
         user.faceDescriptor,
         faceDescriptor
       );
-      console.log(`Face distance with ${user.voterIdNumber}: ${distance}`);
 
       if (distance < minDistance) {
         minDistance = distance;
@@ -761,11 +966,6 @@ router.post("/:id/mark-attendance", auth.isOfficial, async (req, res) => {
       const totalVoters = await User.countDocuments({
         panchayatId,
       });
-      console.log({
-        totalVoters,
-        panchayatCriteria: panchayat.sabhaCriteria,
-        quorumRequired: totalVoters * (panchayat.sabhaCriteria / 100 || 0.1),
-      });
       // Calculate quorum as 10% of total voters
       const quorumRequired = Math.ceil(
         totalVoters * (panchayat.sabhaCriteria / 100 || 0.1)
@@ -793,7 +993,6 @@ router.post("/:id/mark-attendance", auth.isOfficial, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error marking attendance:", error);
     res.status(500).json({
       success: false,
       message: "Server error while marking attendance: " + error.message,
@@ -842,11 +1041,6 @@ router.get("/:id/attendance-stats", async (req, res) => {
     // Count present users
     const presentCount = gramSabha.attendances.length;
 
-    console.log({
-      totalVoters,
-      panchayatCriteria: panchayat.sabhaCriteria,
-      quorumRequired: totalVoters * (panchayat.sabhaCriteria / 100 || 0.1),
-    });
     // Calculate quorum as 10% of total voters
     const quorumRequired = Math.ceil(
       totalVoters * (panchayat.sabhaCriteria / 100 || 0.1)
@@ -861,7 +1055,6 @@ router.get("/:id/attendance-stats", async (req, res) => {
       quorumMet: presentCount >= quorumRequired,
     });
   } catch (error) {
-    console.error("Error getting attendance stats:", error);
     res.status(500).json({
       success: false,
       message:
@@ -893,7 +1086,6 @@ router.get("/panchayat/:panchayatId/today", async (req, res) => {
 
     res.json(gramSabhas);
   } catch (error) {
-    console.error("Error fetching today's meetings:", error);
     res
       .status(500)
       .json({ success: false, message: "Failed to fetch today's meetings" });
@@ -921,7 +1113,6 @@ router.post("/recording/start", async (req, res) => {
     );
     res.status(200).json({ success: true, data: response.data });
   } catch (error) {
-    console.error("Error fetching today's meetings:", error);
     res
       .status(500)
       .json({ success: false, message: "Failed to fetch today's meetings" });
@@ -988,10 +1179,6 @@ router.post("/recordings/stop", async (req, res) => {
       historyId,
     });
   } catch (error) {
-    console.error(
-      "Error stopping recording:",
-      error?.response?.data || error.message
-    );
     res.status(500).json({
       success: false,
       message: "Failed to stop recording",
@@ -1055,10 +1242,6 @@ router.post("/recordings/list", async (req, res) => {
       recordingData: listRes.data,
     });
   } catch (error) {
-    console.error(
-      "Error fetching recording details:",
-      error?.response?.data || error.message
-    );
     res.status(500).json({
       success: false,
       message: "Failed to fetch recording details",

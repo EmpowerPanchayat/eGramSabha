@@ -863,4 +863,33 @@ router.post('/:issueId/transcription/retry', anyAuthenticated, async (req, res) 
     }
 });
 
+// POST /issues/batch-minimal
+router.post('/batch-minimal', anyAuthenticated, async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ success: false, message: 'No IDs provided' });
+  }
+  try {
+    // Fetch minimal fields plus transcription.description
+    const issues = await Issue.find(
+      { _id: { $in: ids } },
+      { _id: 1, title: 1, category: 1, subcategory: 1, status: 1, 'transcription.description': 1 }
+    );
+    // Map to minimal object with description
+    const minimal = issues.map(issue => ({
+      _id: issue._id,
+      title: issue.title,
+      category: issue.category,
+      subcategory: issue.subcategory,
+      status: issue.status,
+      transcription: {
+        description: issue.transcription && issue.transcription.description ? issue.transcription.description : undefined
+      }
+    }));
+    res.json({ success: true, issues: minimal });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 module.exports = router;

@@ -17,8 +17,25 @@ const gramSabhaSchema = new mongoose.Schema(
       maxLength: 255,
     },
     agenda: {
-      type: String,
-      required: true,
+      type: [
+        {
+          title: {
+            type: mongoose.Schema.Types.Mixed, // { en: String, hi: String, ... }
+            required: true
+          },
+          description: {
+            type: mongoose.Schema.Types.Mixed, // { en: String, hi: String, ... }
+            required: false
+          },
+          linkedIssues: [
+            {
+              type: mongoose.Schema.Types.ObjectId,
+              ref: 'Issue',
+            }
+          ]
+        }
+      ],
+      default: []
     },
     scheduledDurationHours: {
       type: Number,

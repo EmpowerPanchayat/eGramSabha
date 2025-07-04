@@ -18,7 +18,7 @@ const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
 const auth = require("./middleware/auth");
 
-const { startCronJobs } = require("./utils/cronJobs");
+const { startCronJobs, stopCronJobs } = require("./utils/cronJobs");
 
 // Load environment variables
 dotenv.config();
@@ -47,6 +47,7 @@ const citizenAuthRoutes = require('./routes/citizenAuthRoutes');
 const officialRoutes = require('./routes/officialRoutes');
 const gramSabhaRoutes = require('./routes/gramSabhaRoutes');
 const platformConfigRoutes = require('./routes/platformConfigRoutes');
+const issueSummaryRoutes = require('./routes/issueSummaryRoutes');
 
 // Import models
 const User = require("./models/User");
@@ -530,6 +531,7 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/officials', officialRoutes);
 app.use('/api/gram-sabha', gramSabhaRoutes);
 app.use('/api/platform-configurations', platformConfigRoutes);
+app.use('/api/summaries', issueSummaryRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
