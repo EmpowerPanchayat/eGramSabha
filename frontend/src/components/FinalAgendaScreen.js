@@ -1,0 +1,580 @@
+// FinalAgendaScreen.js — Material UI version (fixed issue linking logic)
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Box,
+  Typography,
+  Paper,
+  Button,
+  Grid,
+  Divider,
+  Chip,
+  Modal,
+  TextField,
+  IconButton,
+  Stack,
+  InputAdornment,
+  CircularProgress,
+  Snackbar
+} from '@mui/material';
+import {
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Link as LinkIcon,
+  Close as CloseIcon,
+  Search as SearchIcon,
+  Visibility as VisibilityIcon
+} from '@mui/icons-material';
+import { useLanguage } from '../utils/LanguageContext';
+import { getLabelKeyFromValue } from '../utils/categoryUtils';
+import { updateAgendaSummary } from '../api/summary';
+import { fetchAllIssues, fetchMinimalIssuesByIds } from '../api/issues';
+import IssueDetailsModal from './IssueDetailsModal';
+
+export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onBack, onComplete, panchayatId }) => {
+  const { language, strings } = useLanguage();
+  
+  const normalizeAgendaItems = (items) => {
+    if (!items) {
+      return [];
+    }
+    return items.map((item, index) => {
+      const normalizedItem = {
+        id: item.id || `agenda_${index + 1}`,
+        title: item.title || '',
+        description: item.description || '',
+        linkedIssues: item.linked_issues || item.linkedIssues || [],
+        estimatedDuration: item.estimatedDuration || 15,
+        order: item.order || index + 1,
+      };
+      return normalizedItem;
+    });
+  };
+
+  const normalizeIssues = (issues) => {
+    if (!issues || !Array.isArray(issues)) {
+      return [];
+    }
+    return (issues || []).map((issue, index) => {
+      // Check if issue is already normalized (has title field)
+      if (issue.title) {
+        return {
+          id: issue.id,
+          title: issue.title,
+          description: issue.description,
+        };
+      }
+      
+      // Fallback to original normalization logic for raw issues
+      const description = issue.transcription?.description?.[language] || 
+                          issue.transcription?.description?.en ||
+                          issue.transcription_text || // Fallback to original transcription
+                          issue.text; // Final fallback to issue text
+
+      const normalizedIssue = {
+        id: issue._id || issue.id,
+        title: description,
+        description: `${issue.category} - ${issue.subcategory}`,
+      };
+      return normalizedIssue;
+    });
+  };
+
+  const getIssueDisplayData = (issue) => {
+    if (!issue) return { title: '', description: '' };
+    
+    const title = issue.transcription?.description?.[language] ||
+                  issue.transcription?.description?.en ||
+                  issue.transcription_text ||
+                  issue.text || 'No description available';
+    
+    const categoryLabel = strings[getLabelKeyFromValue(issue.category)] || issue.category;
+    const subcategoryLabel = strings[getLabelKeyFromValue(issue.subcategory)] || issue.subcategory;
+    const description = `${categoryLabel} - ${subcategoryLabel}`;
+    
+    return { title, description };
+  };
+
+  const { details = {}, selectedIssues: rawIssues = [], agendaItems = [] } = meeting || {};
+  
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [issueLinkingModal, setIssueLinkingModal] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingItem, setEditingItem] = useState(null);
+  const [editForm, setEditForm] = useState({ title: '', description: '', estimatedDuration: 15 });
+  const [editErrors, setEditErrors] = useState({ title: '', estimatedDuration: '' });
+  const [newItem, setNewItem] = useState({ title: '', description: '', estimatedDuration: 15 });
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [viewedIssue, setViewedIssue] = useState(null);
+  const [linkableIssues, setLinkableIssues] = useState([]);
+  const [issuesLoading, setIssuesLoading] = useState(false);
+  const [issues, setIssues] = useState(rawIssues);
+
+  // Use useMemo to ensure issues and agendaState update when props change
+  const normalizedAgendaItems = useMemo(() => {
+    return normalizeAgendaItems(agendaItems);
+  }, [language, agendaItems]);
+
+  // State for editable agenda items
+  const [agendaState, setAgendaState] = useState(normalizedAgendaItems);
+
+  // Update agendaState when normalizedAgendaItems change (only if length changes)
+  useEffect(() => {
+    if (agendaState.length !== normalizedAgendaItems.length) {
+      setAgendaState(normalizedAgendaItems);
+    }
+  }, [normalizedAgendaItems]);
+
+  useEffect(() => {
+    onUpdateAgenda(agendaState);
+  }, [agendaState]);
+
+  const totalDuration = agendaState.reduce((sum, item) => sum + (item.estimatedDuration || 0), 0);
+
+  // Helper to get all unique linked issue IDs from agenda items
+  const getAllLinkedIssueIds = (agendaItems) => {
+    const ids = new Set();
+    (agendaItems || []).forEach(item => {
+      (item.linkedIssues || []).forEach(id => ids.add(id));
+    });
+    return Array.from(ids);
+  };
+
+  // On mount or when agendaItems/rawIssues change, ensure all linked issues are present in issues array
+  useEffect(() => {
+    let isMounted = true;
+    const ensureAllLinkedIssues = async () => {
+      const linkedIds = getAllLinkedIssueIds(agendaItems);
+      const existingIds = new Set((issues || []).map(i => i._id || i.id));
+      const missingIds = linkedIds.filter(id => !existingIds.has(id));
+      if (missingIds.length === 0) return;
+      try {
+        // Use the new minimal batch fetch API
+        const fetched = await fetchMinimalIssuesByIds(missingIds);
+        if (isMounted && fetched.length > 0) {
+          setIssues(prev => [...prev, ...fetched]);
+        }
+      } catch (e) {
+        // Ignore fetch errors for missing issues
+      }
+    };
+    ensureAllLinkedIssues();
+    return () => { isMounted = false; };
+  }, [agendaItems, rawIssues, panchayatId]);
+
+  // Update issues if rawIssues prop changes
+  useEffect(() => {
+    setIssues(rawIssues);
+  }, [rawIssues]);
+
+  const getLinkedIssues = (issueIds = []) => {
+    if (!Array.isArray(issueIds)) {
+      return [];
+    }
+    const linkedIssues = issueIds.map(id => issues.find(issue => (issue._id || issue.id) === id)).filter(Boolean);
+    return linkedIssues;
+  };
+
+  const getFilteredIssues = () => {
+    const filtered = linkableIssues.filter(issue => {
+      const { title } = getIssueDisplayData(issue);
+      const search = searchTerm || '';
+      const matches = title.toLowerCase().includes(search.toLowerCase());
+      return matches;
+    });
+    return filtered;
+  };
+
+  const toggleIssueLink = async (agendaItemId, issueId) => {
+    const issue = linkableIssues.find(i => i._id === issueId);
+    if (!issue) return;
+
+    // If the issue is new to this screen, add it to the parent state
+    if (!issues.some(i => i._id === issue._id)) {
+      onUpdateIssues(issue);
+    }
+
+    const isAlreadyLinkedToCurrent = agendaState.find(item => item.id === agendaItemId)?.linkedIssues.includes(issueId);
+
+    let updatedItems = agendaState.map(item => ({
+      ...item,
+      linkedIssues: item.linkedIssues.filter(id => id !== issueId)
+    }));
+
+    if (!isAlreadyLinkedToCurrent) {
+      updatedItems = updatedItems.map(item => 
+        item.id === agendaItemId 
+          ? { ...item, linkedIssues: [...item.linkedIssues, issueId] }
+          : item
+      );
+    }
+    
+    setAgendaState(updatedItems);
+    
+    // Persist to backend immediately
+    try {
+      const payload = updatedItems.map(ensureMultilingualFields);
+      await updateAgendaSummary(panchayatId, payload);
+      onUpdateAgenda(payload); // Sync parent state
+    } catch (err) {
+      setSaveError(err.message || 'Failed to save agenda');
+      setTimeout(() => setSaveError(''), 3000);
+    }
+  };
+
+  const validateEditForm = () => {
+    const errors = {};
+    if (!editForm.title.trim()) {
+      errors.title = 'Title is required';
+    }
+    if (!editForm.estimatedDuration || editForm.estimatedDuration <= 0) {
+      errors.estimatedDuration = 'Duration must be a positive number';
+    }
+    setEditErrors(errors);
+    const isValid = Object.keys(errors).length === 0;
+    return isValid;
+  };
+
+  // Helper to ensure agenda item fields are objects with language keys
+  const ensureMultilingualFields = (item) => {
+    const ensureObj = (val) => {
+      if (typeof val === 'object' && val !== null) return val;
+      if (typeof val === 'string') return { [language]: val };
+      return { en: '' };
+    };
+    return {
+      ...item,
+      title: ensureObj(item.title),
+      description: ensureObj(item.description),
+    };
+  };
+
+  const addNewAgendaItem = () => {
+    if (!newItem.title.trim()) return;
+    const item = {
+      id: Date.now().toString(),
+      title: newItem.title,
+      description: newItem.description,
+      linkedIssues: [],
+      estimatedDuration: newItem.estimatedDuration,
+      order: agendaState.length + 1
+    };
+    setAgendaState([...agendaState, item]);
+    setNewItem({ title: '', description: '', estimatedDuration: 15 });
+    setShowAddForm(false);
+  };
+
+  const updateAgendaItem = async (id, updates) => {
+    if (!validateEditForm()) {
+      return;
+    }
+    const updated = agendaState.map(item => {
+      if (item.id !== id) return item;
+      // Update the correct language key for title/description
+      const newTitle = { ...(typeof item.title === 'object' ? item.title : { [language]: item.title }) };
+      newTitle[language] = updates.title;
+      const newDescription = { ...(typeof item.description === 'object' ? item.description : { [language]: item.description }) };
+      newDescription[language] = updates.description;
+      return {
+        ...item,
+        title: newTitle,
+        description: newDescription,
+        estimatedDuration: updates.estimatedDuration || item.estimatedDuration,
+      };
+    });
+    setAgendaState(updated);
+    setEditingItem(null);
+    setEditForm({ title: '', description: '', estimatedDuration: 15 });
+    setEditErrors({ title: '', estimatedDuration: '' });
+    // Immediately persist to backend, ensuring multilingual fields
+    try {
+      const payload = updated.map(ensureMultilingualFields);
+      await updateAgendaSummary(panchayatId, payload);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+      onUpdateAgenda(payload); // Sync parent state to prevent flicker
+    } catch (err) {
+      setSaveError(err.message || 'Failed to save agenda');
+      setTimeout(() => setSaveError(''), 3000);
+    }
+  };
+
+  const deleteAgendaItem = async (id) => {
+    const filtered = agendaState.filter(item => item.id !== id);
+    const reordered = filtered.map((item, index) => ({
+      ...item,
+      order: index + 1,
+    }));
+    
+    setAgendaState(reordered);
+    
+    try {
+      const payload = reordered.map(ensureMultilingualFields);
+      await updateAgendaSummary(panchayatId, payload);
+      onUpdateAgenda(payload);
+    } catch (err) {
+      setSaveError(err.message || 'Failed to delete agenda item');
+      setTimeout(() => setSaveError(''), 3000);
+    }
+  };
+
+  // Helper to get multilingual text
+  const getMultilingualText = (item, field) => {
+    if (!item || !item[field]) return '';
+    let textObj = item[field];
+    if (textObj && typeof textObj === 'object' && textObj.get) {
+      textObj = Object.fromEntries(textObj);
+    }
+    if (typeof textObj === 'object' && textObj !== null) {
+      return textObj[language] || textObj.en || textObj.hi || textObj.hindi || '';
+    }
+    return textObj || '';
+  };
+
+  const handleOpenLinkIssuesModal = async (agendaItemId) => {
+    setIssueLinkingModal(agendaItemId);
+    setIssuesLoading(true);
+    try {
+      // Fetch only 'REPORTED' issues that are not yet linked in the current session
+      const { data } = await fetchAllIssues({ panchayatId, status: 'REPORTED', limit: 1000 });
+      // Combine with already linked issues so they appear in the modal
+      const linkedIds = new Set(agendaState.flatMap(item => item.linkedIssues));
+      const currentlySelectedIssues = issues.filter(issue => linkedIds.has(issue._id));
+      
+      const combined = [...data, ...currentlySelectedIssues];
+      // Remove duplicates
+      const uniqueIssues = Array.from(new Map(combined.map(item => [item._id, item])).values());
+
+      setLinkableIssues(uniqueIssues);
+    } catch (error) {
+      setSaveError('Failed to load issues. Please try again.');
+    } finally {
+      setIssuesLoading(false);
+    }
+  };
+
+  return (
+    <Box sx={{ maxWidth: 960, mx: 'auto', my: 0 }}>
+      <Box sx={{ px: 3, mt: 4 }}>
+        {agendaState.map((item) => (
+          <Box
+            key={item.id}
+            sx={{
+              mb: 2,
+              p: 2,
+              border: '1px solid #ccc',
+              borderRadius: 1,
+              bgcolor: '#fafbfc',
+              transition: 'box-shadow 0.2s',
+              '&:hover': { boxShadow: 2 }
+            }}
+          >
+            {editingItem === item.id ? (
+              <Box>
+                <TextField
+                  fullWidth
+                  label={strings.title}
+                  value={editForm.title}
+                  onChange={(e) => {
+                    const newTitle = e.target.value;
+                    setEditForm({ ...editForm, title: newTitle });
+                  }}
+                  error={Boolean(editErrors.title)}
+                  helperText={editErrors.title}
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  fullWidth
+                  label={strings.description}
+                  value={editForm.description}
+                  onChange={(e) => {
+                    const newDescription = e.target.value;
+                    setEditForm({ ...editForm, description: newDescription });
+                  }}
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  fullWidth
+                  label={strings.durationMins}
+                  type="number"
+                  value={editForm.estimatedDuration}
+                  onChange={(e) => {
+                    const newDuration = parseInt(e.target.value) || 0;
+                    setEditForm({ ...editForm, estimatedDuration: newDuration });
+                  }}
+                  error={Boolean(editErrors.estimatedDuration)}
+                  helperText={editErrors.estimatedDuration}
+                  sx={{ mb: 2 }}
+                />
+                <Stack direction="row" spacing={2}>
+                  <Button variant="contained" color="primary" onClick={() => {
+                    updateAgendaItem(item.id, editForm);
+                  }}>Save</Button>
+                  <Button onClick={() => {
+                    setEditingItem(null);
+                    setEditErrors({ title: '', estimatedDuration: '' });
+                  }}>Cancel</Button>
+                </Stack>
+              </Box>
+            ) : (
+              <>
+                <Stack direction="row" alignItems="center">
+                  {/* <Chip label={`#${item.order}`} size="small" color="info" /> */}
+                  <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
+                    {getMultilingualText(item, 'title')}
+                  </Typography>
+                  <Chip
+                    label={`${item.estimatedDuration} min`}
+                    size="small"
+                    color="secondary"
+                    sx={{ ml: 1 }}
+                  />
+                  <Stack direction="row">
+                    <IconButton onClick={() => {
+                      setEditingItem(item.id);
+                      setEditForm({
+                        title: getMultilingualText(item, 'title'),
+                        description: getMultilingualText(item, 'description'),
+                        estimatedDuration: item.estimatedDuration
+                      });
+                    }}><EditIcon fontSize="small" /></IconButton>
+                    <IconButton onClick={() => {
+                      deleteAgendaItem(item.id);
+                    }}><DeleteIcon fontSize="small" /></IconButton>
+                  </Stack>
+                </Stack>
+                <Typography variant="body2" color="text.secondary">{getMultilingualText(item, 'description')}</Typography>
+                <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  {getLinkedIssues(item.linkedIssues).map(issue => (
+                    <Chip key={issue._id} label={getIssueDisplayData(issue).title} variant="outlined" size="small" icon={<LinkIcon fontSize="small" />} />
+                  ))}
+                </Box>
+                <Button size="small" onClick={() => {
+                  handleOpenLinkIssuesModal(item.id);
+                }} sx={{ mt: 1 }}>Manage Issues</Button>
+              </>
+            )}
+          </Box>
+        ))}
+      </Box>
+
+      <Modal open={Boolean(issueLinkingModal)} onClose={() => {
+        setIssueLinkingModal(null);
+      }}>
+        <Box sx={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          bgcolor: 'background.paper',
+          boxShadow: 24,
+          borderRadius: 2,
+          p: 4,
+          width: { xs: '90%', md: 700 },
+          maxHeight: '80vh',
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h6">Link Issues</Typography>
+            <IconButton onClick={() => {
+              setIssueLinkingModal(null);
+            }}><CloseIcon /></IconButton>
+          </Stack>
+          <TextField
+            fullWidth
+            placeholder="Search issues"
+            value={searchTerm}
+            onChange={(e) => {
+              const newSearchTerm = e.target.value;
+              setSearchTerm(newSearchTerm);
+            }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              )
+            }}
+            sx={{ mb: 2 }}
+          />
+          <Box sx={{ overflowY: 'auto', flexGrow: 1 }}>
+            {issuesLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : getFilteredIssues().map(issue => {
+              const issueId = issue._id;
+              const { title, description } = getIssueDisplayData(issue);
+
+              const linkedItem = agendaState.find(item => item.linkedIssues.includes(issueId));
+              let linkStatus = 'none';
+              if (linkedItem) {
+                linkStatus = linkedItem.id === issueLinkingModal ? 'current' : 'other';
+              }
+
+              return (
+                <Stack direction="row" alignItems="center" spacing={1} key={issueId}
+                  sx={theme => {
+                    const styles = {
+                      p: 1,
+                      border: `1px solid ${theme.palette.divider}`,
+                      borderRadius: 1,
+                      mb: 1,
+                      cursor: 'pointer',
+                      transition: 'background 0.2s, color 0.2s',
+                    };
+                    if (linkStatus === 'current') {
+                      styles.bgcolor = theme.palette.primary.main;
+                      styles.color = theme.palette.common.white;
+                      styles.fontWeight = 'bold';
+                      styles['&:hover'] = { bgcolor: theme.palette.primary.dark };
+                    } else if (linkStatus === 'other') {
+                      styles.bgcolor = theme.palette.grey[400];
+                      styles.color = theme.palette.getContrastText(theme.palette.grey[400]);
+                      styles['&:hover'] = { bgcolor: theme.palette.grey[500] };
+                    } else {
+                      styles.bgcolor = theme.palette.background.paper;
+                      styles.color = theme.palette.text.primary;
+                      styles['&:hover'] = { bgcolor: theme.palette.action.hover };
+                    }
+                    return styles;
+                  }}
+                >
+                  <Box
+                    sx={{ flexGrow: 1 }}
+                    onClick={() => toggleIssueLink(issueLinkingModal, issueId)}
+                  >
+                    <Typography variant="body2">{title}</Typography>
+                    <Typography variant="caption" color="text.secondary">{description}</Typography>
+                  </Box>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setViewedIssue(issue);
+                    }}
+                    sx={{
+                      color: linkStatus === 'current' ? 'white' : 'inherit'
+                    }}
+                  >
+                    <VisibilityIcon fontSize="small" />
+                  </IconButton>
+                </Stack>
+              );
+            })}
+          </Box>
+        </Box>
+      </Modal>
+
+      <IssueDetailsModal
+        issue={viewedIssue}
+        open={Boolean(viewedIssue)}
+        onClose={() => setViewedIssue(null)}
+      />
+    </Box>
+  );
+};
