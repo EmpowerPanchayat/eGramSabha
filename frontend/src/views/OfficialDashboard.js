@@ -103,7 +103,6 @@ const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha }) =
                 }
 
                 const data = await response.json();
-                console.log('Official profile data:', data);
                 setPanchayatInfo(data.data.panchayat);
 
                 // Update the entire userState with the response data

@@ -228,7 +228,6 @@ export const fetchPastMeetings = async (panchayatId) => {
  */
 export const submitRSVP = async (meetingId, rsvpData, userId) => {
     try {
-        console.log({meetingId, rsvpData, userId});
         const response = await api.post(`/gram-sabha/${meetingId}/rsvp/${userId}`, rsvpData);
         return response.data;
     } catch (error) {
@@ -275,7 +274,6 @@ export const getRSVPStats = async (meetingId) => {
  */
 export const fetchTodaysMeetings = async (panchayatId) => {
     try {
-        console.log('Fetching today\'s meetings for Panchayat ID:', panchayatId);
         const response = await api.get(`/gram-sabha/panchayat/${panchayatId}/today`);
         return response.data;
     } catch (error) {
