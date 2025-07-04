@@ -758,6 +758,25 @@ class LLMService:
             "status": "failed_reduce_step"
         }
 
+    def _normalize_agenda_items(self, agenda_list):
+        """Ensure each agenda item has title/description as objects with at least an 'en' key."""
+        normalized = []
+        for item in agenda_list:
+            new_item = dict(item)
+            # Normalize title
+            if isinstance(new_item.get('title'), str):
+                new_item['title'] = {'en': new_item['title']}
+            elif isinstance(new_item.get('title'), dict):
+                # Already a dict, do nothing
+                pass
+            # Normalize description
+            if isinstance(new_item.get('description'), str):
+                new_item['description'] = {'en': new_item['description']}
+            elif isinstance(new_item.get('description'), dict):
+                pass
+            normalized.append(new_item)
+        return normalized
+
     def generate_multilingual_agenda_from_issues(self, issues: list, primary_language: str = "en") -> Dict[str, str]:
         """Generate agenda from issues in multiple languages"""
         logger.info(f"Starting multilingual agenda generation for language: {primary_language}")
@@ -772,6 +791,11 @@ class LLMService:
             }
 
         result = self._generate_multilingual_agenda_with_llm(issues, primary_language)
+        # --- Normalize agenda items in all languages ---
+        for lang in [primary_language, 'english', 'hindi']:
+            key = f"{lang}_agenda"
+            if key in result and isinstance(result[key], list):
+                result[key] = self._normalize_agenda_items(result[key])
         return result
 
     def _generate_multilingual_agenda_with_llm(self, issues: list, primary_language: str) -> Dict[str, str]:
@@ -779,30 +803,43 @@ class LLMService:
         
         issues_text = self._format_issues_for_prompt(issues)
         
+        # Use regular string concatenation to avoid f-string brace conflicts
+        system_prompt = (
+            "You are an expert secretary for Gram Sabha meetings and deeply familiar with Indian Panchayat-level issues and regional languages.\n\n"
+            "Your task is to create a structured meeting agenda from a list of issues, clustering similar issues together. "
+            "You must provide the agenda in English, Hindi, and a requested primary language.\n\n"
+            
+            "1. Input: A list of issues (provided by user)\n"
+            "2. Output: A VALID JSON STRING (parseable with json.loads()) with these exact keys:\n"
+            "{\n"
+            f'  "{primary_language}_agenda": "A list of structured agenda items in the requested primary language",\n'
+            '  "english_agenda": "A list of structured agenda items in English",\n'
+            '  "hindi_agenda": "A list of structured agenda items in Hindi"\n'
+            "}\n\n"
+            
+            "3. Agenda Item Structure (Each item in the list must be a JSON object):\n"
+            "{\n"
+            '   "title": "Very short problem summary (5-8 words)",\n'
+            '   "description": "1-line plain language explanation",\n'
+            '   "issue_ids": {\n'
+            '        "issue_id": "a 2-3 word summary of issue"\n'
+            '    }\n'
+            "}\n\n"
+
+            "4. Strict Rules:\n"
+            "1. GROUP similar issues by matching their core problems (ignore minor wording differences).\n"
+            "2. For each group, create ONE agenda item.\n"
+            "3. Never split the same issue ID across multiple items.\n"
+            "4. Keep titles specific (include location if relevant).\n"
+            "5. Make descriptions clear and simple for villagers to understand.\n"
+            "6. Ensure consistency across all language versions.\n"
+            "7. Return ONLY the JSON object, no additional text or explanations."
+        )
+
         messages = [
             {
                 "role": "system",
-                "content": f"""You are an expert secretary for Gram Sabha meetings and deeply familiar with Indian Panchayat-level issues and regional languages.
-
-Create structured meeting agendas from issues in English and Hindi.
-Return your response as a JSON object with exactly these keys:
-- {primary_language}_agenda: Agenda in the requested primary language
-- english_agenda: Agenda in English  
-- hindi_agenda: Agenda in Hindi
-
-AGENDA ITEM FORMAT RULES:
-1. GROUP similar issues by matching their core problems (ignore minor wording differences)
-2. For each group create ONE agenda item with:
-   - title: Very short problem summary (5-8 words)
-   - description: 1-line plain language explanation
-   - issue_ids: ALL original IDs in this cluster
-
-IMPORTANT RULES:
-- Never split same issue IDs across multiple items
-- Keep titles specific (include location if relevant)
-- Make descriptions clear for villagers to understand
-- Group similar issues together to avoid duplication
-- Format professionally and make them actionable"""
+                "content": system_prompt
             },
             {
                 "role": "user",
@@ -812,8 +849,7 @@ IMPORTANT RULES:
 
 Primary language requested: {primary_language}
 
-Create comprehensive text-based agendas that properly group similar issues together.
-Each agenda should be a well-formatted text with grouped agenda items.
+Create comprehensive, well-structured agendas that properly group similar issues together.
 Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda keys."""
             }
         ]
@@ -869,6 +905,11 @@ Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda 
             return self.generate_multilingual_agenda_from_issues(new_issues, primary_language)
 
         result = self._update_multilingual_agenda_with_llm(current_agenda, new_issues, primary_language)
+        # --- Normalize agenda items in all languages ---
+        for lang in [primary_language, 'english', 'hindi']:
+            key = f"{lang}_agenda"
+            if key in result and isinstance(result[key], list):
+                result[key] = self._normalize_agenda_items(result[key])
         return result
 
     def _update_multilingual_agenda_with_llm(self, current_agenda: list, new_issues: list, primary_language: str) -> Dict[str, str]:
@@ -877,32 +918,44 @@ Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda 
         current_agenda_text = json.dumps(current_agenda, indent=2, ensure_ascii=False)
         new_issues_text = self._format_issues_for_prompt(new_issues)
         
+        system_prompt = (
+            "You are an expert secretary for Gram Sabha meetings and deeply familiar with Indian Panchayat-level issues and regional languages.\n\n"
+            "Your task is to update a structured meeting agenda by integrating new issues. You must provide the updated agenda in English, Hindi, and a requested primary language.\n\n"
+
+            "1. Input:\n"
+            "- A current agenda (as a JSON-formatted string).\n"
+            "- A list of new issues to integrate.\n\n"
+
+            "2. Output: A VALID JSON STRING (parseable with json.loads()) with these exact keys:\n"
+            "{\n"
+            f'  "{primary_language}_agenda": "The updated list of structured agenda items in the requested language",\n'
+            '  "english_agenda": "The updated list of structured agenda items in English",\n'
+            '  "hindi_agenda": "The updated list of structured agenda items in Hindi"\n'
+            "}\n\n"
+
+            "3. Agenda Item Structure (Each item in the list must be a JSON object):\n"
+            "{\n"
+            '   "title": "Very short problem summary (5-8 words)",\n'
+            '   "description": "1-line plain language explanation",\n'
+            '   "issue_ids": {\n'
+            '        "issue_id": "a 2-3 word summary of issue"\n'
+            '    }\n'
+            "}\n\n"
+
+            "4. Strict Rules:\n"
+            "1. Integrate new issues into EXISTING agenda items if they match thematically.\n"
+            "2. Create NEW items ONLY for truly unique issues that don't fit existing categories.\n"
+            "3. Preserve all original issue IDs without duplication across the old and new items.\n"
+            "4. Keep the structure identical to the input where possible.\n"
+            "5. Never lose or duplicate any issue IDs.\n"
+            "6. Make descriptions clear and simple for villagers to understand.\n"
+            "7. Return ONLY the JSON object, no additional text or explanations."
+        )
+
         messages = [
             {
                 "role": "system",
-                "content": f"""You are an expert secretary for Gram Sabha meetings and deeply familiar with Indian Panchayat-level issues and regional languages.
-
-Update structured meeting agendas by integrating new issues in English and Hindi.
-Return your response as a JSON object with exactly these keys:
-- {primary_language}_agenda: Updated agenda in the requested primary language
-- english_agenda: Updated agenda in English
-- hindi_agenda: Updated agenda in Hindi
-
-AGENDA UPDATE RULES:
-1. Adding new issues to EXISTING agenda items when they match thematically
-2. Creating NEW items only for truly unique issues that don't fit existing categories
-3. Preserving all original issue IDs without duplication
-
-AGENDA ITEM FORMAT:
-- title: Very short problem summary (5-8 words)
-- description: 1-line plain language explanation
-- issue_ids: ALL original IDs in this cluster
-
-IMPORTANT:
-- Keep identical structure as input where possible
-- Never lose or duplicate any issue IDs
-- Make descriptions clear for villagers
-- Format professionally and make them actionable"""
+                "content": system_prompt
             },
             {
                 "role": "user",
@@ -916,7 +969,7 @@ New Issues to Integrate:
 
 Primary language requested: {primary_language}
 
-Create updated text-based agendas that properly integrate the new issues.
+Create updated, well-structured agendas that properly integrate the new issues.
 Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda keys."""
             }
         ]
