@@ -1,5 +1,6 @@
 // File: backend/models/Ward.js
 const mongoose = require('mongoose');
+const MODEL_REFS = require('./modelRefs');
 
 const wardSchema = new mongoose.Schema({
     name: {
@@ -15,7 +16,7 @@ const wardSchema = new mongoose.Schema({
     },
     panchayatId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Panchayat',
+        ref: MODEL_REFS.PANCHAYAT,
         required: true
     },
     createdAt: {

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const MODEL_REFS = require('./modelRefs');
 
 const summaryRequestSchema = new mongoose.Schema({
     requestId: {
@@ -16,7 +17,7 @@ const summaryRequestSchema = new mongoose.Schema({
     },
     panchayatId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Panchayat',
+        ref: MODEL_REFS.PANCHAYAT,
         required: true
     },
     status: {

@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const MODEL_REFS = require('./modelRefs');
 
 const gramSabhaSchema = new mongoose.Schema(
   {
@@ -30,7 +31,7 @@ const gramSabhaSchema = new mongoose.Schema(
           linkedIssues: [
             {
               type: mongoose.Schema.Types.ObjectId,
-              ref: 'Issue',
+              ref: MODEL_REFS.ISSUE,
             }
           ]
         }
@@ -84,7 +85,7 @@ const gramSabhaSchema = new mongoose.Schema(
     issues: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Issue",
+        ref: MODEL_REFS.ISSUE,
       },
     ],
     attendances: {
@@ -108,7 +109,7 @@ const gramSabhaSchema = new mongoose.Schema(
           userId: {
             type: mongoose.Schema.Types.ObjectId,
             required: true,
-            ref: "User",
+            ref: MODEL_REFS.USER,
           },
         },
       ],
@@ -165,12 +166,12 @@ const gramSabhaSchema = new mongoose.Schema(
     panchayatId: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
-      ref: "Panchayat",
+      ref: MODEL_REFS.PANCHAYAT,
     },
     scheduledById: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
-      ref: "User",
+      ref: MODEL_REFS.USER,
     },
   },
   {

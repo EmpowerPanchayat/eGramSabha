@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const MODEL_REFS = require('./modelRefs');
 
 const agendaItemSchema = new mongoose.Schema({
     title: {
@@ -13,21 +14,21 @@ const agendaItemSchema = new mongoose.Schema({
     },
     linkedIssues: [{
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Issue'
+        ref: MODEL_REFS.ISSUE,
     }]
 });
 
 const issueSummarySchema = new mongoose.Schema({
     panchayatId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Panchayat',
+        ref: MODEL_REFS.PANCHAYAT,
         required: true,
         unique: true
     },
     agendaItems: [agendaItemSchema],
     issues: [{
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Issue'
+        ref: MODEL_REFS.ISSUE,
     }]
 }, { timestamps: true });
 

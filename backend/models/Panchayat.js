@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const MODEL_REFS = require('./modelRefs');
 
 const panchayatSchema = new mongoose.Schema({
     name: {
@@ -44,7 +45,7 @@ const panchayatSchema = new mongoose.Schema({
         type: [{
             officialId: {
                 type: mongoose.Schema.Types.ObjectId,
-                ref: 'Official'
+                ref: MODEL_REFS.OFFICIAL
             },
             role: {
                 type: String,
@@ -52,7 +53,7 @@ const panchayatSchema = new mongoose.Schema({
             },
             wardId: {
                 type: mongoose.Schema.Types.ObjectId,
-                ref: 'Ward',
+                ref: MODEL_REFS.WARD,
                 // Only required for WARD_MEMBER role
             }
         }],
