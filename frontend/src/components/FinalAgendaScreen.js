@@ -27,7 +27,7 @@ import {
 import { useLanguage } from '../utils/LanguageContext';
 import { getLabelKeyFromValue } from '../utils/categoryUtils';
 import { updateAgendaSummary } from '../api/summary';
-import { fetchAllIssues, fetchMinimalIssuesByIds } from '../api/issues';
+import { fetchAllIssues, fetchMinimalIssuesByIds, fetchIssueById } from '../api/issues';
 import IssueDetailsModal from './IssueDetailsModal';
 
 export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onBack, onComplete, panchayatId }) => {
@@ -176,6 +176,19 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
     }
     const linkedIssues = issueIds.map(id => issues.find(issue => (issue._id || issue.id) === id)).filter(Boolean);
     return linkedIssues;
+  };
+
+  const handleViewIssue = async (issueId) => {
+    try {
+      const response = await fetchIssueById(issueId);
+      if (response && response.issue) {
+        setViewedIssue(response.issue);
+      } else {
+        setSaveError('Issue not found');
+      }
+    } catch (err) {
+      setSaveError('Failed to load issue details');
+    }
   };
 
   const getFilteredIssues = () => {
@@ -555,7 +568,7 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
                     size="small"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setViewedIssue(issue);
+                      handleViewIssue(issueId);
                     }}
                     sx={{
                       color: linkStatus === 'current' ? 'white' : 'inherit'
