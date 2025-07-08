@@ -1,5 +1,6 @@
 // File: backend/models/Issue.js
 const mongoose = require('mongoose');
+const MODEL_REFS = require('./modelRefs');
 
 const attachmentSchema = new mongoose.Schema({
     attachment: {
@@ -84,7 +85,7 @@ const issueSchema = new mongoose.Schema({
     },
     createdForId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+        ref: MODEL_REFS.USER,
         required: true
     },
     status: {
@@ -104,16 +105,16 @@ const issueSchema = new mongoose.Schema({
     },
     panchayatId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Panchayat',
+        ref: MODEL_REFS.PANCHAYAT,
         required: true
     },
     gramSabhaId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'GramSabha'
+        ref: MODEL_REFS.GRAM_SABHA,
     },
     creatorId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+        ref: MODEL_REFS.USER,
         required: true
     },
     transcription: {
@@ -141,6 +142,10 @@ const issueSchema = new mongoose.Schema({
         enhancedHindiTranscription: {
             type: String,
             default: null
+        },
+        description: {
+            type: Object,
+            default: {}
         },
         language: {
             type: String,
@@ -178,6 +183,10 @@ const issueSchema = new mongoose.Schema({
             type: String,
             default: null
         }
+    },
+    isSummarized: {
+        type: Boolean,
+        default: false
     },
     createdAt: {
         type: Date,

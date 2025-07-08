@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { generateToken, generateRefreshToken } = require('../config/jwt');
+const MODEL_REFS = require('./modelRefs');
 
 const userSchema = new mongoose.Schema({
   name: String,
@@ -44,7 +45,7 @@ const userSchema = new mongoose.Schema({
   // Reference to panchayat
   panchayatId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Panchayat',
+    ref: MODEL_REFS.PANCHAYAT,
     required: true
   },
   // New fields for authentication
@@ -53,7 +54,7 @@ const userSchema = new mongoose.Schema({
   },
   wardId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Ward'
+    ref: MODEL_REFS.WARD,
   },
   // Security token for passwordless sessions
   securityToken: String,

@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { generateToken, generateRefreshToken } = require('../config/jwt');
+const MODEL_REFS = require('./modelRefs');
 
 const officialSchema = new mongoose.Schema({
     username: {
@@ -40,7 +41,7 @@ const officialSchema = new mongoose.Schema({
     },
     panchayatId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Panchayat',
+        ref: MODEL_REFS.PANCHAYAT,
         // Not required for ADMIN role
     },
     phone: {
@@ -59,12 +60,12 @@ const officialSchema = new mongoose.Schema({
     },
     linkedCitizenId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+        ref: MODEL_REFS.USER,
         // This links the official to an existing citizen user
     },
     wardId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Ward',
+        ref: MODEL_REFS.WARD,
         // Only relevant for WARD_MEMBER role
     },
     passwordResetToken: String,

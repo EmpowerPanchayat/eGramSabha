@@ -32,25 +32,20 @@ const PastMeetingsList = ({ panchayatId, user }) => {
     const [selectedMeeting, setSelectedMeeting] = useState(null);
 
     useEffect(() => {
-        console.log('PastMeetingsList - panchayatId:', panchayatId);
         loadPastMeetings();
     }, [panchayatId]);
 
     const loadPastMeetings = async () => {
         if (!panchayatId) {
-            console.log('PastMeetingsList - No panchayatId provided');
             return;
         }
 
         try {
             setLoading(true);
             setError('');
-            console.log('PastMeetingsList - Fetching meetings for panchayat:', panchayatId);
             const data = await fetchPastMeetings(panchayatId);
-            console.log('PastMeetingsList - Received meetings:', data);
             setMeetings(data);
         } catch (error) {
-            console.error('PastMeetingsList - Error loading meetings:', error);
             setError(error.message || 'Failed to load past meetings');
         } finally {
             setLoading(false);

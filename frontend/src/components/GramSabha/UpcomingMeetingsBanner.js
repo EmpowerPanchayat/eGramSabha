@@ -46,7 +46,6 @@ const UpcomingMeetingsBanner = ({ panchayatId, user }) => {
     const [selectedMeetingId, setSelectedMeetingId] = useState(null);
 
     useEffect(() => {
-        console.log('UpcomingMeetingsBanner - panchayatId:', panchayatId);
         if (panchayatId) {
             loadUpcomingMeetings();
         }
@@ -60,7 +59,6 @@ const UpcomingMeetingsBanner = ({ panchayatId, user }) => {
             setError('');
             const data = await fetchUpcomingMeetings(panchayatId);
             setMeetings(data);
-            console.log('UpcomingMeetingsBanner - Received meetings:', data);
             // Load RSVP status for each meeting
             data.forEach(meeting => {
                 loadRSVPStatus(meeting._id);

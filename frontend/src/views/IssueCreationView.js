@@ -184,17 +184,10 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
 
             // Process audio attachment if exists
             if (audioBlob) {
-                console.log(`[IssueCreationView] Processing audio attachment for issue: ${issueId}`);
                 const reader = new FileReader();
                 reader.readAsDataURL(audioBlob);
                 reader.onloadend = async () => {
                     try {
-                        console.log(`[IssueCreationView] Uploading audio attachment:`, {
-                            issueId,
-                            audioSize: audioBlob.size,
-                            mimeType: audioBlob.type
-                        });
-                        
                         const uploadResponse = await fetch(`${API_URL}/issues/upload-attachment`, {
                             method: 'POST',
                             headers: {
@@ -208,14 +201,6 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                                 mimeType: 'audio/wav'
                             })
                         });
-                        
-                        const uploadData = await uploadResponse.json();
-                        console.log(`[IssueCreationView] Audio attachment upload response:`, {
-                            issueId,
-                            success: uploadData.success,
-                            attachmentId: uploadData.attachmentId
-                        });
-                        
                     } catch (error) {
                         console.error(`[IssueCreationView] Error uploading audio attachment:`, {
                             issueId,
@@ -229,13 +214,6 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
             // Process file attachments
             for (const file of attachments) {
                 try {
-                    console.log(`[IssueCreationView] Uploading file attachment:`, {
-                        issueId,
-                        filename: file.name,
-                        fileSize: file.size,
-                        mimeType: file.type
-                    });
-                    
                     const uploadResponse = await fetch(`${API_URL}/issues/upload-attachment`, {
                         method: 'POST',
                         headers: {
@@ -249,15 +227,6 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                             mimeType: file.type
                         })
                     });
-                    
-                    const uploadData = await uploadResponse.json();
-                    console.log(`[IssueCreationView] File attachment upload response:`, {
-                        issueId,
-                        filename: file.name,
-                        success: uploadData.success,
-                        attachmentId: uploadData.attachmentId
-                    });
-                    
                 } catch (error) {
                     console.error(`[IssueCreationView] Error uploading file attachment:`, {
                         issueId,

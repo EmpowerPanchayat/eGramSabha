@@ -33,16 +33,13 @@ const PanchayatSelector = ({
       setLoading(true);
       try {
         const data = await fetchPanchayats();
-        console.log("Loaded panchayats:", data);
         setPanchayats(data);
 
         // Auto-select first panchayat if no value and only one panchayat exists
         if (!value && data.length === 1 && onChange && !showAllOption) {
-          console.log("Auto-selecting first panchayat:", data[0]._id);
           onChange(data[0]._id);
         }
       } catch (error) {
-        console.error('Error loading panchayats:', error);
         setError('Failed to load panchayats');
       } finally {
         setLoading(false);
@@ -114,7 +111,6 @@ const PanchayatSelector = ({
         value={value || ''}
         label={label || undefined}
         onChange={(e) => {
-          console.log("PanchayatSelector onChange triggered with value:", e.target.value);
           onChange(e.target.value);
         }}
         displayEmpty={!label}

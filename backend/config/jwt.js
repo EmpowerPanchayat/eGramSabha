@@ -44,7 +44,6 @@ const generateToken = (payload, userType) => {
 // Verify token based on user type
 const verifyToken = (token, userType) => {
     let secret;
-    console.log('Verifying token for user type:', userType);
     switch (userType) {
         case 'ADMIN':
             secret = JWT_ADMIN_SECRET;
