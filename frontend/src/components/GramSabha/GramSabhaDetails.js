@@ -487,9 +487,9 @@ const GramSabhaDetails = ({ meetingId, user }) => {
               <table border="1" cellpadding="4" cellspacing="0" style="border-collapse: collapse; width: 100%; font-size: 11px; margin-bottom: 10px; table-layout: fixed;">
                 <thead>
                   <tr>
-                    <th style="width: 10%;text-align: center;">S.No</th>
-                    <th style="width: 70%;">Issue Description</th>
-                    <th style="width: 20%; text-align: center; vertical-align: top;">Issue Owner</th>
+                    <th style="width: 10%;text-align: center;">${strings.serialNo}</th>
+                    <th style="width: 70%;">${strings.issueDescription}</th>
+                    <th style="width: 20%; text-align: center; vertical-align: top;">${strings.issueOwner}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -503,7 +503,7 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                           || issue.transcription?.text
                           || "-"}
                       </td>
-                      <td style="text-align: center;">${issue.creatorId?.name || '-'}</td>
+                      <td style="text-align: center;">${issue.createdForId?.name || '-'}</td>
                     </tr>
                   `).join("")}
                 </tbody>

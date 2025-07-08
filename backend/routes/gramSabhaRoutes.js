@@ -361,8 +361,8 @@ router.get("/:id", async (req, res) => {
     for (const agendaItem of gramSabha.agenda || []) {
       if (Array.isArray(agendaItem.linkedIssues) && agendaItem.linkedIssues.length > 0) {
         const issues = await Issue.find({ _id: { $in: agendaItem.linkedIssues } })
-          .select('transcription creatorId')
-          .populate('creatorId', 'name')
+          .select('transcription creatorId createdForId')
+          .populate('createdForId', 'name')
           .lean();
         agendaItem.linkedIssues = issues;
       }

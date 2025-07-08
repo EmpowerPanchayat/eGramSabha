@@ -216,7 +216,21 @@ const fetchSummaryResults = cron.schedule('*/1 * * * *', async () => {
                         };
                     });
 
-                    if (request.requestType === 'CREATE') {
+
+                    // check if issue summary already exists for the panchayat
+                    const existingSummary = await IssueSummary.findOne({ panchayatId: request.panchayatId });
+                    // If it exists and it's agenda items are empty, we update it; otherwise, we create a new one
+                    if (existingSummary && existingSummary.agendaItems.length == 0) {
+                        await IssueSummary.findOneAndUpdate(
+                            { panchayatId: request.panchayatId },
+                            {
+                                $set: { agendaItems: agendaItems },
+                                $addToSet: { issues: { $each: allIssueIds.map(id => new mongoose.Types.ObjectId(id)) } }
+                            },
+                            { new: true, upsert: true }
+                        );
+                    }
+                    else if (request.requestType === 'CREATE') {
                         await IssueSummary.create({
                             panchayatId: request.panchayatId,
                             agendaItems: agendaItems,
