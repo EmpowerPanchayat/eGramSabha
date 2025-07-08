@@ -8,7 +8,7 @@ const agendaService = require('../services/agendaService');
 const transcriptionService = require('../services/transcriptionService');
 
 // Cron job to initiate issue summary generation
-const initiateSummaryGeneration = cron.schedule('*/1 * * * *', async () => {
+const initiateSummaryGeneration = cron.schedule('0 * * * *', async () => {
     try {
         const panchayats = await Panchayat.find({});
         for (const panchayat of panchayats) {
@@ -68,7 +68,7 @@ const initiateSummaryGeneration = cron.schedule('*/1 * * * *', async () => {
 
 
 // Cron job to fetch results of summary generation
-const fetchSummaryResults = cron.schedule('*/1 * * * *', async () => {
+const fetchSummaryResults = cron.schedule('0 * * * *', async () => {
     try {
         const pendingRequests = await SummaryRequest.find({ status: 'PROCESSING' });
 
