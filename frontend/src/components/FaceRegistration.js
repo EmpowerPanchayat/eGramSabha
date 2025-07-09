@@ -173,6 +173,10 @@ const FaceRegistration = ({
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter((d) => d.kind === "videoinput");
 
+      if (videoDevices.length === 0) {
+        throw new Error("No video input devices found");
+      }
+
       const categorized = { user: null, environment: null };
 
       for (const device of videoDevices) {
@@ -181,7 +185,7 @@ const FaceRegistration = ({
             video: { deviceId: { exact: device.deviceId } },
           });
           const track = stream.getVideoTracks()[0];
-          const facingMode = track.getSettings().facingMode;
+          const facingMode = track.getSettings().facingMode || "user";
 
           if (facingMode === "user" && !categorized.user) {
             categorized.user = { device, facingMode };
