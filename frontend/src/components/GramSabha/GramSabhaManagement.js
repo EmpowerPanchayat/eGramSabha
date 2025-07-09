@@ -418,6 +418,8 @@ const GramSabhaManagement = ({ panchayatId }) => {
         return textObj || '';
     };
 
+    const isConcluded = selectedGramSabha && selectedGramSabha.status === 'CONCLUDED';
+
     return (
         <Box>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -522,151 +524,158 @@ const GramSabhaManagement = ({ panchayatId }) => {
                 <DialogContent>
                     <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
                         <Stack spacing={3}>
-                            <TextField
-                                fullWidth
-                                label={strings.titleOptional}
-                                name="title"
-                                value={formData.title}
-                                onChange={handleInputChange}
-                                helperText={strings.titleHelperText}
-                            />
-                            
-                            <Typography variant="subtitle2" color="text.secondary">
-                                {strings.previewTitle}: {previewTitle}
-                            </Typography>
-                            
-                            <Divider />
-                            
-                                <Typography variant="h6" gutterBottom>
-                                    {strings.dateAndTime}
-                                </Typography>
-                                
-                                <Stack direction="row" spacing={2}>
+                            {!isConcluded ? (
+                                <>
                                     <TextField
                                         fullWidth
-                                        label={strings.date}
-                                        name="date"
-                                        type="date"
-                                        value={formData.date}
+                                        label={strings.titleOptional}
+                                        name="title"
+                                        value={formData.title}
                                         onChange={handleInputChange}
-                                        InputLabelProps={{ shrink: true }}
-                                        required
+                                        helperText={strings.titleHelperText}
                                     />
-                                    <TextField
-                                        fullWidth
-                                        label={strings.time}
-                                        name="time"
-                                        type="time"
-                                        value={formData.time}
-                                        onChange={handleInputChange}
-                                        InputLabelProps={{ shrink: true }}
-                                        required
-                                    />
-                            </Stack>
-
-                            <TextField
-                                fullWidth
-                                label={strings.duration}
-                                name="scheduledDurationHours"
-                                type="number"
-                                value={formData.scheduledDurationHours}
-                                onChange={handleInputChange}
-                                InputProps={{ inputProps: { min: 15, max: 480 } }}
-                                helperText={strings.durationHelperText}
-                                required
-                            />
-
-                            <TextField
-                                fullWidth
-                                label={strings.location}
-                                name="location"
-                                value={formData.location}
-                                onChange={handleInputChange}
-                                required
-                            />
-
-                            {/* Agenda Items from Issue Summary */}
-                            <Box>
-                                <Typography variant="h6" gutterBottom>
-                                    {strings.agenda || 'Agenda Items'}
-                                </Typography>
-                                
-                                {loadingAgenda ? (
-                                    <Box display="flex" justifyContent="center" p={2}>
-                                        <CircularProgress size={24} />
-                                    </Box>
-                                ) : allAgendaItems.length > 0 ? (
-                                    <Box>
-                                        <Typography variant="body2" color="text.secondary" gutterBottom>
-                                            Select agenda items to include in this meeting:
+                                    
+                                    <Typography variant="subtitle2" color="text.secondary">
+                                        {strings.previewTitle}: {previewTitle}
+                                    </Typography>
+                                    
+                                    <Divider />
+                                    
+                                        <Typography variant="h6" gutterBottom>
+                                            {strings.dateAndTime}
                                         </Typography>
-                                        <Paper variant="outlined" sx={{ p: 2 }}>
-                                            {allAgendaItems.map((item, index) => {
-                                                const isSelected = selectedAgendaItems.some(selected =>
-                                                    selected._id === item._id
-                                                );
-                                                return (
-                                                    <Box
-                                                        key={item._id || index}
-                                                        sx={{
-                                                            p: 2,
-                                                            mb: 1,
-                                                            border: '1px solid #e0e0e0',
-                                                            borderRadius: 1,
-                                                            backgroundColor: isSelected ? '#e3f2fd' : '#fafafa',
-                                                            cursor: 'pointer',
-                                                            '&:hover': {
-                                                                backgroundColor: isSelected ? '#bbdefb' : '#f5f5f5'
-                                                            }
-                                                        }}
-                                                        onClick={() => {
-                                                            if (isSelected) {
-                                                                setSelectedAgendaItems(selectedAgendaItems.filter(selected =>
-                                                                    selected._id !== item._id
-                                                                ));
-                                                            } else {
-                                                                setSelectedAgendaItems([...selectedAgendaItems, item]);
-                                                            }
-                                                        }}
-                                                    >
-                                                        <Box display="flex" alignItems="flex-start">
-                                                            <Checkbox
-                                                                checked={isSelected}
-                                                                sx={{ mt: 0 }}
-                                                            />
-                                                            <Box sx={{ ml: 1, flex: 1 }}>
-                                                                <Typography variant="subtitle1" fontWeight="medium">
-                                                                    {getMultilingualText(item, 'title') || `Agenda Item ${index + 1}`}
-                                                                </Typography>
-                                                                <Typography variant="body2" color="text.secondary">
-                                                                    {getMultilingualText(item, 'description') || 'No description available'}
-                                                                </Typography>
-                                                                {item.linkedIssues && item.linkedIssues.length > 0 && (
-                                                                    <Typography variant="caption" color="primary" sx={{ mt: 0.5, display: 'block' }}>
-                                                                        📋 {item.linkedIssues.length} linked issue{item.linkedIssues.length !== 1 ? 's' : ''}
-                                                                    </Typography>
-                                                                )}
-                                                            </Box>
-                                                        </Box>
-                                                    </Box>
-                                                );
-                                            })}
-                                        </Paper>
-                                        {selectedAgendaItems.length > 0 && (
-                                            <Box sx={{ mt: 2, p: 2, backgroundColor: '#e8f5e8', borderRadius: 1, border: '1px solid #4caf50' }}>
-                                                <Typography variant="body2" color="success.main" fontWeight="medium">
-                                                    ✅ {selectedAgendaItems.length} item{selectedAgendaItems.length !== 1 ? 's' : ''} selected for this meeting
-                                                </Typography>
+                                        
+                                        <Stack direction="row" spacing={2}>
+                                            <TextField
+                                                fullWidth
+                                                label={strings.date}
+                                                name="date"
+                                                type="date"
+                                                value={formData.date}
+                                                onChange={handleInputChange}
+                                                InputLabelProps={{ shrink: true }}
+                                                required
+                                            />
+                                            <TextField
+                                                fullWidth
+                                                label={strings.time}
+                                                name="time"
+                                                type="time"
+                                                value={formData.time}
+                                                onChange={handleInputChange}
+                                                InputLabelProps={{ shrink: true }}
+                                                required
+                                            />
+                                    </Stack>
+
+                                    <TextField
+                                        fullWidth
+                                        label={strings.duration}
+                                        name="scheduledDurationHours"
+                                        type="number"
+                                        value={formData.scheduledDurationHours}
+                                        onChange={handleInputChange}
+                                        InputProps={{ inputProps: { min: 15, max: 480 } }}
+                                        helperText={strings.durationHelperText}
+                                        required
+                                    />
+
+                                    <TextField
+                                        fullWidth
+                                        label={strings.location}
+                                        name="location"
+                                        value={formData.location}
+                                        onChange={handleInputChange}
+                                        required
+                                    />
+
+                                    {/* Agenda Items from Issue Summary */}
+                                    <Box>
+                                        <Typography variant="h6" gutterBottom>
+                                            {strings.agenda || 'Agenda Items'}
+                                        </Typography>
+                                        
+                                        {loadingAgenda ? (
+                                            <Box display="flex" justifyContent="center" p={2}>
+                                                <CircularProgress size={24} />
                                             </Box>
+                                        ) : allAgendaItems.length > 0 ? (
+                                            <Box>
+                                                <Typography variant="body2" color="text.secondary" gutterBottom>
+                                                    Select agenda items to include in this meeting:
+                                                </Typography>
+                                                <Paper variant="outlined" sx={{ p: 2 }}>
+                                                    {allAgendaItems.map((item, index) => {
+                                                        const isSelected = selectedAgendaItems.some(selected =>
+                                                            selected._id === item._id
+                                                        );
+                                                        return (
+                                                            <Box
+                                                                key={item._id || index}
+                                                                sx={{
+                                                                    p: 2,
+                                                                    mb: 1,
+                                                                    border: '1px solid #e0e0e0',
+                                                                    borderRadius: 1,
+                                                                    backgroundColor: isSelected ? '#e3f2fd' : '#fafafa',
+                                                                    cursor: 'pointer',
+                                                                    '&:hover': {
+                                                                        backgroundColor: isSelected ? '#bbdefb' : '#f5f5f5'
+                                                                    }
+                                                                }}
+                                                                onClick={() => {
+                                                                    if (isSelected) {
+                                                                        setSelectedAgendaItems(selectedAgendaItems.filter(selected =>
+                                                                            selected._id !== item._id
+                                                                        ));
+                                                                    } else {
+                                                                        setSelectedAgendaItems([...selectedAgendaItems, item]);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Box display="flex" alignItems="flex-start">
+                                                                    <Checkbox
+                                                                        checked={isSelected}
+                                                                        sx={{ mt: 0 }}
+                                                                    />
+                                                                    <Box sx={{ ml: 1, flex: 1 }}>
+                                                                        <Typography variant="subtitle1" fontWeight="medium">
+                                                                            {getMultilingualText(item, 'title') || `Agenda Item ${index + 1}`}
+                                                                        </Typography>
+                                                                        <Typography variant="body2" color="text.secondary">
+                                                                            {getMultilingualText(item, 'description') || 'No description available'}
+                                                                        </Typography>
+                                                                        {item.linkedIssues && item.linkedIssues.length > 0 && (
+                                                                            <Typography variant="caption" color="primary" sx={{ mt: 0.5, display: 'block' }}>
+                                                                                📋 {item.linkedIssues.length} linked issue{item.linkedIssues.length !== 1 ? 's' : ''}
+                                                                            </Typography>
+                                                                        )}
+                                                                    </Box>
+                                                                </Box>
+                                                            </Box>
+                                                        );
+                                                    })}
+                                                </Paper>
+                                                {selectedAgendaItems.length > 0 && (
+                                                    <Box sx={{ mt: 2, p: 2, backgroundColor: '#e8f5e8', borderRadius: 1, border: '1px solid #4caf50' }}>
+                                                        <Typography variant="body2" color="success.main" fontWeight="medium">
+                                                            ✅ {selectedAgendaItems.length} item{selectedAgendaItems.length !== 1 ? 's' : ''} selected for this meeting
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                            </Box>
+                                        ) : (
+                                            <Alert severity="info">
+                                                {strings.noAgendaInfo}
+                                            </Alert>
                                         )}
                                     </Box>
-                                ) : (
-                                    <Alert severity="info">
-                                        No agenda items available. Please ensure issues have been summarized for this panchayat.
-                                    </Alert>
-                                )}
-                            </Box>
-
+                                </>
+                            ) : 
+                                <Alert severity="info">
+                                    {strings.meetingConcludedInfo}
+                                </Alert>
+                            }
                             <Box>
                                 <Typography variant="subtitle1" gutterBottom>
                                     {strings.attachments}

@@ -270,6 +270,9 @@ const translations = {
     clickToUpload: "Click to upload",
     uploadFiles: "Upload Files",
     fileName: "File Name",
+    meetingConcludedInfo : "Since the meeting is CONCLUDED, you can only upload any attachment if required. To view meeting details, please click on the View Details(eye) button in Actions Section.",
+    noAgendaInfo: "No agenda items available. Please ensure issues have been summarized for this panchayat.",
+
     // Table Headers
     tableTitle: "Title",
     tableDateTime: "Date & Time",
@@ -695,6 +698,9 @@ const translations = {
     clickToUpload: "अपलोड करने के लिए क्लिक करें",
     uploadFiles: "फ़ाइल अपलोड करें",
     fileName: "फ़ाइल का नाम",
+    meetingConcludedInfo: "चूंकि बैठक समाप्त हो चुकी है, आप केवल आवश्यकतानुसार कोई अटैचमेंट अपलोड कर सकते हैं। बैठक विवरण देखने के लिए कृपया क्रियाएँ अनुभाग में विवरण देखें (आंख) बटन पर क्लिक करें।",
+    noAgendaInfo: "कोई एजेंडा आइटम उपलब्ध नहीं है। कृपया सुनिश्चित करें कि इस पंचायत के मुद्दों को संक्षेपित किया गया है।",
+
     // Table Headers
     tableTitle: "शीर्षक",
     tableDateTime: "तिथि और समय",
