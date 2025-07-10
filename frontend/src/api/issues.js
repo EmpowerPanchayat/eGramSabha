@@ -134,8 +134,6 @@ export const fetchAllIssues = async (params = {}) => {
  * @returns {Promise<Object>} Transcription status and data
  */
 export const getTranscriptionStatus = async (issueId) => {
-    console.log(`[FrontendAPI] Getting transcription status for issue: ${issueId}`);
-    
     try {
         const response = await fetch(`${API_URL}/issues/${issueId}/transcription`, {
             method: 'GET',
@@ -145,17 +143,10 @@ export const getTranscriptionStatus = async (issueId) => {
             },
         });
 
-        console.log(`[FrontendAPI] Transcription status response:`, {
-            issueId,
-            status: response.status,
-            ok: response.ok
-        });
-
         if (!response.ok) {
             if (response.status === 401) {
                 const json = await response.json();
                 if (json?.expired) {
-                    console.log(`[FrontendAPI] Token expired, attempting refresh for issue: ${issueId}`);
                     const refreshed = await handleTokenRefresh();
                     if (!refreshed) throw new Error('Session expired. Please login again.');
                     return { retry: true };
@@ -165,16 +156,10 @@ export const getTranscriptionStatus = async (issueId) => {
         }
 
         const data = await response.json();
-        console.log(`[FrontendAPI] Transcription status data received:`, {
-            issueId,
-            success: data.success,
-            hasTranscription: !!data.transcription,
-            transcriptionStatus: data.transcription?.status
-        });
         
         return data;
     } catch (error) {
-        console.error(`[FrontendAPI] Error fetching transcription status:`, {
+        console.error(`Error fetching transcription status:`, {
             issueId,
             error: error.message,
             stack: error.stack
@@ -189,8 +174,6 @@ export const getTranscriptionStatus = async (issueId) => {
  * @returns {Promise<Object>} Retry response
  */
 export const retryTranscription = async (issueId) => {
-    console.log(`[FrontendAPI] Retrying transcription for issue: ${issueId}`);
-    
     try {
         const response = await fetch(`${API_URL}/issues/${issueId}/transcription/retry`, {
             method: 'POST',
@@ -200,17 +183,10 @@ export const retryTranscription = async (issueId) => {
             },
         });
 
-        console.log(`[FrontendAPI] Transcription retry response:`, {
-            issueId,
-            status: response.status,
-            ok: response.ok
-        });
-
         if (!response.ok) {
             if (response.status === 401) {
                 const json = await response.json();
                 if (json?.expired) {
-                    console.log(`[FrontendAPI] Token expired, attempting refresh for retry: ${issueId}`);
                     const refreshed = await handleTokenRefresh();
                     if (!refreshed) throw new Error('Session expired. Please login again.');
                     return { retry: true };
@@ -220,20 +196,49 @@ export const retryTranscription = async (issueId) => {
         }
 
         const data = await response.json();
-        console.log(`[FrontendAPI] Transcription retry successful:`, {
-            issueId,
-            success: data.success,
-            message: data.message,
-            transcriptionStatus: data.transcription?.status
-        });
         
         return data;
     } catch (error) {
-        console.error(`[FrontendAPI] Error retrying transcription:`, {
+        console.error(`Error retrying transcription:`, {
             issueId,
             error: error.message,
             stack: error.stack
         });
         throw error;
     }
+};
+
+export const fetchIssueById = async (id) => {
+    const url = `${API_URL}/issues/${id}`;
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders(),
+            },
+        });
+        if (!response.ok) {
+            throw new Error('Failed to fetch issue');
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Fetch error:', error);
+        throw error;
+    }
+};
+
+export const fetchMinimalIssuesByIds = async (ids) => {
+    const url = `${API_URL}/issues/batch-minimal`;
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ ids }),
+    });
+    if (!response.ok) throw new Error('Failed to fetch minimal issues');
+    const data = await response.json();
+    return data.issues;
 };

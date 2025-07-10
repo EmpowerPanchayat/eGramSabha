@@ -26,17 +26,14 @@ import {
     Paper,
     Alert,
     CircularProgress,
-        Divider,
-        InputAdornment,
-        List,
-        ListItem,
-        ListItemIcon,
-        ListItemText
+    Checkbox,
+    Divider,
+    List,
+    ListItem,
+    ListItemIcon,
+    ListItemText
 } from '@mui/material';
-    import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, AttachFile as AttachFileIcon } from '@mui/icons-material';
-import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, AttachFile as AttachFileIcon, Close as CloseIcon } from '@mui/icons-material';
 import {
     fetchGramSabhaMeetings,
     createGramSabhaMeeting,
@@ -44,12 +41,13 @@ import {
     deleteGramSabhaMeeting,
     addAttachment
 } from '../../api/gram-sabha';
+import { fetchIssueSummary } from '../../api/summary';
 import { useAuth } from '../../utils/authContext';
 import { useLanguage } from '../../utils/LanguageContext';
 import GramSabhaDetails from './GramSabhaDetails';
 
 const GramSabhaManagement = ({ panchayatId }) => {
-    const { strings } = useLanguage();
+    const { strings, language } = useLanguage();
     const [gramSabhas, setGramSabhas] = useState([]);
     const [openDialog, setOpenDialog] = useState(false);
     const [selectedGramSabha, setSelectedGramSabha] = useState(null);
@@ -62,13 +60,16 @@ const GramSabhaManagement = ({ panchayatId }) => {
         date: '',
         time: '',
         location: '',
-        agenda: '',
         scheduledDurationHours: 2,
         attachments: []
     });
     const [previewTitle, setPreviewTitle] = useState('');
     const { user, logout } = useAuth();
     const [selectedMeetingId, setSelectedMeetingId] = useState(null);
+    const [agendaItems, setAgendaItems] = useState([]);
+    const [loadingAgenda, setLoadingAgenda] = useState(false);
+    const [selectedAgendaItems, setSelectedAgendaItems] = useState([]);
+    const [allAgendaItems, setAllAgendaItems] = useState([]);
 
     useEffect(() => {
         if (!user) {
@@ -83,6 +84,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
         }
 
         loadGramSabhas();
+        loadAgendaItems();
     }, [panchayatId, user]);
 
     useEffect(() => {
@@ -126,20 +128,70 @@ const GramSabhaManagement = ({ panchayatId }) => {
         }
     };
 
+    const loadAgendaItems = async () => {
+        if (!panchayatId) return;
+
+        try {
+            setLoadingAgenda(true);
+            const summaryData = await fetchIssueSummary(panchayatId);
+            if (summaryData.success && summaryData.summary && summaryData.summary.agendaItems) {
+                setAgendaItems(summaryData.summary.agendaItems);
+                // Initialize selected items as empty for new meetings
+                setSelectedAgendaItems([]);
+            } else {
+                setAgendaItems([]);
+                setSelectedAgendaItems([]);
+            }
+        } catch (error) {
+            console.error('Error loading agenda items:', error);
+            setAgendaItems([]);
+            setSelectedAgendaItems([]);
+        } finally {
+            setLoadingAgenda(false);
+        }
+    };
+
+    // Helper to merge and deduplicate agenda items by _id
+    const mergeAgendaItems = (meetingAgenda, summaryAgenda) => {
+        const map = new Map();
+        meetingAgenda.forEach(item => item._id && map.set(item._id, item));
+        summaryAgenda.forEach(item => item._id && !map.has(item._id) && map.set(item._id, item));
+        return Array.from(map.values());
+    };
+
+    // Load agenda items for dialog (meeting + summary)
+    const loadAgendaItemsForDialog = async (gramSabha) => {
+        setLoadingAgenda(true);
+        try {
+            const summaryData = await fetchIssueSummary(panchayatId);
+            const summaryAgenda = (summaryData.success && summaryData.summary && summaryData.summary.agendaItems) ? summaryData.summary.agendaItems : [];
+            const meetingAgenda = gramSabha && Array.isArray(gramSabha.agenda) ? gramSabha.agenda : [];
+            const merged = mergeAgendaItems(meetingAgenda, summaryAgenda);
+            setAllAgendaItems(merged);
+            // Pre-select those in the meeting's agenda
+            setSelectedAgendaItems(meetingAgenda);
+        } catch (error) {
+            setAllAgendaItems([]);
+            setSelectedAgendaItems([]);
+        } finally {
+            setLoadingAgenda(false);
+        }
+    };
+
     const handleOpenDialog = (gramSabha = null) => {
         if (gramSabha) {
             setSelectedGramSabha(gramSabha);
             const dateTime = new Date(gramSabha.dateTime);
             setFormData({
                 title: gramSabha.title,
-                date: dateTime.toISOString().split('T')[0], // Format: YYYY-MM-DD
-                time: dateTime.toTimeString().slice(0, 5), // Format: HH:MM
+                date: dateTime.toISOString().split('T')[0],
+                time: dateTime.toTimeString().slice(0, 5),
                 location: gramSabha.location,
-                agenda: gramSabha.agenda,
                 description: gramSabha.description,
-                    scheduledDurationHours: gramSabha.scheduledDurationHours,
-                    attachments: gramSabha.attachments || []
+                scheduledDurationHours: gramSabha.scheduledDurationHours,
+                attachments: gramSabha.attachments || []
             });
+            loadAgendaItemsForDialog(gramSabha);
         } else {
             setSelectedGramSabha(null);
             setFormData({
@@ -147,11 +199,11 @@ const GramSabhaManagement = ({ panchayatId }) => {
                 date: '',
                 time: '',
                 location: '',
-                agenda: '',
                 description: '',
                 scheduledDurationHours: 2,
                 attachments: []
             });
+            loadAgendaItemsForDialog(null);
         }
         setOpenDialog(true);
     };
@@ -159,6 +211,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
     const handleCloseDialog = () => {
         setOpenDialog(false);
         setSelectedGramSabha(null);
+        setSelectedAgendaItems([]);
         setError('');
     };
 
@@ -173,19 +226,19 @@ const GramSabhaManagement = ({ panchayatId }) => {
         });
     };
 
-        const handleFileChange = (e) => {
-            const files = Array.from(e.target.files);
-            setFormData(prev => ({
-                ...prev,
-                attachments: [...prev.attachments, ...files]
-            }));
-        };
+    const handleFileChange = (e) => {
+        const files = Array.from(e.target.files);
+        setFormData(prev => ({
+            ...prev,
+            attachments: [...prev.attachments, ...files]
+        }));
+    };
 
-        const removeAttachment = (index) => {
-            setFormData(prev => ({
-                ...prev,
-                attachments: prev.attachments.filter((_, i) => i !== index)
-            }));
+    const removeAttachment = (index) => {
+        setFormData(prev => ({
+            ...prev,
+            attachments: prev.attachments.filter((_, i) => i !== index)
+        }));
     };
 
     const handleSubmit = async (e) => {
@@ -233,11 +286,6 @@ const GramSabhaManagement = ({ panchayatId }) => {
                     hasChanges = true;
                 }
 
-                if (formData.agenda !== selectedGramSabha.agenda) {
-                    formDataToSend.append('agenda', formData.agenda);
-                    hasChanges = true;
-                }
-
                 if (parseInt(formData.scheduledDurationHours) !== parseInt(selectedGramSabha.scheduledDurationHours)) {
                     formDataToSend.append('scheduledDurationHours', formData.scheduledDurationHours);
                     hasChanges = true;
@@ -254,6 +302,12 @@ const GramSabhaManagement = ({ panchayatId }) => {
                     });
                 }
 
+                // Add selected agenda items
+                if (selectedAgendaItems.length > 0) {
+                    formDataToSend.append('selectedAgendaItems', JSON.stringify(selectedAgendaItems));
+                    hasChanges = true;
+                }
+
                 if (hasChanges) {
                     await updateGramSabhaMeeting(selectedGramSabha._id, formDataToSend);
                 }
@@ -265,10 +319,15 @@ const GramSabhaManagement = ({ panchayatId }) => {
                 formDataToSend.append('title', formData.title || '');
                 formDataToSend.append('dateTime', dateTime.toISOString());
                 formDataToSend.append('location', formData.location);
-                formDataToSend.append('agenda', formData.agenda);
                 formDataToSend.append('scheduledDurationHours', formData.scheduledDurationHours);
                 formDataToSend.append('date', formData.date);
                 formDataToSend.append('time', formData.time);
+                
+                // Add selected agenda items
+                if (selectedAgendaItems.length > 0) {
+                    formDataToSend.append('selectedAgendaItems', JSON.stringify(selectedAgendaItems));
+                }
+                
                 // Append each attachment file
                 if (formData.attachments && formData.attachments.length > 0) {
                     formData.attachments.forEach(file => {
@@ -281,8 +340,11 @@ const GramSabhaManagement = ({ panchayatId }) => {
                 await createGramSabhaMeeting(formDataToSend);
                 handleCloseDialog();
                 loadGramSabhas();
+                // Reload agenda items to reflect changes
+                loadAgendaItems();
             }
         } catch (err) {
+            console.error('❌ Error in handleSubmit:', err);
             if (err.message === 'Invalid token' || err.message === 'Token has expired') {
                 logout();
                 setError('Your session has expired. Please login again.');
@@ -335,6 +397,28 @@ const GramSabhaManagement = ({ panchayatId }) => {
         setDeleteDialogOpen(false);
         setMeetingToDelete(null);
     };
+
+    // Helper function to get multilingual text
+    const getMultilingualText = (item, field) => {
+        if (!item || !item[field]) return '';
+        
+        // If it's a Map object (from MongoDB), convert to plain object first
+        let textObj = item[field];
+        if (textObj && typeof textObj === 'object' && textObj.get) {
+            // It's a Map, convert to plain object
+            textObj = Object.fromEntries(textObj);
+        }
+        
+        // If it's already a plain object with language keys
+        if (typeof textObj === 'object' && textObj !== null) {
+            return textObj[language] || textObj.en || textObj.hi || textObj.hindi || '';
+        }
+        
+        // If it's a string, return as is
+        return textObj || '';
+    };
+
+    const isConcluded = selectedGramSabha && selectedGramSabha.status === 'CONCLUDED';
 
     return (
         <Box>
@@ -440,81 +524,158 @@ const GramSabhaManagement = ({ panchayatId }) => {
                 <DialogContent>
                     <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
                         <Stack spacing={3}>
-                            <TextField
-                                fullWidth
-                                label={strings.titleOptional}
-                                name="title"
-                                value={formData.title}
-                                onChange={handleInputChange}
-                                helperText={strings.titleHelperText}
-                            />
-                            
-                            <Typography variant="subtitle2" color="text.secondary">
-                                {strings.previewTitle}: {previewTitle}
-                            </Typography>
-                            
-                            <Divider />
-                            
-                                <Typography variant="h6" gutterBottom>
-                                    {strings.dateAndTime}
-                                </Typography>
-                                
-                                <Stack direction="row" spacing={2}>
+                            {!isConcluded ? (
+                                <>
                                     <TextField
                                         fullWidth
-                                        label={strings.date}
-                                        name="date"
-                                        type="date"
-                                        value={formData.date}
+                                        label={strings.titleOptional}
+                                        name="title"
+                                        value={formData.title}
                                         onChange={handleInputChange}
-                                        InputLabelProps={{ shrink: true }}
-                                        required
+                                        helperText={strings.titleHelperText}
                                     />
+                                    
+                                    <Typography variant="subtitle2" color="text.secondary">
+                                        {strings.previewTitle}: {previewTitle}
+                                    </Typography>
+                                    
+                                    <Divider />
+                                    
+                                        <Typography variant="h6" gutterBottom>
+                                            {strings.dateAndTime}
+                                        </Typography>
+                                        
+                                        <Stack direction="row" spacing={2}>
+                                            <TextField
+                                                fullWidth
+                                                label={strings.date}
+                                                name="date"
+                                                type="date"
+                                                value={formData.date}
+                                                onChange={handleInputChange}
+                                                InputLabelProps={{ shrink: true }}
+                                                required
+                                            />
+                                            <TextField
+                                                fullWidth
+                                                label={strings.time}
+                                                name="time"
+                                                type="time"
+                                                value={formData.time}
+                                                onChange={handleInputChange}
+                                                InputLabelProps={{ shrink: true }}
+                                                required
+                                            />
+                                    </Stack>
+
                                     <TextField
                                         fullWidth
-                                        label={strings.time}
-                                        name="time"
-                                        type="time"
-                                        value={formData.time}
+                                        label={strings.duration}
+                                        name="scheduledDurationHours"
+                                        type="number"
+                                        value={formData.scheduledDurationHours}
                                         onChange={handleInputChange}
-                                        InputLabelProps={{ shrink: true }}
+                                        InputProps={{ inputProps: { min: 15, max: 480 } }}
+                                        helperText={strings.durationHelperText}
                                         required
                                     />
-                            </Stack>
 
-                            <TextField
-                                fullWidth
-                                label={strings.duration}
-                                name="scheduledDurationHours"
-                                type="number"
-                                value={formData.scheduledDurationHours}
-                                onChange={handleInputChange}
-                                InputProps={{ inputProps: { min: 15, max: 480 } }}
-                                helperText={strings.durationHelperText}
-                                required
-                            />
+                                    <TextField
+                                        fullWidth
+                                        label={strings.location}
+                                        name="location"
+                                        value={formData.location}
+                                        onChange={handleInputChange}
+                                        required
+                                    />
 
-                            <TextField
-                                fullWidth
-                                label={strings.location}
-                                name="location"
-                                value={formData.location}
-                                onChange={handleInputChange}
-                                required
-                            />
-
-                            <TextField
-                                fullWidth
-                                label={strings.agenda}
-                                name="agenda"
-                                value={formData.agenda}
-                                onChange={handleInputChange}
-                                multiline
-                                rows={6}
-                                required
-                                helperText={strings.agendaHelperText}
-                            />
-
+                                    {/* Agenda Items from Issue Summary */}
+                                    <Box>
+                                        <Typography variant="h6" gutterBottom>
+                                            {strings.agenda || 'Agenda Items'}
+                                        </Typography>
+                                        
+                                        {loadingAgenda ? (
+                                            <Box display="flex" justifyContent="center" p={2}>
+                                                <CircularProgress size={24} />
+                                            </Box>
+                                        ) : allAgendaItems.length > 0 ? (
+                                            <Box>
+                                                <Typography variant="body2" color="text.secondary" gutterBottom>
+                                                    Select agenda items to include in this meeting:
+                                                </Typography>
+                                                <Paper variant="outlined" sx={{ p: 2 }}>
+                                                    {allAgendaItems.map((item, index) => {
+                                                        const isSelected = selectedAgendaItems.some(selected =>
+                                                            selected._id === item._id
+                                                        );
+                                                        return (
+                                                            <Box
+                                                                key={item._id || index}
+                                                                sx={{
+                                                                    p: 2,
+                                                                    mb: 1,
+                                                                    border: '1px solid #e0e0e0',
+                                                                    borderRadius: 1,
+                                                                    backgroundColor: isSelected ? '#e3f2fd' : '#fafafa',
+                                                                    cursor: 'pointer',
+                                                                    '&:hover': {
+                                                                        backgroundColor: isSelected ? '#bbdefb' : '#f5f5f5'
+                                                                    }
+                                                                }}
+                                                                onClick={() => {
+                                                                    if (isSelected) {
+                                                                        setSelectedAgendaItems(selectedAgendaItems.filter(selected =>
+                                                                            selected._id !== item._id
+                                                                        ));
+                                                                    } else {
+                                                                        setSelectedAgendaItems([...selectedAgendaItems, item]);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Box display="flex" alignItems="flex-start">
+                                                                    <Checkbox
+                                                                        checked={isSelected}
+                                                                        sx={{ mt: 0 }}
+                                                                    />
+                                                                    <Box sx={{ ml: 1, flex: 1 }}>
+                                                                        <Typography variant="subtitle1" fontWeight="medium">
+                                                                            {getMultilingualText(item, 'title') || `Agenda Item ${index + 1}`}
+                                                                        </Typography>
+                                                                        <Typography variant="body2" color="text.secondary">
+                                                                            {getMultilingualText(item, 'description') || 'No description available'}
+                                                                        </Typography>
+                                                                        {item.linkedIssues && item.linkedIssues.length > 0 && (
+                                                                            <Typography variant="caption" color="primary" sx={{ mt: 0.5, display: 'block' }}>
+                                                                                📋 {item.linkedIssues.length} linked issue{item.linkedIssues.length !== 1 ? 's' : ''}
+                                                                            </Typography>
+                                                                        )}
+                                                                    </Box>
+                                                                </Box>
+                                                            </Box>
+                                                        );
+                                                    })}
+                                                </Paper>
+                                                {selectedAgendaItems.length > 0 && (
+                                                    <Box sx={{ mt: 2, p: 2, backgroundColor: '#e8f5e8', borderRadius: 1, border: '1px solid #4caf50' }}>
+                                                        <Typography variant="body2" color="success.main" fontWeight="medium">
+                                                            ✅ {selectedAgendaItems.length} item{selectedAgendaItems.length !== 1 ? 's' : ''} selected for this meeting
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                            </Box>
+                                        ) : (
+                                            <Alert severity="info">
+                                                {strings.noAgendaInfo}
+                                            </Alert>
+                                        )}
+                                    </Box>
+                                </>
+                            ) : 
+                                <Alert severity="info">
+                                    {strings.meetingConcludedInfo}
+                                </Alert>
+                            }
                             <Box>
                                 <Typography variant="subtitle1" gutterBottom>
                                     {strings.attachments}
@@ -527,7 +688,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
                                         variant="outlined"
                                         component="label"
                                         startIcon={<AttachFileIcon />}
-                                fullWidth
+                                        fullWidth
                                         sx={{
                                             height: '56px',
                                             justifyContent: 'flex-start',
@@ -611,7 +772,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
                         onClick={handleSubmit}
                         variant="contained"
                         color="primary"
-                        disabled={loading || !formData.date || !formData.time || !formData.agenda}
+                        disabled={loading || !formData.date || !formData.time || selectedAgendaItems.length === 0}
                     >
                         {loading ? <CircularProgress size={24} /> : strings.save}
                     </Button>
@@ -652,4 +813,4 @@ const GramSabhaManagement = ({ panchayatId }) => {
     );
 };
 
-export default GramSabhaManagement; 
+export default GramSabhaManagement;

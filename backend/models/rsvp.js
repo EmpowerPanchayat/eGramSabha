@@ -1,14 +1,15 @@
 const mongoose = require('mongoose');
+const MODEL_REFS = require('./modelRefs');
 
 const rsvpSchema = new mongoose.Schema({
     gramSabhaId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'GramSabha',
+        ref: MODEL_REFS.GRAM_SABHA,
         required: true
     },
     userId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+        ref: MODEL_REFS.USER,
         required: true
     },
     status: {

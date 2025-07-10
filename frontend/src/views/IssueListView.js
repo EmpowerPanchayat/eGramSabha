@@ -56,17 +56,20 @@ import CategorySubcategorySelector from '../components/IssueCategorySubcategoryS
 import { getCategoryIcon } from '../utils/issues';
 import { getLabelKeyFromValue } from '../utils/categoryUtils';
 import { fetchAllIssues, getTranscriptionStatus, retryTranscription } from '../api/issues';
+import { fetchIssueSummary } from '../api/summary';
 import tokenManager from '../utils/tokenManager';
 import formatDate from '../utils/formatDate';
 import STATUS_KEY_VALUE_MAP from "../constants/issueStatus";
+import IssueDetailsModal from '../components/IssueDetailsModal';
+import { FinalAgendaScreen } from '../components/FinalAgendaScreen';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const IssueListView = ({ user, onBack, onViewIssue }) => {
-    const { strings } = useLanguage();
+    const { strings, language } = useLanguage();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    const [tabValue, setTabValue] = useState(0); // 0 = My Issues, 1 = All Issues
+    const [tabValue, setTabValue] = useState(0); // 0 = All Issues, 1= Issue Summary
     const [issues, setIssues] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -83,10 +86,66 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
     const [transcriptionData, setTranscriptionData] = useState(null);
     const [transcriptionLoading, setTranscriptionLoading] = useState(false);
+    const [agendaItems, setAgendaItems] = useState([]);
+    const [selectedIssues, setSelectedIssues] = useState([]);
+    const [summaryLoading, setSummaryLoading] = useState(false);
+    const [summaryError, setSummaryError] = useState('');
     const [creatorId, setCreatedById] = useState('');
     const [createdForId, setCreatedForId] = useState('');
     const [users, setUsers] = useState([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
+    
+    const handleAddIssuesToSummary = (newIssues) => {
+        const newIssuesArray = Array.isArray(newIssues) ? newIssues : [newIssues];
+        setSelectedIssues(prevIssues => {
+            const existingIds = new Set(prevIssues.map(i => i._id));
+            const issuesToAdd = newIssuesArray.filter(i => !existingIds.has(i._id));
+            return [...prevIssues, ...issuesToAdd];
+        });
+    };
+    
+    // Helper function to get multilingual text - MUST be defined before functions that use it
+    const getMultilingualText = (item, field) => {
+        if (!item || !item[field]) return '';
+        
+        // If it's a Map object (from MongoDB), convert to plain object first
+        let textObj = item[field];
+        if (textObj && typeof textObj === 'object' && textObj.get) {
+            // It's a Map, convert to plain object
+            textObj = Object.fromEntries(textObj);
+        }
+        
+        // If it's already a plain object with language keys
+        if (typeof textObj === 'object' && textObj !== null) {
+            return textObj[language] || textObj.en || textObj.hi || textObj.hindi || '';
+        }
+        
+        // If it's a string, return as is
+        return textObj || '';
+    };
+
+    const meeting = {
+        selectedIssues: selectedIssues,
+        agendaItems
+    };
+
+    const fetchSummary = useCallback(async () => {
+        if (tabValue !== 1) return;
+
+        setSummaryLoading(true);
+        setSummaryError('');
+        try {
+            const { summary } = await fetchIssueSummary(user.panchayatId);
+            setAgendaItems(summary.agendaItems || []);
+            setSelectedIssues(summary.issues || []);
+        } catch (error) {
+            setSummaryError(error.message || 'Error fetching issue summary');
+            setAgendaItems([]);
+            setSelectedIssues([]);
+        } finally {
+            setSummaryLoading(false);
+        }
+    }, [tabValue, user.panchayatId]);
 
     // Helper to get Authorization header for issues endpoints
     const getAuthHeaders = () => {
@@ -142,25 +201,18 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
             };
 
             if (creatorId) {
-                console.log({creatorId});
                 params.userId = creatorId;
             }
 
             if (createdForId) {
-                console.log({createdForId});
                 params.createdForId = createdForId;
             }
 
-            if (tabValue === 0) {
-                const userId = user.linkedCitizenId || user.id;
-                params = { ...params, userId };
-            } else {
-                if (!user.panchayatId) {
-                    setError('Panchayat ID not available');
-                    return;
-                }
-                params = { ...params, panchayatId: user.panchayatId };
+            if (!user.panchayatId) {
+                setError('Panchayat ID not available');
+                return;
             }
+            params = { ...params, panchayatId: user.panchayatId };
 
             const { data, total, retry = false } = await fetchAllIssues(params);
 
@@ -181,8 +233,12 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     }, [debouncedSearchTerm, page, rowsPerPage, status, category, subcategory, creatorId, createdForId, tabValue, user.linkedCitizenId, user.id, user.panchayatId]);
 
     useEffect(() => {
-        fetchIssues();
-    }, [category, page, rowsPerPage, status, subcategory, creatorId, createdForId, tabValue, debouncedSearchTerm, fetchIssues]);
+        if (tabValue === 0) {
+            fetchIssues();
+        } else {
+            fetchSummary();
+        }
+    }, [category, page, rowsPerPage, status, subcategory, creatorId, createdForId, tabValue, debouncedSearchTerm, fetchIssues, fetchSummary]);
 
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -225,16 +281,9 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     };
 
     const fetchTranscriptionStatus = async (issueId) => {
-        console.log(`[IssueListView] Fetching transcription status for issue: ${issueId}`);
         setTranscriptionLoading(true);
         try {
             const response = await getTranscriptionStatus(issueId);
-            console.log(`[IssueListView] Transcription status response:`, {
-                issueId,
-                success: response.success,
-                hasTranscription: !!response.transcription,
-                transcriptionStatus: response.transcription?.status
-            });
             
             if (response.success) {
                 setTranscriptionData(response.transcription);
@@ -253,15 +302,9 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     const handleRetryTranscription = async () => {
         if (!selectedIssue) return;
         
-        console.log(`[IssueListView] User initiated transcription retry for issue: ${selectedIssue._id}`);
         setTranscriptionLoading(true);
         try {
             const response = await retryTranscription(selectedIssue._id);
-            console.log(`[IssueListView] Transcription retry response:`, {
-                issueId: selectedIssue._id,
-                success: response.success,
-                message: response.message
-            });
             
             // Refresh transcription status after retry
             await fetchTranscriptionStatus(selectedIssue._id);
@@ -278,7 +321,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
 
     const handleCloseDialog = () => {
         setDialogOpen(false);
-        setTranscriptionData(null);
+        setSelectedIssue(null);
     };
 
     // Get status chip based on issue status
@@ -409,7 +452,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             <PlaylistAddCheckIcon sx={{ mr: 1 }} />
                             <Typography variant="h5" component="h1">
-                                {strings.issuesList}
+                                {tabValue === 0 ? strings.issuesList : strings.issueSummary}
                             </Typography>
                         </Box>
                     </Box>
@@ -433,18 +476,18 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                             }}
                         >
                             <Tab
-                                label={strings.myIssues}
+                                label={strings.allIssues}
                                 icon={<PersonIcon />}
                                 iconPosition="start"
                             />
                             <Tab
-                                label={strings.allIssues}
+                                label={strings.issueSummary}
                                 icon={<FolderIcon />}
                                 iconPosition="start"
                             />
                         </Tabs>
                     </Paper>
-
+                {tabValue === 0 ? (
                     <Box sx={{ p: 3 }}>
                         <Box
                             sx={{
@@ -567,9 +610,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                     {strings.noIssuesFound}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary">
-                                    {tabValue === 0
-                                        ? 'You have not reported any issues yet. Click "Report New Issue" on the dashboard to create one.'
-                                        : 'No issues have been reported in your panchayat yet.'}
+                                    'No issues have been reported in your panchayat yet. Click "Report New Issue" on the dashboard to create one.'
                                 </Typography>
                             </Paper>
                         ) : (
@@ -753,11 +794,30 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                             </>
                         )}
                     </Box>
+                ):
+                    summaryLoading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', my: 8 }}>
+                            <CircularProgress size={60} />
+                        </Box>
+                    ) : summaryError ? (
+                        <Alert severity="error" sx={{ m: 3 }}>
+                            {summaryError}
+                        </Alert>
+                    ) : (
+                        <FinalAgendaScreen
+                            meeting={meeting}
+                            onUpdateAgenda={setAgendaItems}
+                            panchayatId={user.panchayatId}
+                            onUpdateIssues={handleAddIssuesToSummary}
+                        />
+                    )
+                }
                 </CardContent>
             </Card>
 
             {/* Issue Details Dialog */}
-            <Dialog
+            <IssueDetailsModal
+                issue={selectedIssue}
                 open={dialogOpen}
                 onClose={handleCloseDialog}
                 maxWidth="md"
@@ -1162,7 +1222,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                         </DialogActions>
                     </>
                 )}
-            </Dialog>
+            </IssueDetailsModal>
         </Container>
     );
 };

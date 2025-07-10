@@ -51,7 +51,7 @@ const GramSabhaDetails = ({ meetingId, user }) => {
   const [rsvpStats, setRsvpStats] = useState(null);
   const [attendanceStats, setAttendanceStats] = useState(null);
   const [attendance, setAttendance] = useState(null);
-  const { strings } = useLanguage();
+  const { language, strings } = useLanguage();
   const dataFetched = useRef(false);
   const isMenuOpen = Boolean(anchorEl);
 
@@ -458,6 +458,115 @@ const GramSabhaDetails = ({ meetingId, user }) => {
 
     //Revoke the object URL to prevent memory leaks
     URL.revokeObjectURL(url);
+  };
+
+  // Helper to get multilingual text
+  const getMultilingualText = (item, field) => {
+    if (!item || !item[field]) return '';
+    let textObj = item[field];
+    if (textObj && typeof textObj === 'object' && textObj.get) {
+      textObj = Object.fromEntries(textObj);
+    }
+    if (typeof textObj === 'object' && textObj !== null) {
+      return textObj[language] || textObj.en || textObj.hi || textObj.hindi || '';
+    }
+    return textObj || '';
+  };
+
+  const handleDownloadAgendaPDF = () => {
+    if (!meeting) return;
+
+    const panchayat = attendance?.panchayatId || {};
+    const agendaItemsHTML = Array.isArray(meeting.agenda)
+      ? meeting.agenda.map((item, i) => {
+          const title = getMultilingualText(item, 'title') || `${strings.agenda} ${i + 1}`;
+          const desc = getMultilingualText(item, 'description') || '';
+          const linkedIssues = item.linkedIssues?.length
+            ? `
+              <p><strong>${strings.linkedIssues}:</strong></p>
+              <table border="1" cellpadding="4" cellspacing="0" style="border-collapse: collapse; width: 100%; font-size: 11px; margin-bottom: 10px; table-layout: fixed;">
+                <thead>
+                  <tr>
+                    <th style="width: 10%;text-align: center;">${strings.serialNo}</th>
+                    <th style="width: 70%;">${strings.issueDescription}</th>
+                    <th style="width: 20%; text-align: center; vertical-align: top;">${strings.issueOwner}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${item.linkedIssues.map((issue, idx) => `
+                    <tr>
+                      <td style="text-align: center;">${idx + 1}</td>
+                      <td>
+                        ${language === "hi"
+                          ? issue.transcription?.enhancedHindiTranscription
+                          : issue.transcription?.enhancedEnglishTranscription
+                          || issue.transcription?.text
+                          || "-"}
+                      </td>
+                      <td style="text-align: center;">${issue.createdForId?.name || '-'}</td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            `
+            : '';
+          return `
+            <p><strong>${i + 1}. ${title}</strong></p>
+            <p>${desc}</p>
+            ${linkedIssues}
+          `;
+        }).join("")
+      : `<p>${strings.noAgenda}</p>`;
+
+    const container = document.createElement("div");
+
+    container.innerHTML = `
+      <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-size: 12px; line-height: 1.8; padding: 30px;">
+        <div style="text-align: right; margin-bottom: 10px;">
+          <strong>${strings.serialNo} _____ </strong> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${strings.date} ${new Date().toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN')}
+        </div>
+
+        <h2 style="text-align: center;">${strings.gramSabhaAgendaNotice}</h2>
+
+        <p><strong>${strings.village}:</strong> ${panchayat.name || "-"}<br/>
+        <strong>${strings.date}:</strong> ${new Date(meeting.dateTime).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN')}<br/>
+        <strong>${strings.time}:</strong> ${new Date(meeting.dateTime).toLocaleTimeString(language === 'hi' ? 'hi-IN' : 'en-IN', {
+          hour: '2-digit', minute: '2-digit', hour12: true
+        })}<br/>
+        <strong>${strings.location}:</strong> ${meeting.location || "-"}</p>
+
+        <p>${strings.gramSabhaNoticeText}</p>
+
+        <h3>${strings.newIssuesAndPlanHeading}:</h3>
+
+        <p>${strings.newIssuesAndPlanDescription}</p>
+
+        ${agendaItemsHTML}
+
+        <br/><br/>
+        <div style="display: flex; justify-content: space-between; margin-top: 40px;">
+          <div><br/>
+            <small>(${strings.secretary}, ${strings.gramPanchayat} ${panchayat.name || ""})</small>
+          </div>
+          <div><br/>
+            <small>(${strings.sarpanch}, ${strings.gramPanchayat} ${panchayat.name || ""})</small>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(container);
+
+    html2pdf()
+      .from(container)
+      .set({
+        margin: 0.5,
+        filename: `agenda_${Date.now()}.pdf`,
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: "in", format: "a4", orientation: "portrait" }
+      })
+      .save()
+      .then(() => document.body.removeChild(container));
   };
 
   if (loading && !meeting) {
@@ -905,15 +1014,50 @@ const GramSabhaDetails = ({ meetingId, user }) => {
           
           <Divider sx={{ my: 3 }} />
 
-          {/* Agenda Section */}
-          <Box sx={{ mb: 4 }}>
-            <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">
               {strings.agenda}
             </Typography>
+
+            <Tooltip title={strings.downloadPDF}>
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<DownloadIcon />}
+                onClick={handleDownloadAgendaPDF}
+                disabled={loading}
+              >
+                {strings.download}
+              </Button>
+            </Tooltip>
+          </Box>
+            
+          {/* Agenda Section */}
+          <Box sx={{ mb: 4 }}>
             <Paper variant="outlined" sx={{ p: 3, bgcolor: 'background.default' }}>
-              <Typography variant="body1" sx={{ whiteSpace: 'pre-line' }}>
-                {meeting.agenda || strings.noAgenda}
-              </Typography>
+              {meeting.agenda && Array.isArray(meeting.agenda) && meeting.agenda.length > 0 ? (
+                <Box>
+                  {meeting.agenda.map((item, index) => (
+                    <Box key={item._id || index} sx={{ mb: 2, pb: 2, borderBottom: index < meeting.agenda.length - 1 ? '1px solid #e0e0e0' : 'none' }}>
+                      <Typography variant="subtitle1" fontWeight="medium" gutterBottom>
+                        {getMultilingualText(item, 'title') || `Agenda Item ${index + 1}`}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {getMultilingualText(item, 'description') || 'No description available'}
+                      </Typography>
+                      {item.linkedIssues && item.linkedIssues.length > 0 && (
+                        <Typography variant="caption" color="primary" sx={{ mt: 0.5, display: 'block' }}>
+                          📋 {item.linkedIssues.length} linked issue{item.linkedIssues.length !== 1 ? 's' : ''}
+                        </Typography>
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+              ) : (
+                <Typography variant="body1" sx={{ whiteSpace: 'pre-line' }}>
+                  {strings.noAgenda}
+                </Typography>
+              )}
             </Paper>
           </Box>
 

@@ -113,7 +113,6 @@ export const AuthProvider = ({ children }) => {
 
         // Store complete user data in localStorage for persistence
         localStorage.setItem('user', JSON.stringify(enhancedUserData));
-        console.log({ userData })
         // Set user state with appropriate structure based on role
         if (['ADMIN', 'SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY', 'GUEST'].includes(userData.role)) {
             // Handle linkedUser data carefully

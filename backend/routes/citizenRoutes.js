@@ -70,7 +70,6 @@ router.post('/face-login', async (req, res) => {
         for (const user of registeredUsers) {
             const distance = calculateFaceDistance(user.faceDescriptor, faceDescriptor);
             distances.push({ user, distance });
-            console.log(`Face distance with ${user.voterIdNumber}: ${distance}`);
 
             if (distance < minDistance) {
                 minDistance = distance;
@@ -165,7 +164,6 @@ router.get('/profile/:userId', isCitizen, async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Error fetching citizen profile:', error);
         res.status(500).json({
             success: false,
             message: 'Error fetching citizen profile: ' + error.message
