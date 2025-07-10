@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Added MoM generation using LLM.([#65](https://github.com/EmpowerPanchayat/eGramSabha/issues/65))
 - Added Issue Transcription Implementation.([#65](https://github.com/EmpowerPanchayat/eGramSabha/issues/65))
 - Filters for createdFor and createdBy on Issue Creation Page.([#85](https://github.com/EmpowerPanchayat/eGramSabha/issues/85))
--Issue Summary and Agenda generation & display features implementation.
+- Issue Summary and Agenda generation & display features implementation.
   - Supports linking recorded issues to Gram Sabha agenda.
   - Includes backend schema, APIs, and UI updates for display and PDF download.
   - Admins can review, edit, and finalize agenda items.
@@ -45,6 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Issue Life Cycle and it's translations. ([#22](https://github.com/EmpowerPanchayat/eGramSabha/issues/22))
 - createdFor field with createdForId and update related logic in IssueCreationView and IssueListView.([#85](https://github.com/EmpowerPanchayat/eGramSabha/issues/85))
+- Display of gram sabha meeting details based on status.
+  - Adds conditional rendering, If gram sabha meeting is CONCLUDED, the basic details cannot be edited.
+  ([#100](https://github.com/EmpowerPanchayat/eGramSabha/issues/100))
 
 ## [0.2.0] - 2025-05-27
 
