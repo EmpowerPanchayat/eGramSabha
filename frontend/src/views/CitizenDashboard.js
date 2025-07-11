@@ -31,9 +31,6 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import NotificationsIcon from '@mui/icons-material/Notifications';
-import SettingsIcon from '@mui/icons-material/Settings';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import FlagIcon from '@mui/icons-material/Flag';
@@ -47,7 +44,9 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
     const { strings } = useLanguage();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-    const [panchayatInfo, setPanchayatInfo] = useState(null);
+    
+    // Initialize panchayatInfo immediately from user prop
+    const [panchayatInfo, setPanchayatInfo] = useState(user?.panchayat || null);
     const [userState, setUserState] = useState(user);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -59,11 +58,11 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
         const token = tokenManager.getToken();
         return token ? { 'Authorization': `Bearer ${token}` } : {};
     };
-    
 
+    // Single useEffect that runs only once on mount
     useEffect(() => {
         const fetchUserDetails = async () => {
-            if (!user || !user.id) return;
+            if (!user?.id) return;
 
             setLoading(true);
             try {
@@ -73,44 +72,13 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
                 const response = await getCitizenProfile();
                 if (response?.success && response?.data?.user) {
                     const userData = response.data.user;
+                    console.log('Setting panchayatInfo:', userData.panchayat);
                     setPanchayatInfo(userData.panchayat);
 
                     // Always set the thumbnail URL using the GridFS API endpoint
                     setUserState(prev => ({
                         ...prev,
                         faceImageUrl: `${API_URL}/users/${userData.id}/thumbnail`
-                    }));
-                } else {
-                  // If API call fails, try a direct fetch as fallback
-                  console.log(
-                    "CitizenDashboard - API call failed, trying direct fetch"
-                  );
-                  // Add Authorization header if token exists
-                  const headers = {
-                    "Content-Type": "application/json",
-                    ...getAuthHeaders(),
-                  };
-                  const directResponse = await fetch(
-                    `${API_URL}/citizens/profile/${user.id}`,
-                    {
-                      method: "GET",
-                      headers: headers,
-                    }
-                  );
-
-                  if (!directResponse.ok) {
-                    throw new Error(
-                      "Failed to fetch user profile via direct API"
-                    );
-                  }
-
-                  const data = await directResponse.json();
-                  setPanchayatInfo(data.userData.panchayat);
-
-                    // Always use the GridFS thumbnail endpoint
-                    setUserState(prev => ({
-                        ...prev,
-                        faceImageUrl: `${API_URL}/users/${user.id}/thumbnail`
                     }));
                 }
             } catch (error) {
@@ -122,7 +90,7 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
         };
 
         fetchUserDetails();
-    }, [user, API_URL]);
+    }, []); // Empty dependency array - only run once on mount
 
     return (
         <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
@@ -147,20 +115,6 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
                     {strings.welcomeCitizen}, {user?.name || ''}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    {/* {!isMobile && (
-                        <>
-                            <IconButton color="inherit" size="small">
-                                <HelpOutlineIcon />
-                            </IconButton>
-                            <IconButton color="inherit" size="small">
-                                <NotificationsIcon />
-                            </IconButton>
-                            <IconButton color="inherit" size="small">
-                                <SettingsIcon />
-                            </IconButton>
-                            <Divider orientation="vertical" flexItem sx={{ mx: 1, bgcolor: 'rgba(255,255,255,0.2)' }} />
-                        </>
-                    )} */}
                     <LanguageSwitcher sx={{
                         '& .MuiButton-outlined': {
                             bgcolor: 'rgba(255,255,255,0.2)',
@@ -180,6 +134,7 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
             {loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
                     <CircularProgress size={60} />
+                    <Typography variant="body1" sx={{ ml: 2 }}>Loading dashboard...</Typography>
                 </Box>
             ) : (
                 <Grid container spacing={3}>

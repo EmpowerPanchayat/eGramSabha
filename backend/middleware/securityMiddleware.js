@@ -16,7 +16,7 @@ const configureSecurityMiddleware = (app) => {
 
     // Enable CORS with appropriate options
     app.use(cors({
-        origin: process.env.CORS_ORIGIN || 'http://localhost:3001',
+        origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
         credentials: true,
         optionsSuccessStatus: 204
