@@ -1,4 +1,3 @@
-// File: frontend/src/utils/translations.js
 const translations = {
   en: {
     // Common
@@ -21,8 +20,84 @@ const translations = {
     panchayat: "Panchayat",
     district: "District",
     state: "State",
+    block: "Block", // Added
     address: "Address",
     mobileNumber: "Mobile Number",
+
+    // ===== NEW: Location-based login error messages =====
+    invalidLgdCode:
+      "Invalid LGD Code. Please check the code or select manually.",
+    lgdCodeNotFound:
+      "LGD Code not found. Please verify the code or use manual selection.",
+    locationNotFound:
+      "Location not found. Please check the spelling or select manually.",
+    missingBlockInUrl:
+      "Block is required in the location path. Please provide complete location.",
+    incompleteLocationPath:
+      "Incomplete location path. Expected format: /State/District/Block/Panchayat",
+    locationError:
+      "Error loading location. Please try again or select manually.",
+    panchayatNotFound: "Panchayat not found in the specified location.",
+
+    // ===== NEW: UI elements for location selection =====
+    selectManually: "Select Manually",
+    changeLocation: "Change Location",
+    panchayatFound: "Panchayat Found",
+    loginError: "Login Error",
+    selectYourPanchayat: "Select Your Panchayat",
+    processingLoginMethod: "Processing login method...",
+
+    // ===== NEW: Location hierarchy labels =====
+    locationDetails: "Location Details",
+    currentSelection: "Current Selection",
+    refreshLocationData: "Refresh location data",
+    loadingLocationData: "Loading location data...",
+
+    // ===== NEW: Form labels and hints =====
+    lgdCode: "LGD Code",
+    lgdCodeOptional:
+      "Government-issued Local Governance Directory Code (optional)",
+    enterLgdCode: "Enter LGD Code (optional)",
+    lgdCodeExample: "e.g. 123456789",
+    lgdCodeAlreadyExists:
+      "This LGD Code is already in use by another panchayat",
+    lgdCodeValidation:
+      "LGD Code must be a numeric string with maximum 10 digits",
+
+    // ===== NEW: Location selection hints =====
+    createNewOption: 'Create "%s"',
+    nameWillSync: "Name will sync with location selection",
+
+    // ===== NEW: Quick access methods =====
+    quickAccessMethods: "Quick Access Methods:",
+    useLgdCode: "Use LGD Code: ?lgdCode=123456",
+    useLocationPath: "Use Path: /State/District/Block/Panchayat",
+
+    // ===== NEW: Enhanced validation messages =====
+    stateRequired: "State is required",
+    districtRequired: "District is required",
+    blockRequired: "Block is required",
+    panchayatNameRequired: "Panchayat name is required",
+    invalidCharacters: "Contains invalid characters",
+
+    // ===== NEW: System messages =====
+    failedToSavePanchayat: "Failed to save panchayat. Please try again.",
+    failedToLoadLocationData:
+      "Failed to load location data. Please refresh the page.",
+    failedToRefreshLocationData: "Failed to refresh location data",
+
+    // ===== NEW: Navigation and breadcrumbs =====
+    basicInformation: "Basic Information",
+    demographicsAndCommunication: "Demographics & Communication",
+    additionalDetails: "Additional Details",
+
+    // ===== NEW: Camera and face recognition (enhanced) =====
+    readyToStartCamera: "Ready to start camera",
+    noAdditionalCameras: "No additional cameras available",
+
+    // ===== NEW: Cache and performance =====
+    fresh: "Fresh",
+    stale: "Stale",
 
     // Authentication
     citizenLogin: "Citizen Login",
@@ -59,6 +134,8 @@ const translations = {
       "Please ensure you have granted camera permissions to this site. You might need to update your browser settings.",
     selectPanchayatFirst:
       'Please select your panchayat and click "Start Camera" to begin the face login process',
+    completeLivelinessChecks: "Please complete all liveliness checks",
+    errorLoadingModels: "Error loading face recognition models",
 
     // Citizen dashboard
     welcomeCitizen: "Welcome",
@@ -145,7 +222,6 @@ const translations = {
     rowsPerPage: "Rows per page",
 
     // Issue details sections
-    basicInformation: "Basic Information",
     timeline: "Timeline",
     additionalInformation: "Additional Information",
 
@@ -319,21 +395,11 @@ const translations = {
     statusRESCHEDULED: "Rescheduled",
 
     // Gram Sabha Details
-    date: "Date",
-    time: "Time",
-    location: "Location",
-    duration: "Duration",
     minutes: "minutes",
     hours: "hours",
     status: "Status",
-    agenda: "Agenda",
-    attachments: "Attachments",
-    uploadFile: "Upload File",
-    fileName: "File Name",
     fileType: "File Type",
     uploadedAt: "Uploaded At",
-    actions: "Actions",
-    download: "Download",
     noAttachments: "No attachments uploaded yet",
     downloadPDF: "Download PDF",
     downloadCSV: "Download CSV",
@@ -347,7 +413,6 @@ const translations = {
     upcomingMeeting: "Upcoming Gram Sabha Meeting",
     noUpcomingMeetings: "No upcoming meetings scheduled",
     meetingDetails: "Meeting Details",
-    viewDetails: "View Details",
     rsvp: "RSVP",
     attending: "Attending",
     notAttending: "Not Attending",
@@ -362,7 +427,6 @@ const translations = {
     todaysMeeting: "Today's Meeting",
     noMeetingsToday: "No meetings scheduled for today",
     markAttendance: "Mark Attendance",
-    startRecording: "Start Recording",
     attendanceStats: "Attendance Statistics",
     totalVoters: "Total Voters",
     totalRegistered: "Total Registered",
@@ -378,34 +442,21 @@ const translations = {
     joinMeeting: "Join Meeting",
     endMeeting: "End Meeting",
     verifyAttendee: "Verify Attendee",
-    voterIdLastFour: "Last 4 digits of Voter ID",
     enterLastFourDigits: "Enter the last 4 digits of the voter ID card",
     faceVerification: "Face Verification",
     cameraInstructions: "Camera will be used to verify the attendee's identity",
     loadingModels: "Loading models...",
-    startCamera: "Start Camera",
     stopCamera: "Stop Camera",
 
     //Attendance
     verifyAttendance: "Verify Attendance",
-    meetingDetails: "Meeting Details",
     attendanceReportTitle: "Gram Sabha Attendance Report",
     panchayatDetails: "Panchayat Details",
-    gramSabhaDetails: "Gram Sabha Details",
     title: "Title",
-    date: "Date",
-    location: "Location",
-    block: "Block",
-    agenda: "Agenda",
-    duration: "Duration",
-    hours: "hour(s)",
-    status: "Status",
     genderStats: "Gender Statistics",
     casteStats: "Caste Category Statistics",
     attendanceList: "Attendance List",
     sNo: "S.No",
-    name: "Name",
-    gender: "Gender",
     casteCategory: "Caste Category",
     verificationMethod: "Verification Method",
     noData: "No data available",
@@ -445,8 +496,83 @@ const translations = {
     panchayat: "पंचायत",
     district: "जिला",
     state: "राज्य",
+    block: "ब्लॉक", // Added
     address: "पता",
     mobileNumber: "मोबाइल नंबर",
+
+    // ===== NEW: Location-based login error messages =====
+    invalidLgdCode:
+      "अमान्य एलजीडी कोड। कृपया कोड जांचें या मैन्युअल रूप से चुनें।",
+    lgdCodeNotFound:
+      "एलजीडी कोड नहीं मिला। कृपया कोड सत्यापित करें या मैन्युअल चयन का उपयोग करें।",
+    locationNotFound:
+      "स्थान नहीं मिला। कृपया वर्तनी जांचें या मैन्युअल रूप से चुनें।",
+    missingBlockInUrl:
+      "स्थान पथ में ब्लॉक आवश्यक है। कृपया पूरा स्थान प्रदान करें।",
+    incompleteLocationPath:
+      "अधूरा स्थान पथ। अपेक्षित प्रारूप: /राज्य/जिला/ब्लॉक/पंचायत",
+    locationError:
+      "स्थान लोड करने में त्रुटि। कृपया पुनः प्रयास करें या मैन्युअल रूप से चुनें।",
+    panchayatNotFound: "निर्दिष्ट स्थान में पंचायत नहीं मिली।",
+
+    // ===== NEW: UI elements for location selection =====
+    selectManually: "मैन्युअल रूप से चुनें",
+    changeLocation: "स्थान बदलें",
+    panchayatFound: "पंचायत मिली",
+    loginError: "लॉगिन त्रुटि",
+    selectYourPanchayat: "अपनी पंचायत चुनें",
+    processingLoginMethod: "लॉगिन विधि प्रोसेसिंग...",
+
+    // ===== NEW: Location hierarchy labels =====
+    locationDetails: "स्थान विवरण",
+    currentSelection: "वर्तमान चयन",
+    refreshLocationData: "स्थान डेटा रीफ्रेश करें",
+    loadingLocationData: "स्थान डेटा लोड हो रहा है...",
+
+    // ===== NEW: Form labels and hints =====
+    lgdCode: "एलजीडी कोड",
+    lgdCodeOptional: "सरकार द्वारा जारी स्थानीय शासन निर्देशिका कोड (वैकल्पिक)",
+    enterLgdCode: "एलजीडी कोड दर्ज करें (वैकल्पिक)",
+    lgdCodeExample: "जैसे 123456789",
+    lgdCodeAlreadyExists:
+      "यह एलजीडी कोड पहले से ही दूसरी पंचायत द्वारा उपयोग में है",
+    lgdCodeValidation:
+      "एलजीडी कोड अधिकतम 10 अंकों की संख्यात्मक स्ट्रिंग होनी चाहिए",
+
+    // ===== NEW: Location selection hints =====
+    createNewOption: '"%s" बनाएं',
+    nameWillSync: "नाम स्थान चयन के साथ सिंक होगा",
+
+    // ===== NEW: Quick access methods =====
+    quickAccessMethods: "त्वरित पहुंच विधियां:",
+    useLgdCode: "एलजीडी कोड का उपयोग करें: ?lgdCode=123456",
+    useLocationPath: "पथ का उपयोग करें: /राज्य/जिला/ब्लॉक/पंचायत",
+
+    // ===== NEW: Enhanced validation messages =====
+    stateRequired: "राज्य आवश्यक है",
+    districtRequired: "जिला आवश्यक है",
+    blockRequired: "ब्लॉक आवश्यक है",
+    panchayatNameRequired: "पंचायत का नाम आवश्यक है",
+    invalidCharacters: "अमान्य वर्ण शामिल हैं",
+
+    // ===== NEW: System messages =====
+    failedToSavePanchayat: "पंचायत सहेजने में विफल। कृपया पुनः प्रयास करें।",
+    failedToLoadLocationData:
+      "स्थान डेटा लोड करने में विफल। कृपया पृष्ठ को रीफ्रेश करें।",
+    failedToRefreshLocationData: "स्थान डेटा रीफ्रेश करने में विफल",
+
+    // ===== NEW: Navigation and breadcrumbs =====
+    basicInformation: "बुनियादी जानकारी",
+    demographicsAndCommunication: "जनसांख्यिकी और संचार",
+    additionalDetails: "अतिरिक्त विवरण",
+
+    // ===== NEW: Camera and face recognition (enhanced) =====
+    readyToStartCamera: "कैमरा शुरू करने के लिए तैयार",
+    noAdditionalCameras: "कोई अतिरिक्त कैमरा उपलब्ध नहीं",
+
+    // ===== NEW: Cache and performance =====
+    fresh: "ताज़ा",
+    stale: "पुराना",
 
     // Authentication
     citizenLogin: "नागरिक लॉगिन",
@@ -485,6 +611,8 @@ const translations = {
       "कृपया सुनिश्चित करें कि आपने इस साइट को कैमरा अनुमतियां दी हैं। आपको अपनी ब्राउज़र सेटिंग्स अपडेट करनी पड़ सकती हैं।",
     selectPanchayatFirst:
       'कृपया अपनी पंचायत चुनें और चेहरे की लॉगिन प्रक्रिया शुरू करने के लिए "कैमरा शुरू करें" पर क्लिक करें',
+    completeLivelinessChecks: "कृपया सभी जीवंतता जांच पूरी करें",
+    errorLoadingModels: "चेहरा पहचान मॉडल लोड करने में त्रुटि",
 
     // Citizen dashboard
     welcomeCitizen: "स्वागत है",
@@ -572,7 +700,6 @@ const translations = {
     rowsPerPage: "प्रति पृष्ठ पंक्तियाँ",
 
     // Issue details sections
-    basicInformation: "मूल जानकारी",
     timeline: "समयरेखा",
     additionalInformation: "अतिरिक्त जानकारी",
 
@@ -764,6 +891,12 @@ const translations = {
     tableStatus: "स्थिति",
     tableActions: "कार्रवाई",
     noDataToDisplay: "दिखाने के लिए कोई डेटा नहीं है",
+    scheduleMeetings: "आगामी ग्राम सभा बैठकें शेड्यूल करें",
+    manageAttendees: "प्रतिभागियों और भागीदारी का प्रबंधन करें",
+    trackAgendas: "बैठक एजेंडा और प्रस्तावों को ट्रैक करें",
+    gramSabhaDesc: "ग्राम सभा बैठकों को शेड्यूल और प्रबंधित करें",
+    viewDetails: "विवरण देखें",
+    gramSabhaDetails: "ग्राम सभा विवरण",
 
     // Gram Sabha Status
     statusSCHEDULED: "निर्धारित",
@@ -774,20 +907,11 @@ const translations = {
     statusRESCHEDULED: "पुनर्निर्धारित",
 
     // Gram Sabha Details
-    date: "तिथि",
-    time: "समय",
-    location: "स्थान",
-    duration: "अवधि",
     minutes: "मिनट",
+    hours: "घंटे",
     status: "स्थिति",
-    agenda: "एजेंडा",
-    attachments: "अटैचमेंट",
-    uploadFile: "फ़ाइल अपलोड करें",
-    fileName: "फ़ाइल का नाम",
     fileType: "फ़ाइल का प्रकार",
     uploadedAt: "अपलोड की तिथि",
-    actions: "कार्रवाई",
-    download: "डाउनलोड",
     noAttachments: "अभी तक कोई अटैचमेंट अपलोड नहीं किया गया है",
     downloadPDF: "पीडीएफ डाउनलोड करें",
     downloadCSV: "सीएसवी डाउनलोड करें",
@@ -801,7 +925,6 @@ const translations = {
     upcomingMeeting: "आगामी ग्राम सभा बैठक",
     noUpcomingMeetings: "कोई आगामी बैठक निर्धारित नहीं है",
     meetingDetails: "बैठक विवरण",
-    viewDetails: "विवरण देखें",
     rsvp: "उपस्थिति पुष्टि",
     attending: "उपस्थित हो रहे हैं",
     notAttending: "उपस्थित नहीं हो रहे हैं",
@@ -816,7 +939,6 @@ const translations = {
     todaysMeeting: "आज की बैठक",
     noMeetingsToday: "आज के लिए कोई बैठक निर्धारित नहीं है",
     markAttendance: "उपस्थिति दर्ज करें",
-    startRecording: "रिकॉर्डिंग शुरू करें",
     attendanceStats: "उपस्थिति आंकड़े",
     totalVoters: "कुल मतदाता",
     totalRegistered: "कुल पंजीकृत",
@@ -832,35 +954,22 @@ const translations = {
     joinMeeting: "बैठक में शामिल हों",
     endMeeting: "बैठक समाप्त करें",
     verifyAttendee: "प्रतिभागी सत्यापित करें",
-    voterIdLastFour: "मतदाता पहचान पत्र के अंतिम 4 अंक",
     enterLastFourDigits: "मतदाता पहचान पत्र के अंतिम 4 अंक दर्ज करें",
     faceVerification: "चेहरा सत्यापन",
     cameraInstructions:
       "प्रतिभागी की पहचान सत्यापित करने के लिए कैमरा का उपयोग किया जाएगा",
     loadingModels: "मॉडल लोड हो रहे हैं...",
-    startCamera: "कैमरा शुरू करें",
     stopCamera: "कैमरा बंद करें",
 
     //Attendance
     verifyAttendance: "उपस्थिति सत्यापित करें",
-    meetingDetails: "बैठक विवरण",
     attendanceReportTitle: "ग्राम सभा उपस्थिति रिपोर्ट",
     panchayatDetails: "पंचायत विवरण",
-    gramSabhaDetails: "ग्राम सभा विवरण",
     title: "शीर्षक",
-    date: "तारीख",
-    location: "स्थान",
-    block: "ब्लॉक",
-    agenda: "एजेंडा",
-    duration: "अवधि",
-    hours: "घंटे",
-    status: "स्थिति",
     genderStats: "लिंग आधारित आँकड़े",
     casteStats: "जाति वर्गीकरण",
     attendanceList: "उपस्थिति सूची",
     sNo: "क्रम संख्या",
-    name: "नाम",
-    gender: "लिंग",
     casteCategory: "जाति वर्ग",
     verificationMethod: "सत्यापन विधि",
     noData: "कोई रिकॉर्ड उपलब्ध नहीं",

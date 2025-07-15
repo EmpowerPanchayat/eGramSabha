@@ -26,7 +26,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:5000";
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3001";
+const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
 const NODE_ENV = process.env.NODE_ENV || "development";
 
 // Import Swagger setup
@@ -48,6 +48,7 @@ const officialRoutes = require('./routes/officialRoutes');
 const gramSabhaRoutes = require('./routes/gramSabhaRoutes');
 const platformConfigRoutes = require('./routes/platformConfigRoutes');
 const issueSummaryRoutes = require('./routes/issueSummaryRoutes');
+const locationRoutes = require("./routes/locationRoutes");
 
 // Import models
 const User = require("./models/User");
@@ -532,6 +533,7 @@ app.use('/api/officials', officialRoutes);
 app.use('/api/gram-sabha', gramSabhaRoutes);
 app.use('/api/platform-configurations', platformConfigRoutes);
 app.use('/api/summaries', issueSummaryRoutes);
+app.use("/api/locations", locationRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
