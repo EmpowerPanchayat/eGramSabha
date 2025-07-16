@@ -3,6 +3,7 @@ const { updateAllMeetingStatuses } = require('./meetingUtils');
 const Issue = require('../models/Issue');
 const transcriptionService = require('../services/transcriptionService');
 const { initiateSummaryGeneration, fetchSummaryResults, retryFailedSummaryRequests } = require('./summaryCronJobs');
+const { agendaTranslationCron } = require('./agendaTranslationCron');
 
 // Run every 30 minutes
 const updateMeetingStatuses = cron.schedule('*/30 * * * *', async () => {
@@ -175,6 +176,7 @@ const retryTranscriptionInitiation = cron.schedule('*/1 * * * *', async () => {
 
 // Start the cron jobs
 const startCronJobs = () => {
+    agendaTranslationCron.start();
     updateMeetingStatuses.start();
     checkTranscriptionStatus.start();
     retryFailedTranscriptions.start();
@@ -186,6 +188,7 @@ const startCronJobs = () => {
 
 // Stop the cron jobs
 const stopCronJobs = () => {
+    agendaTranslationCron.stop();
     updateMeetingStatuses.stop();
     checkTranscriptionStatus.stop();
     retryFailedTranscriptions.stop();
