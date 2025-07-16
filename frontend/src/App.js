@@ -1,25 +1,24 @@
-// File: frontend/src/App.js (Updated for Multi-User Authentication)
-import React from 'react';
+import React from "react";
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
-} from 'react-router-dom';
-import { Box } from '@mui/material';
-import { useAuth, AuthProvider } from './utils/authContext';
-import { LanguageProvider } from './utils/LanguageContext';
+} from "react-router-dom";
+import { Box } from "@mui/material";
+import { useAuth, AuthProvider } from "./utils/authContext";
+import { LanguageProvider } from "./utils/LanguageContext";
 
 // Import Portals
-import AdminPortal from './views/AdminPortal';
-import CitizenPortal from './views/CitizenPortal';
-import OfficialPortalWithLanguage from './views/OfficialPortal';
+import AdminPortal from "./views/AdminPortal";
+import CitizenPortal from "./views/CitizenPortal";
+import OfficialPortalWithLanguage from "./views/OfficialPortal";
 
 // Import Auth Views
-import AdminLoginView from './views/AdminLoginView';
-import OfficialLoginView from './views/OfficialLoginView'; // New official-specific login view
-import ForgotPasswordView from './views/ForgotPasswordView';
-import ResetPasswordView from './views/ResetPasswordView';
+import AdminLoginView from "./views/AdminLoginView";
+import OfficialLoginView from "./views/OfficialLoginView";
+import ForgotPasswordView from "./views/ForgotPasswordView";
+import ResetPasswordView from "./views/ResetPasswordView";
 
 // Enhanced Protected Route component that handles user types
 const ProtectedRoute = ({ children, requiredRoles = [] }) => {
@@ -27,17 +26,25 @@ const ProtectedRoute = ({ children, requiredRoles = [] }) => {
 
   if (!user) {
     // Determine the appropriate login path based on the required roles
-    let loginPath = '/admin/login'; // Default
+    let loginPath = "/admin/login"; // Default
 
     // Check if this is an official route
-    if (requiredRoles.some(role =>
-      ['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY', 'GUEST'].includes(role)
-    )) {
-      loginPath = '/official/login';
+    if (
+      requiredRoles.some((role) =>
+        [
+          "SECRETARY",
+          "PRESIDENT",
+          "WARD_MEMBER",
+          "COMMITTEE_SECRETARY",
+          "GUEST",
+        ].includes(role)
+      )
+    ) {
+      loginPath = "/official/login";
     }
     // Check if this is a citizen route
-    else if (requiredRoles.includes('CITIZEN')) {
-      loginPath = '/'; // Citizen portal
+    else if (requiredRoles.includes("CITIZEN")) {
+      loginPath = "/"; // Citizen portal
     }
 
     return <Navigate to={loginPath} replace />;
@@ -48,11 +55,11 @@ const ProtectedRoute = ({ children, requiredRoles = [] }) => {
     // Redirect users to their appropriate dashboard based on their type
     const userType = getUserType();
 
-    if (userType === 'ADMIN') {
+    if (userType === "ADMIN") {
       return <Navigate to="/admin/dashboard" replace />;
-    } else if (userType === 'OFFICIAL') {
+    } else if (userType === "OFFICIAL") {
       return <Navigate to="/official/dashboard" replace />;
-    } else if (userType === 'CITIZEN') {
+    } else if (userType === "CITIZEN") {
       return <Navigate to="/citizen/dashboard" replace />;
     }
 
@@ -70,28 +77,53 @@ const AppContent = () => {
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <Router>
         <Routes>
-          {/* Citizen Portal is the default route */}
+          {/* ===== CITIZEN ROUTES (Enhanced with Location-Based Login) ===== */}
+
+          {/* Default citizen portal route */}
           <Route path="/" element={<CitizenPortal />} />
-          {/* Auth Routes - Separate paths for admin and official */}
+
+          {/* NEW: Citizen login routes with location support */}
+          {/* Manual selection login */}
+          <Route path="/citizen-login" element={<CitizenPortal />} />
+
+          {/* LGD Code login - handled by query parameter */}
+          {/* Example: /citizen-login?lgdCode=123456 */}
+
+          {/* Location path login - NEW pattern */}
+          {/* Example: /citizen-login/Bihar/Patna/Danapur/Rampur */}
+          <Route path="/citizen-login/*" element={<CitizenPortal />} />
+
+          {/* Direct location path access - NEW pattern */}
+          {/* Example: /Haryana/Palwal/Prithla/Tatarpur */}
+          <Route path="/:state/:district/:block/:panchayat" element={<CitizenPortal />} />
+
+          {/* Citizen dashboard - protected route */}
+          <Route
+            path="/citizen/dashboard"
+            element={
+              <ProtectedRoute requiredRoles={["CITIZEN"]}>
+                <CitizenPortal />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/citizen/dashboard/*"
+            element={
+              <ProtectedRoute requiredRoles={["CITIZEN"]}>
+                <CitizenPortal />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ===== ADMIN ROUTES ===== */}
+
           <Route path="/admin/login" element={<AdminLoginView />} />
-          <Route path="/official/login" element={<OfficialLoginView />} />{" "}
-          {/* New official login route */}
           <Route
             path="/admin/forgot-password"
             element={<ForgotPasswordView />}
           />
-          <Route
-            path="/official/forgot-password"
-            element={<ForgotPasswordView />}
-          />{" "}
-          {/* Official forgot password */}
           <Route path="/admin/reset-password" element={<ResetPasswordView />} />
-          <Route
-            path="/official/reset-password"
-            element={<ResetPasswordView />}
-          />{" "}
-          {/* Official reset password */}
-          {/* Admin Routes */}
+
           <Route
             path="/admin"
             element={
@@ -116,24 +148,19 @@ const AppContent = () => {
               </ProtectedRoute>
             }
           />
-          {/* Citizen Routes */}
+
+          {/* ===== OFFICIAL ROUTES ===== */}
+
+          <Route path="/official/login" element={<OfficialLoginView />} />
           <Route
-            path="/citizen/dashboard"
-            element={
-              <ProtectedRoute requiredRoles={["CITIZEN"]}>
-                <CitizenPortal />
-              </ProtectedRoute>
-            }
+            path="/official/forgot-password"
+            element={<ForgotPasswordView />}
           />
           <Route
-            path="/citizen/dashboard/*"
-            element={
-              <ProtectedRoute requiredRoles={["CITIZEN"]}>
-                <CitizenPortal />
-              </ProtectedRoute>
-            }
+            path="/official/reset-password"
+            element={<ResetPasswordView />}
           />
-          {/* Official Routes */}
+
           <Route
             path="/official"
             element={
@@ -214,6 +241,9 @@ const AppContent = () => {
               </ProtectedRoute>
             }
           />
+
+          {/* ===== UTILITY ROUTES ===== */}
+
           {/* Unauthorized Page */}
           <Route
             path="/unauthorized"
@@ -244,6 +274,7 @@ const AppContent = () => {
               </Box>
             }
           />
+
           {/* Legacy paths for backward compatibility */}
           <Route
             path="/login"
@@ -257,6 +288,10 @@ const AppContent = () => {
             path="/login/official"
             element={<Navigate to="/official/login" replace />}
           />
+
+          {/* Legacy citizen routes - redirect to new structure */}
+          <Route path="/citizen" element={<Navigate to="/" replace />} />
+
           {/* Default Route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -276,3 +311,35 @@ const App = () => {
 };
 
 export default App;
+
+/*
+NEW CITIZEN LOGIN URL PATTERNS THAT NOW WORK:
+
+1. Default Landing/Login:
+   / → CitizenPortal (shows login if not authenticated)
+
+2. Manual Selection Login:
+   /citizen-login → CitizenPortal (shows manual location selection)
+
+3. LGD Code Login:
+   /citizen-login?lgdCode=123456789 → CitizenPortal (auto-finds panchayat)
+
+4. Location Path Login:
+   /citizen-login/Bihar/Patna/Danapur/Rampur → CitizenPortal (auto-finds panchayat)
+   /citizen-login/Maharashtra/Mumbai/Andheri/Versova
+   /citizen-login/Tamil%20Nadu/Chennai/Tambaram/Chitlapakkam
+
+5. Protected Citizen Routes:
+   /citizen/dashboard → Requires authentication, redirects to appropriate view
+
+ERROR HANDLING:
+- Invalid LGD codes → Show error + manual selection option
+- Invalid location paths → Show error + manual selection option  
+- Missing path components → Show error + manual selection option
+
+AUTHENTICATION FLOW:
+- Unauthenticated users can access all /citizen-login/* routes
+- Successful login redirects to /citizen/dashboard
+- Protected routes require CITIZEN role
+- Logout redirects back to /
+*/

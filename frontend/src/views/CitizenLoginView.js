@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import * as faceapi from "face-api.js";
 import {
   Box,
@@ -17,6 +18,8 @@ import {
   Slider,
   IconButton,
   Tooltip,
+  Collapse,
+  Divider,
 } from "@mui/material";
 import {
   CameraAlt as CameraAltIcon,
@@ -28,22 +31,43 @@ import {
   ZoomIn as ZoomInIcon,
   ZoomOut as ZoomOutIcon,
   SwitchCamera as SwitchCameraIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  LocationOn as LocationOnIcon,
+  Tag as TagIcon,
+  Error as ErrorIcon,
 } from "@mui/icons-material";
-import PanchayatSelector from "../components/PanchayatSelector";
 import LanguageSwitcher from "../components/LanguageSwitcher";
+import CascadingLocationDropdowns from "../components/CascadingLocationDropdowns";
 import { useLanguage } from "../utils/LanguageContext";
+import {
+  fetchPanchayatByLgdCode,
+  fetchPanchayatByLocation,
+  validateLocationPath,
+  getErrorMessage,
+} from "../api";
 import { FaceMesh } from "@mediapipe/face_mesh";
 import { Camera } from "@mediapipe/camera_utils";
 
 const CitizenLoginView = ({ onLogin }) => {
   const { strings } = useLanguage();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { "*": urlPath, state, district, block, panchayat } = useParams(); // Capture both wildcard path and direct params
+
+  // Login method states
+  const [loginMethod, setLoginMethod] = useState("loading"); // 'loading', 'lgd', 'location', 'manual', 'error'
+  const [selectedPanchayat, setSelectedPanchayat] = useState(null);
+  const [urlError, setUrlError] = useState("");
+  const [showManualSelection, setShowManualSelection] = useState(false);
+
+  // Face recognition states
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameras, setCameras] = useState([]);
   const [capturedImage, setCapturedImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [error, setError] = useState("");
-  const [selectedPanchayat, setSelectedPanchayat] = useState("");
   const [cameraPermissionDenied, setCameraPermissionDenied] = useState(false);
   const [voterIdLastFour, setVoterIdLastFour] = useState("");
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -59,7 +83,7 @@ const CitizenLoginView = ({ onLogin }) => {
     movement: { verified: false, count: 0 },
   });
 
-  // --- Platform config and thresholds state ---
+  // Platform config and thresholds state
   const [platformConfig, setPlatformConfig] = useState({
     liveliness: true,
     blink_count: 4,
@@ -78,7 +102,127 @@ const CitizenLoginView = ({ onLogin }) => {
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
-  // Fetch only settings.camera for config
+  // Process URL parameters and determine login method
+  useEffect(() => {
+    processUrlAndSetLoginMethod();
+  }, [searchParams, urlPath, state, district, block, panchayat]);
+
+  // Process URL to determine login method
+  const processUrlAndSetLoginMethod = async () => {
+    setLoginMethod("loading");
+    setUrlError("");
+    setSelectedPanchayat(null);
+
+    try {
+      // Check for LGD code in query parameters
+      const lgdCode = searchParams.get("lgdCode");
+      if (lgdCode) {
+        await handleLgdCodeLogin(lgdCode);
+        return;
+      }
+
+      // Check for direct path parameters (/:state/:district/:block/:panchayat)
+      if (state && district && block && panchayat) {
+        await handleLocationPathLogin(`${state}/${district}/${block}/${panchayat}`);
+        return;
+      }
+
+      // Check for location path (wildcard from /citizen-login/*)
+      if (urlPath) {
+        await handleLocationPathLogin(urlPath);
+        return;
+      }
+
+      // Default to manual selection
+      setLoginMethod("manual");
+    } catch (error) {
+      console.error("Error processing URL:", error);
+      setUrlError(getErrorMessage("locationError"));
+      setLoginMethod("error");
+    }
+  };
+
+  // Handle LGD code login
+  const handleLgdCodeLogin = async (lgdCode) => {
+    try {
+      const panchayat = await fetchPanchayatByLgdCode(lgdCode);
+      setSelectedPanchayat(panchayat);
+      setLoginMethod("lgd");
+    } catch (error) {
+      console.error("LGD code error:", error);
+      setUrlError(getErrorMessage(error.message || "lgdCodeNotFound"));
+      setLoginMethod("error");
+    }
+  };
+
+  // Handle location path login
+  const handleLocationPathLogin = async (path) => {
+    try {
+      // Parse the path segments
+      const pathSegments = path.split("/").filter(Boolean);
+
+      // Validate path format
+      const validation = await validateLocationPath(pathSegments);
+      if (!validation.isValid) {
+        setUrlError(getErrorMessage(validation.error));
+        setLoginMethod("error");
+        return;
+      }
+
+      // If validation passes, try to fetch panchayat
+      const [state, district, block, panchayatName] = pathSegments;
+      const panchayat = await fetchPanchayatByLocation(
+        state,
+        district,
+        block,
+        panchayatName
+      );
+      setSelectedPanchayat(panchayat);
+      setLoginMethod("location");
+    } catch (error) {
+      console.error("Location path error:", error);
+      setUrlError(getErrorMessage(error.message || "locationNotFound"));
+      setLoginMethod("error");
+    }
+  };
+
+  // Handle manual panchayat selection
+  const handleManualLocationChange = async (location) => {
+    if (
+      location.state &&
+      location.district &&
+      location.block &&
+      location.panchayat
+    ) {
+      try {
+        // Fetch the actual panchayat from the database
+        const panchayat = await fetchPanchayatByLocation(
+          location.state,
+          location.district,
+          location.block,
+          location.panchayat
+        );
+        setSelectedPanchayat(panchayat);
+      } catch (error) {
+        console.error("Error fetching panchayat for manual selection:", error);
+        setError("Failed to fetch panchayat details. Please try again.");
+        setSelectedPanchayat(null);
+      }
+    } else {
+      setSelectedPanchayat(null);
+    }
+  };
+
+  // Switch to manual selection
+  const switchToManualSelection = () => {
+    setLoginMethod("manual");
+    setShowManualSelection(true);
+    setUrlError("");
+    // Clear URL parameters
+    navigate("/citizen-login", { replace: true });
+  };
+
+  // Fetch platform config
   const fetchPlatformConfig = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/platform-configurations/camera`);
@@ -107,7 +251,7 @@ const CitizenLoginView = ({ onLogin }) => {
     }
   }, [API_URL]);
 
-  // Refs
+  // Refs for face recognition
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
@@ -165,7 +309,6 @@ const CitizenLoginView = ({ onLogin }) => {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
 
-        // Initialize FaceMesh and processing
         faceMesh.current = new FaceMesh({
           locateFile: (file) =>
             `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`,
@@ -484,7 +627,6 @@ const CitizenLoginView = ({ onLogin }) => {
 
       drawFaceOutline(faceLandmarks);
 
-      // --- Auto-verify if liveliness is false ---
       if (!platformConfig.liveliness) {
         setVerificationState((prev) => ({
           ...prev,
@@ -494,7 +636,6 @@ const CitizenLoginView = ({ onLogin }) => {
         }));
         return;
       }
-      // ------------------------------------------
 
       const livelinessChecks = {
         blink: detectBlink(faceLandmarks),
@@ -534,7 +675,7 @@ const CitizenLoginView = ({ onLogin }) => {
     setCameraPermissionDenied(false);
 
     try {
-      await fetchPlatformConfig(); // <-- fetch config before camera
+      await fetchPlatformConfig();
 
       if (
         !selectedPanchayat ||
@@ -555,9 +696,9 @@ const CitizenLoginView = ({ onLogin }) => {
       resetVerification();
       resetCameraView();
       if (!faceMesh.current || typeof faceMesh.current.send !== "function") {
-        await initializeFaceMesh(); // ✅ Safe re-initialization
+        await initializeFaceMesh();
       }
-      setIsCameraActive(true); // This triggers the useEffect
+      setIsCameraActive(true);
     } catch (error) {
       console.error("Camera startup error:", error);
       setIsCameraActive(false);
@@ -584,7 +725,7 @@ const CitizenLoginView = ({ onLogin }) => {
         .close()
         .catch((err) => console.warn("FaceMesh close error", err))
         .finally(() => {
-          faceMesh.current = null; // ✅ Explicitly remove reference
+          faceMesh.current = null;
         });
     }
 
@@ -684,7 +825,6 @@ const CitizenLoginView = ({ onLogin }) => {
     try {
       setLoading(true);
 
-      // Only require checks if liveliness is true
       if (
         platformConfig.liveliness &&
         (!verificationState.blink.verified ||
@@ -729,29 +869,21 @@ const CitizenLoginView = ({ onLogin }) => {
         throw new Error(strings.faceNotRecognized);
       }
 
-      const response = await fetch(`${API_URL}/citizens/face-login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          faceDescriptor: Array.from(detections.descriptor),
-          panchayatId: selectedPanchayat,
-          voterIdLastFour,
-        }),
-      });
-
-      // API call for face authentication using the new token-based system
+      // Use the existing auth API
       try {
-        // Step 1: Initiate the face login process
-        const initResponse = await fetch(`${API_URL}/auth/citizen/face-login/init`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            voterIdLastFour: voterIdLastFour,
-            panchayatId: selectedPanchayat,
-          }),
-        });
+        const initResponse = await fetch(
+          `${API_URL}/auth/citizen/face-login/init`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              voterIdLastFour: voterIdLastFour,
+              panchayatId: selectedPanchayat._id,
+            }),
+          }
+        );
 
         const initData = await initResponse.json();
 
@@ -764,39 +896,43 @@ const CitizenLoginView = ({ onLogin }) => {
             "Invalid voter ID": strings.errorInvalidVoterId,
           };
           throw new Error(
-            errorMessageMap[initData.message] || initData.message || strings.faceAuthFailed
+            errorMessageMap[initData.message] ||
+              initData.message ||
+              strings.faceAuthFailed
           );
         }
 
-        // Prepare verify data based on response (single user or multiple potential users)
         let verifyBody;
 
         if (initData.data.userId && initData.data.securityToken) {
-          // Single user case
           verifyBody = {
             userId: initData.data.userId,
             securityToken: initData.data.securityToken,
             faceDescriptor: Array.from(detections.descriptor),
           };
-        } else if (initData.data.potentialUserIds && initData.data.userSecurityTokens) {
-          // Multiple potential users case
+        } else if (
+          initData.data.potentialUserIds &&
+          initData.data.userSecurityTokens
+        ) {
           verifyBody = {
             potentialUserIds: initData.data.potentialUserIds,
             userSecurityTokens: initData.data.userSecurityTokens,
             faceDescriptor: Array.from(detections.descriptor),
           };
         } else {
-          throw new Error('Invalid response from server');
+          throw new Error("Invalid response from server");
         }
 
-        // Step 2: Verify with face descriptor
-        const verifyResponse = await fetch(`${API_URL}/auth/citizen/face-login/verify`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(verifyBody),
-        });
+        const verifyResponse = await fetch(
+          `${API_URL}/auth/citizen/face-login/verify`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(verifyBody),
+          }
+        );
 
         const verifyData = await verifyResponse.json();
 
@@ -806,19 +942,20 @@ const CitizenLoginView = ({ onLogin }) => {
             "Multiple potential matches found": strings.errorMultipleMatches,
           };
           throw new Error(
-            errorMessageMap[verifyData.message] || verifyData.message || strings.faceAuthFailed
+            errorMessageMap[verifyData.message] ||
+              verifyData.message ||
+              strings.faceAuthFailed
           );
         }
 
-        // If we got here, authentication succeeded
         if (onLogin && verifyData.data && verifyData.data.user) {
-          // Call the onLogin handler from CitizenPortal
-          // This will typically store the user data and tokens in state and localStorage
           if (verifyData.data.token && verifyData.data.refreshToken) {
-            // If using the auth context or token manager
-            onLogin(verifyData.data.user, verifyData.data.token, verifyData.data.refreshToken);
+            onLogin(
+              verifyData.data.user,
+              verifyData.data.token,
+              verifyData.data.refreshToken
+            );
           } else {
-            // Backward compatibility with previous implementation
             onLogin(verifyData.data.user);
           }
         }
@@ -845,7 +982,7 @@ const CitizenLoginView = ({ onLogin }) => {
     API_URL,
     onLogin,
     stopCamera,
-    platformConfig.liveliness, // add this dependency
+    platformConfig.liveliness,
   ]);
 
   const retakePhoto = useCallback(() => {
@@ -854,9 +991,105 @@ const CitizenLoginView = ({ onLogin }) => {
     startCamera();
   }, [startCamera]);
 
-  const passedVerificationCount = Object.values(verificationState)
-    .filter((val) => typeof val === "object")
-    .filter((check) => check.verified).length;
+  // Render different UI based on login method
+  const renderLoginMethodContent = () => {
+    switch (loginMethod) {
+      case "loading":
+        return (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              p: 4,
+            }}
+          >
+            <CircularProgress size={40} />
+            <Typography variant="body1" sx={{ ml: 2 }}>
+              Processing login method...
+            </Typography>
+          </Box>
+        );
+
+      case "error":
+        return (
+          <Alert
+            severity="error"
+            sx={{ mb: 3 }}
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                onClick={switchToManualSelection}
+                startIcon={<LocationOnIcon />}
+              >
+                Select Manually
+              </Button>
+            }
+          >
+            <Typography variant="body2">
+              <strong>Login Error:</strong> {urlError}
+            </Typography>
+          </Alert>
+        );
+
+      case "lgd":
+      case "location":
+        return (
+          <Alert
+            severity="success"
+            sx={{ mb: 3 }}
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                onClick={switchToManualSelection}
+                startIcon={<LocationOnIcon />}
+              >
+                Change Location
+              </Button>
+            }
+          >
+            <Typography variant="body2">
+              <strong>Panchayat Found:</strong> {selectedPanchayat?.name}
+              <br />
+              <small>
+                {selectedPanchayat?.state} → {selectedPanchayat?.district} →{" "}
+                {selectedPanchayat?.block}
+                {selectedPanchayat?.lgdCode &&
+                  ` (LGD: ${selectedPanchayat.lgdCode})`}
+              </small>
+            </Typography>
+          </Alert>
+        );
+
+      case "manual":
+        return (
+          <Box sx={{ mb: 3 }}>
+            <Typography
+              variant="h6"
+              gutterBottom
+              sx={{ display: "flex", alignItems: "center", gap: 1 }}
+            >
+              <LocationOnIcon color="primary" />
+              Select Your Panchayat
+            </Typography>
+            <CascadingLocationDropdowns
+              mode="select"
+              onLocationChange={handleManualLocationChange}
+              required={["state", "district", "block", "panchayat"]}
+              showCreateOptions={false}
+              compact={true}
+              variant="outlined"
+              size="medium"
+            />
+          </Box>
+        );
+
+      default:
+        return null;
+    }
+  };
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
@@ -907,24 +1140,10 @@ const CitizenLoginView = ({ onLogin }) => {
                   </Alert>
                 )}
 
-                <Box sx={{ mb: 3 }}>
-                  <PanchayatSelector
-                    value={selectedPanchayat}
-                    onChange={setSelectedPanchayat}
-                    showAllOption={false}
-                    label={strings.selectPanchayat}
-                    fullWidth
-                    required
-                    InputProps={{
-                      startAdornment: (
-                        <AccountBalanceIcon
-                          sx={{ mr: 1, color: "text.secondary" }}
-                        />
-                      ),
-                    }}
-                  />
-                </Box>
+                {/* Login Method Content */}
+                {renderLoginMethodContent()}
 
+                {/* Voter ID Input */}
                 <Box sx={{ mb: 3 }}>
                   <TextField
                     fullWidth
@@ -955,6 +1174,7 @@ const CitizenLoginView = ({ onLogin }) => {
                   />
                 </Box>
 
+                {/* Camera Section */}
                 <Paper
                   elevation={2}
                   sx={{
@@ -1002,7 +1222,9 @@ const CitizenLoginView = ({ onLogin }) => {
                         {strings.positionFace}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {strings.selectPanchayatFirst}
+                        {selectedPanchayat
+                          ? "Ready to start camera"
+                          : strings.selectPanchayatFirst}
                       </Typography>
                     </Box>
                   )}
@@ -1206,6 +1428,7 @@ const CitizenLoginView = ({ onLogin }) => {
                   )}
                 </Paper>
 
+                {/* Camera Info */}
                 {cameras.length > 0 && (
                   <Paper
                     variant="outlined"
@@ -1225,6 +1448,7 @@ const CitizenLoginView = ({ onLogin }) => {
                   </Paper>
                 )}
 
+                {/* Action Buttons */}
                 <Box sx={{ display: "flex", justifyContent: "center", gap: 2 }}>
                   {!isCameraActive && !capturedImage ? (
                     <Button
@@ -1282,6 +1506,37 @@ const CitizenLoginView = ({ onLogin }) => {
                       </Button>
                     </>
                   )}
+                </Box>
+
+                {/* URL Helper Section */}
+                <Divider sx={{ my: 3 }} />
+                <Box sx={{ textAlign: "center" }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    gutterBottom
+                  >
+                    Quick Access Methods:
+                  </Typography>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    justifyContent="center"
+                    flexWrap="wrap"
+                  >
+                    <Chip
+                      icon={<TagIcon />}
+                      label="Use LGD Code: ?lgdCode=123456"
+                      size="small"
+                      variant="outlined"
+                    />
+                    <Chip
+                      icon={<LocationOnIcon />}
+                      label="Use Path: /State/District/Block/Panchayat"
+                      size="small"
+                      variant="outlined"
+                    />
+                  </Stack>
                 </Box>
               </Box>
             </CardContent>

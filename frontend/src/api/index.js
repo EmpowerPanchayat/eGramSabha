@@ -675,3 +675,371 @@ export const updateUserProfile = async (voterId, updateData, panchayatId = null)
     throw error;
   }
 };
+
+/**
+ * Get complete location hierarchy for client-side caching
+ * @returns {Promise<Object>} Location hierarchy data
+ */
+export const fetchLocationHierarchy = async () => {
+  try {
+    const response = await fetch(`${API_URL}/locations/hierarchy`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch location hierarchy');
+    }
+    const data = await response.json();
+    return data.data; // Return just the hierarchy data
+  } catch (error) {
+    console.error('Error fetching location hierarchy:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all states with optional search
+ * @param {string} search - Optional search term
+ * @returns {Promise<Array>} List of states
+ */
+export const fetchStates = async (search = '') => {
+  try {
+    const url = search 
+      ? `${API_URL}/locations/states?search=${encodeURIComponent(search)}`
+      : `${API_URL}/locations/states`;
+    
+    console.log('Fetching states from:', url);
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch states: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('States response:', data);
+    
+    if (!data.success) {
+      throw new Error(data.message || 'API returned unsuccessful response');
+    }
+    
+    return data.data || [];
+  } catch (error) {
+    console.error('Error fetching states:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get districts for a state with optional search
+ * @param {string} state - State name
+ * @param {string} search - Optional search term
+ * @returns {Promise<Array>} List of districts
+ */
+export const fetchDistricts = async (state, search = '') => {
+  try {
+    if (!state) throw new Error('State is required');
+    
+    const url = search 
+      ? `${API_URL}/locations/districts/${encodeURIComponent(state)}?search=${encodeURIComponent(search)}`
+      : `${API_URL}/locations/districts/${encodeURIComponent(state)}`;
+    
+    console.log('Fetching districts from:', url);
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch districts: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('Districts response:', data);
+    
+    if (!data.success) {
+      throw new Error(data.message || 'API returned unsuccessful response');
+    }
+    
+    return data.data || [];
+  } catch (error) {
+    console.error('Error fetching districts:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get blocks for a state and district with optional search
+ * @param {string} state - State name
+ * @param {string} district - District name
+ * @param {string} search - Optional search term
+ * @returns {Promise<Array>} List of blocks
+ */
+export const fetchBlocks = async (state, district, search = '') => {
+  try {
+    if (!state || !district) throw new Error('State and district are required');
+    
+    const url = search 
+      ? `${API_URL}/locations/blocks/${encodeURIComponent(state)}/${encodeURIComponent(district)}?search=${encodeURIComponent(search)}`
+      : `${API_URL}/locations/blocks/${encodeURIComponent(state)}/${encodeURIComponent(district)}`;
+    
+    console.log('Fetching blocks from:', url);
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch blocks: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('Blocks response:', data);
+    
+    if (!data.success) {
+      throw new Error(data.message || 'API returned unsuccessful response');
+    }
+    
+    return data.data || [];
+  } catch (error) {
+    console.error('Error fetching blocks:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get panchayats for a state, district, and block with optional search
+ * @param {string} state - State name
+ * @param {string} district - District name
+ * @param {string} block - Block name
+ * @param {string} search - Optional search term
+ * @returns {Promise<Array>} List of panchayats
+ */
+export const fetchPanchayatsByLocation = async (state, district, block, search = '') => {
+  try {
+    if (!state || !district || !block) throw new Error('State, district, and block are required');
+    
+    const url = search 
+      ? `${API_URL}/locations/panchayats/${encodeURIComponent(state)}/${encodeURIComponent(district)}/${encodeURIComponent(block)}?search=${encodeURIComponent(search)}`
+      : `${API_URL}/locations/panchayats/${encodeURIComponent(state)}/${encodeURIComponent(district)}/${encodeURIComponent(block)}`;
+    
+    console.log('Fetching panchayats from:', url);
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch panchayats: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('Panchayats response:', data);
+    
+    if (!data.success) {
+      throw new Error(data.message || 'API returned unsuccessful response');
+    }
+    
+    return data.data || [];
+  } catch (error) {
+    console.error('Error fetching panchayats:', error);
+    throw error;
+  }
+};
+
+/**
+ * Validate if a location exists
+ * @param {Object} location - Location object with state, district, block, panchayat
+ * @returns {Promise<boolean>} True if location exists
+ */
+export const validateLocation = async (location) => {
+  try {
+    const response = await fetch(`${API_URL}/locations/validate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(location)
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to validate location');
+    }
+    
+    const data = await response.json();
+    return data.exists;
+  } catch (error) {
+    console.error('Error validating location:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get location suggestions for auto-complete
+ * @param {string} term - Search term
+ * @param {string} type - Type of location (state, district, block, panchayat)
+ * @param {Object} context - Context for higher levels
+ * @returns {Promise<Array>} List of suggestions
+ */
+export const getLocationSuggestions = async (term, type, context = {}) => {
+  try {
+    const params = new URLSearchParams({
+      term,
+      type,
+      ...context
+    });
+
+    const response = await fetch(`${API_URL}/locations/suggest?${params}`);
+    if (!response.ok) {
+      throw new Error('Failed to get location suggestions');
+    }
+    
+    const data = await response.json();
+    return data.data;
+  } catch (error) {
+    console.error('Error getting location suggestions:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get panchayat by LGD code
+ * @param {string} lgdCode - LGD Code
+ * @returns {Promise<Object>} Panchayat data
+ */
+export const fetchPanchayatByLgdCode = async (lgdCode) => {
+  try {
+    const response = await fetch(`${API_URL}/panchayats/by-lgd/${encodeURIComponent(lgdCode)}`);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to fetch panchayat by LGD code');
+    }
+    
+    const data = await response.json();
+    return data.data.panchayat;
+  } catch (error) {
+    console.error('Error fetching panchayat by LGD code:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get panchayat by location path
+ * @param {string} state - State name
+ * @param {string} district - District name
+ * @param {string} block - Block name
+ * @param {string} panchayat - Panchayat name
+ * @returns {Promise<Object>} Panchayat data
+ */
+export const fetchPanchayatByLocation = async (state, district, block, panchayat) => {
+  try {
+    const url = `${API_URL}/panchayats/by-location/${encodeURIComponent(state)}/${encodeURIComponent(district)}/${encodeURIComponent(block)}/${encodeURIComponent(panchayat)}`;
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to fetch panchayat by location');
+    }
+    
+    const data = await response.json();
+    return data.data.panchayat;
+  } catch (error) {
+    console.error('Error fetching panchayat by location:', error);
+    throw error;
+  }
+};
+
+/**
+ * Validate location path format
+ * @param {Array} pathSegments - Array of path segments
+ * @returns {Promise<Object>} Validation result
+ */
+export const validateLocationPath = async (pathSegments) => {
+  try {
+    const response = await fetch(`${API_URL}/panchayats/validate-location-path`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ pathSegments })
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      return {
+        isValid: false,
+        error: data.message,
+        details: data.error
+      };
+    }
+    
+    return {
+      isValid: true,
+      pathSegments: data.pathSegments
+    };
+  } catch (error) {
+    console.error('Error validating location path:', error);
+    return {
+      isValid: false,
+      error: 'locationError',
+      details: error.message
+    };
+  }
+};
+
+/**
+ * Search panchayats for login (with filters)
+ * @param {Object} filters - Search filters
+ * @returns {Promise<Array>} List of matching panchayats
+ */
+export const searchPanchayatsForLogin = async (filters = {}) => {
+  try {
+    const params = new URLSearchParams();
+    
+    Object.keys(filters).forEach(key => {
+      if (filters[key]) {
+        params.append(key, filters[key]);
+      }
+    });
+
+    const response = await fetch(`${API_URL}/panchayats/search-login?${params}`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to search panchayats');
+    }
+    
+    const data = await response.json();
+    return data.data;
+  } catch (error) {
+    console.error('Error searching panchayats for login:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get location statistics
+ * @returns {Promise<Object>} Location statistics
+ */
+export const fetchLocationStats = async () => {
+  try {
+    const response = await fetch(`${API_URL}/locations/stats`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch location statistics');
+    }
+    const data = await response.json();
+    return data.data;
+  } catch (error) {
+    console.error('Error fetching location stats:', error);
+    throw error;
+  }
+};
+
+// Error message mapping for different error types
+export const ERROR_MESSAGES = {
+  invalidLgdCode: 'Invalid LGD Code. Please check the code or select manually.',
+  lgdCodeNotFound: 'LGD Code not found. Please verify the code or use manual selection.',
+  locationNotFound: 'Location not found. Please check the spelling or select manually.',
+  missingBlockInUrl: 'Block is required in the location path. Please provide complete location.',
+  incompleteLocationPath: 'Incomplete location path. Expected format: /State/District/Block/Panchayat',
+  locationError: 'Error loading location. Please try again or select manually.',
+  panchayatNotFound: 'Panchayat not found in the specified location.'
+};
+
+/**
+ * Get user-friendly error message
+ * @param {string} errorCode - Error code from API
+ * @returns {string} User-friendly error message
+ */
+export const getErrorMessage = (errorCode) => {
+  return ERROR_MESSAGES[errorCode] || errorCode || 'An unexpected error occurred';
+};
