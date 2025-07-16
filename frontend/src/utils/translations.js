@@ -6,6 +6,7 @@ const translations = {
     error: "Error",
     success: "Success",
     submit: "Submit",
+    add: "Add",
     cancel: "Cancel",
     save: "Save",
     delete: "Delete",
@@ -408,6 +409,7 @@ const translations = {
     noResponse: "No Response",
     totalRegisteredUsers: "Total Registered Users",
     noAgenda: "No agenda available",
+    translationInProgress: "Some translations are in progress. Please wait a few moments.",
 
     // Upcoming Meetings
     upcomingMeeting: "Upcoming Gram Sabha Meeting",
@@ -482,6 +484,7 @@ const translations = {
     error: "त्रुटि",
     success: "सफलता",
     submit: "जमा करें",
+    "add": "जोड़ें",
     cancel: "रद्द करें",
     save: "सहेजें",
     delete: "हटाएं",
@@ -920,6 +923,7 @@ const translations = {
     noResponse: "कोई प्रतिक्रिया नहीं",
     totalRegisteredUsers: "कुल पंजीकृत उपयोगकर्ता",
     noAgenda: "कोई एजेंडा उपलब्ध नहीं है",
+    translationInProgress: "कुछ अनुवाद प्रगति में हैं। कृपया कुछ क्षण प्रतीक्षा करें।",
 
     // Upcoming Meetings
     upcomingMeeting: "आगामी ग्राम सभा बैठक",

@@ -241,6 +241,14 @@ const GramSabhaManagement = ({ panchayatId }) => {
         }));
     };
 
+    const prepareAgendaItemsForSubmission = (items) => {
+        return items.map(item => ({
+            ...item,
+            createdByType: item.createdByType || 'SYSTEM',
+            createdByUserId: item.createdByType === 'USER' && item.createdByUserId ? item.createdByUserId : undefined
+        }));
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!user) {
@@ -304,7 +312,8 @@ const GramSabhaManagement = ({ panchayatId }) => {
 
                 // Add selected agenda items
                 if (selectedAgendaItems.length > 0) {
-                    formDataToSend.append('selectedAgendaItems', JSON.stringify(selectedAgendaItems));
+                    const preparedItems = prepareAgendaItemsForSubmission(selectedAgendaItems);
+                    formDataToSend.append('selectedAgendaItems', JSON.stringify(preparedItems));
                     hasChanges = true;
                 }
 
@@ -325,7 +334,8 @@ const GramSabhaManagement = ({ panchayatId }) => {
                 
                 // Add selected agenda items
                 if (selectedAgendaItems.length > 0) {
-                    formDataToSend.append('selectedAgendaItems', JSON.stringify(selectedAgendaItems));
+                    const preparedItems = prepareAgendaItemsForSubmission(selectedAgendaItems);
+                    formDataToSend.append('selectedAgendaItems', JSON.stringify(preparedItems));
                 }
                 
                 // Append each attachment file
@@ -419,6 +429,19 @@ const GramSabhaManagement = ({ panchayatId }) => {
     };
 
     const isConcluded = selectedGramSabha && selectedGramSabha.status === 'CONCLUDED';
+    const supportedLanguages = ['en', 'hi', 'hindi'];
+    const isMissingTranslation = (field) => {
+        if (!field || typeof field !== 'object') return false;
+
+        const hasAtLeastOneFilled = Object.values(field).some(val => val?.trim());
+        const isMissingAnyLang = supportedLanguages.some(lang => !field[lang]?.trim());
+
+        return hasAtLeastOneFilled && isMissingAnyLang;
+    };
+    const showAgendaTranslationAlert = allAgendaItems.some(
+        item =>
+            isMissingTranslation(item.title) || isMissingTranslation(item.description)
+        );
 
     return (
         <Box>
@@ -604,6 +627,12 @@ const GramSabhaManagement = ({ panchayatId }) => {
                                                 <Typography variant="body2" color="text.secondary" gutterBottom>
                                                     Select agenda items to include in this meeting:
                                                 </Typography>
+                                                {/* Show translation alert */}
+                                                {showAgendaTranslationAlert && (
+                                                <Alert severity="info" sx={{ mb: 2 }}>
+                                                    {strings.translationInProgress}
+                                                </Alert>
+                                                )}
                                                 <Paper variant="outlined" sx={{ p: 2 }}>
                                                     {allAgendaItems.map((item, index) => {
                                                         const isSelected = selectedAgendaItems.some(selected =>

@@ -62,6 +62,8 @@ import formatDate from '../utils/formatDate';
 import STATUS_KEY_VALUE_MAP from "../constants/issueStatus";
 import IssueDetailsModal from '../components/IssueDetailsModal';
 import { FinalAgendaScreen } from '../components/FinalAgendaScreen';
+import { updateAgendaSummary } from '../api/summary';
+import api from '../utils/axiosConfig';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -94,7 +96,75 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     const [createdForId, setCreatedForId] = useState('');
     const [users, setUsers] = useState([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
-    
+    const [showAddForm, setShowAddForm] = useState(false);
+    const [newItem, setNewItem] = useState({ title: '', description: '', estimatedDuration: 15 });
+    const [agendaState, setAgendaState] = useState([]);
+    const [saveSuccess, setSaveSuccess] = useState(false);
+    const [saveError, setSaveError] = useState('');
+
+    const ensureMultilingualFields = (item) => {
+        const convertMapToObj = (val) => {
+            if (val instanceof Map) return Object.fromEntries(val);
+            if (typeof val === 'object' && val !== null) return val;
+            if (typeof val === 'string') return { [language]: val };
+            return { en: '' };
+        };
+
+        return {
+            ...item,
+            title: convertMapToObj(item.title),
+            description: convertMapToObj(item.description),
+            createdByType: item.createdByType || 'SYSTEM',
+            ...(item.createdByType === 'USER' && item.createdByUserId
+            ? { createdByUserId: item.createdByUserId }
+            : {}),
+        };
+    };
+
+    const fetchAgendaSummary = async () => {
+        try {
+            const res = await api.get(`/summaries/panchayat/${user.panchayatId}`);
+            if (res.data?.summary?.agendaItems) {
+            setAgendaState(res.data.summary.agendaItems);
+            setAgendaItems(res.data.summary.agendaItems); // Sync parent
+            }
+        } catch (err) {
+            console.error('Failed to fetch summary:', err);
+        }
+    };
+
+    const addNewAgendaItem = async () => {
+        if (!newItem.title.trim()) return;
+
+        const item = {
+            id: newItem._id || newItem.id || Date.now().toString(),
+            _id: newItem._id || newItem.id,
+            title: { [language]: newItem.title },
+            description: { [language]: newItem.description },
+            linkedIssues: [],
+            estimatedDuration: newItem.estimatedDuration,
+            order: agendaState.length + 1,
+            createdByType: 'USER',
+            createdByUserId: user.id,
+        };
+
+        const updatedAgenda = [...(agendaItems || []), item];
+        setAgendaState(updatedAgenda);
+        setNewItem({ title: '', description: '', estimatedDuration: 15 });
+
+        try {
+            const payload = updatedAgenda.map(ensureMultilingualFields);
+            await updateAgendaSummary(user.panchayatId, payload);
+            await fetchAgendaSummary();
+            setSaveSuccess(true);
+            setShowAddForm(false);
+            setTimeout(() => setSaveSuccess(false), 2000);
+        } catch (err) {
+            setSaveError(err.message || 'Failed to save agenda');
+            setTimeout(() => setSaveError(''), 3000);
+        }
+    };
+ 
     const handleAddIssuesToSummary = (newIssues) => {
         const newIssuesArray = Array.isArray(newIssues) ? newIssues : [newIssues];
         setSelectedIssues(prevIssues => {
@@ -102,26 +172,6 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
             const issuesToAdd = newIssuesArray.filter(i => !existingIds.has(i._id));
             return [...prevIssues, ...issuesToAdd];
         });
-    };
-    
-    // Helper function to get multilingual text - MUST be defined before functions that use it
-    const getMultilingualText = (item, field) => {
-        if (!item || !item[field]) return '';
-        
-        // If it's a Map object (from MongoDB), convert to plain object first
-        let textObj = item[field];
-        if (textObj && typeof textObj === 'object' && textObj.get) {
-            // It's a Map, convert to plain object
-            textObj = Object.fromEntries(textObj);
-        }
-        
-        // If it's already a plain object with language keys
-        if (typeof textObj === 'object' && textObj !== null) {
-            return textObj[language] || textObj.en || textObj.hi || textObj.hindi || '';
-        }
-        
-        // If it's a string, return as is
-        return textObj || '';
     };
 
     const meeting = {
@@ -794,24 +844,91 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                             </>
                         )}
                     </Box>
-                ):
-                    summaryLoading ? (
+                ) : (
+                    <>
+                    <Box sx={{ px: 3, mt: 4, mb: 4 }}>
+                        {!showAddForm && (
+                        <Button
+                            variant="contained"
+                            color="primary"
+                            onClick={() => setShowAddForm(true)}
+                            sx={{ mb: 2 }}
+                        >
+                            {strings.addAgendaItem}
+                        </Button>
+                        )}
+
+                        {showAddForm && (
+                        <Paper elevation={3} sx={{ mb: 3, p: 2 }}>
+                            <Typography variant="h6" gutterBottom>{strings.addAgendaItem}</Typography>
+                            <TextField
+                                fullWidth
+                                label={strings.title}
+                                value={newItem.title}
+                                onChange={(e) => setNewItem({ ...newItem, title: e.target.value })}
+                                sx={{ mb: 2 }}
+                                />
+                            <TextField
+                                fullWidth
+                                label={strings.description}
+                                multiline
+                                minRows={2}
+                                value={newItem.description}
+                                onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+                                sx={{ mb: 2 }}
+                                />
+                            <TextField
+                                label={strings.durationMins}
+                                type="number"
+                                value={newItem.estimatedDuration}
+                                onChange={(e) =>
+                                    setNewItem({
+                                    ...newItem,
+                                    estimatedDuration: parseInt(e.target.value) || 15
+                                    })
+                                }
+                                sx={{ mb: 2, width: 180 }}
+                                inputProps={{ min: 1 }}
+                            />
+                            <Stack direction="row" spacing={2}>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                onClick={() => addNewAgendaItem()}
+                                disabled={!newItem.title.trim()}
+                            >
+                                {strings.add}
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                onClick={() => setShowAddForm(false)}
+                            >
+                                {strings.cancel}
+                            </Button>
+                            </Stack>
+                        </Paper>
+                        )}
+                    </Box>
+                    {/* Agenda Summary List */}
+                    {summaryLoading ? (
                         <Box sx={{ display: 'flex', justifyContent: 'center', my: 8 }}>
-                            <CircularProgress size={60} />
+                        <CircularProgress size={60} />
                         </Box>
-                    ) : summaryError ? (
+                    ) : summaryError && agendaItems.length === 0 ? (
                         <Alert severity="error" sx={{ m: 3 }}>
-                            {summaryError}
+                        {summaryError}
                         </Alert>
                     ) : (
                         <FinalAgendaScreen
-                            meeting={meeting}
-                            onUpdateAgenda={setAgendaItems}
-                            panchayatId={user.panchayatId}
-                            onUpdateIssues={handleAddIssuesToSummary}
+                        meeting={meeting}
+                        agendaItems={agendaItems} // 👈 pass full list
+                        onUpdateAgenda={setAgendaItems}
+                        panchayatId={user.panchayatId}
+                        onUpdateIssues={handleAddIssuesToSummary}
                         />
-                    )
-                }
+                    )}
+                    </>
+                )}
                 </CardContent>
             </Card>
 
