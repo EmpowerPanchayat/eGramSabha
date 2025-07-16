@@ -1,4 +1,4 @@
-const GramSabha = require('../models/gramSabha');
+const GramSabha = require('../models/GramSabha');
 
 const autoUpdateMeetingStatus = async (meeting) => {
     const now = new Date();
