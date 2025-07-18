@@ -1,1 +1,3157 @@
-{}
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Gram Sabha Management System API",
+    "description": "\n## Comprehensive API for Digital Village Governance\n\nThis API serves both Admin Portal (panchayat management) and Citizen Portal (services & issue reporting).\n\n### Features:\n- **Biometric Authentication** - Facial recognition login\n- **Panchayat & Ward Management** - Complete CRUD operations\n- **Issue Tracking** - Rich content reporting with images/audio\n- **Multi-language Support** - English & Hindi\n- **Member Management** - CSV import, bulk operations\n\n### Authentication:\nMost endpoints require JWT Bearer token authentication.\n\n### File Uploads:\nEndpoints support multipart/form-data for images, audio, and documents.\n    ",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000",
+      "description": "Development server"
+    },
+    {
+      "url": "https://egramsabha.empowerpanchayat.org/",
+      "description": "Production server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter JWT Bearer token"
+      }
+    },
+    "schemas": {
+      "User": {
+        "title": "User",
+        "required": [
+          "voterIdNumber",
+          "panchayatId"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "gender": {
+            "type": "string"
+          },
+          "fatherName": {
+            "type": "string"
+          },
+          "husbandName": {
+            "type": "string"
+          },
+          "motherName": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "mobileNumber": {
+            "type": "string"
+          },
+          "voterIdNumber": {
+            "type": "string"
+          },
+          "caste": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string",
+                "enum": [
+                  "General",
+                  "Scheduled Caste",
+                  "Scheduled Tribe",
+                  "Other Backward Classes",
+                  ""
+                ]
+              }
+            }
+          },
+          "faceDescriptor": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "faceImageId": {
+            "type": "schemaobjectid"
+          },
+          "thumbnailImageId": {
+            "type": "schemaobjectid"
+          },
+          "isRegistered": {
+            "type": "boolean"
+          },
+          "registrationDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "panchayatId": {
+            "type": "schemaobjectid"
+          },
+          "lastLogin": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "wardId": {
+            "type": "schemaobjectid"
+          },
+          "securityToken": {
+            "type": "string"
+          },
+          "securityTokenExpires": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "_id": {
+            "type": "string"
+          }
+        }
+      },
+      "Panchayat": {
+        "title": "Panchayat",
+        "required": [
+          "name",
+          "state",
+          "district",
+          "block"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "district": {
+            "type": "string"
+          },
+          "block": {
+            "type": "string"
+          },
+          "villages": {
+            "type": "string"
+          },
+          "geolocation": {
+            "type": "string"
+          },
+          "population": {
+            "type": "number"
+          },
+          "language": {
+            "type": "string"
+          },
+          "sabhaCriteria": {
+            "type": "number"
+          },
+          "officialWhatsappNumber": {
+            "type": "string"
+          },
+          "lgdCode": {
+            "type": "string"
+          },
+          "_id": {
+            "type": "string"
+          }
+        }
+      },
+      "Ward": {
+        "title": "Ward",
+        "required": [
+          "name",
+          "panchayatId"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "geolocation": {
+            "type": "string"
+          },
+          "population": {
+            "type": "number"
+          },
+          "panchayatId": {
+            "type": "schemaobjectid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "_id": {
+            "type": "string"
+          }
+        }
+      },
+      "Issue": {
+        "title": "Issue",
+        "required": [
+          "category",
+          "subcategory",
+          "createdForId",
+          "panchayatId",
+          "creatorId"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "required": false
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "CULTURE_AND_NATURE",
+              "INFRASTRUCTURE",
+              "EARNING_OPPORTUNITIES",
+              "BASIC_AMENITIES",
+              "SOCIAL_WELFARE_SCHEMES",
+              "OTHER"
+            ]
+          },
+          "subcategory": {
+            "type": "string",
+            "enum": [
+              "FESTIVALS",
+              "TREES_AND_FORESTS",
+              "SOIL",
+              "NATURAL_WATER_RESOURCES",
+              "RELIGIOUS_PLACES",
+              "LAND",
+              "WATER",
+              "ENERGY",
+              "TRANSPORTATION",
+              "COMMUNICATION",
+              "AGRICULTURE",
+              "ANIMAL_HUSBANDRY",
+              "FISHERIES",
+              "SMALL_SCALE_INDUSTRIES",
+              "MINOR_FOREST_PRODUCE",
+              "KHADI_AND_VILLAGE_INDUSTRIES",
+              "HEALTH",
+              "EDUCATION",
+              "HOUSING_AND_SANITATION",
+              "SPORTS_AND_ENTERTAINMENT",
+              "FOOD",
+              "WEAKER_SECTIONS",
+              "HANDICAPPED_WELFARE",
+              "FAMILY_WELFARE",
+              "WOMEN_AND_CHILD_DEVELOPMENT",
+              "POVERTY_ALLEVIATION",
+              "OTHER"
+            ]
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "URGENT",
+              "NORMAL"
+            ]
+          },
+          "createdForId": {
+            "type": "schemaobjectid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "REPORTED",
+              "PICKED_IN_AGENDA",
+              "DISCUSSED_IN_GRAM_SABHA",
+              "TRANSFERRED",
+              "RESOLVED",
+              "NO_ACTION_NEEDED"
+            ]
+          },
+          "toBeResolvedBefore": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "remark": {
+            "type": "string"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "attachment": {
+                  "type": "string"
+                },
+                "filename": {
+                  "type": "string"
+                },
+                "mimeType": {
+                  "type": "string"
+                },
+                "uploadedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "attachment"
+              ]
+            }
+          },
+          "panchayatId": {
+            "type": "schemaobjectid"
+          },
+          "gramSabhaId": {
+            "type": "schemaobjectid"
+          },
+          "creatorId": {
+            "type": "schemaobjectid"
+          },
+          "transcription": {
+            "type": "object",
+            "description": {
+              "default": {}
+            },
+            "properties": {
+              "requestId": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "PENDING",
+                  "PROCESSING",
+                  "COMPLETED",
+                  "FAILED"
+                ]
+              },
+              "text": {
+                "type": "string"
+              },
+              "originalTranscription": {
+                "type": "string"
+              },
+              "enhancedEnglishTranscription": {
+                "type": "string"
+              },
+              "enhancedHindiTranscription": {
+                "type": "string"
+              },
+              "description": {
+                "type": "object",
+                "properties": {}
+              },
+              "language": {
+                "type": "string"
+              },
+              "processingMode": {
+                "type": "string"
+              },
+              "transcriptionProvider": {
+                "type": "string"
+              },
+              "providerInfo": {
+                "type": "object",
+                "properties": {}
+              },
+              "llmEnhancementStatus": {
+                "type": "object",
+                "properties": {}
+              },
+              "requestedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "completedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "retryCount": {
+                "type": "number"
+              },
+              "lastError": {
+                "type": "string"
+              }
+            }
+          },
+          "isSummarized": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "_id": {
+            "type": "string"
+          }
+        }
+      },
+      "Official": {
+        "title": "Official",
+        "required": [
+          "username",
+          "email",
+          "password",
+          "name",
+          "role"
+        ],
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "SECRETARY",
+              "PRESIDENT",
+              "WARD_MEMBER",
+              "COMMITTEE_SECRETARY",
+              "GUEST"
+            ]
+          },
+          "panchayatId": {
+            "type": "schemaobjectid"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "lastLogin": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "linkedCitizenId": {
+            "type": "schemaobjectid"
+          },
+          "wardId": {
+            "type": "schemaobjectid"
+          },
+          "passwordResetToken": {
+            "type": "string"
+          },
+          "passwordResetExpires": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "_id": {
+            "type": "string"
+          }
+        }
+      },
+      "GramSabha": {
+        "title": "GramSabha",
+        "required": [
+          "title",
+          "dateTime",
+          "location",
+          "scheduledDurationHours",
+          "status",
+          "panchayatId",
+          "scheduledById"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "dateTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "location": {
+            "type": "string"
+          },
+          "agenda": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "description": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "linkedIssues": {
+                  "type": "array",
+                  "items": {
+                    "type": "schemaobjectid"
+                  }
+                },
+                "createdByType": {
+                  "type": "string",
+                  "enum": [
+                    "USER",
+                    "SYSTEM"
+                  ]
+                },
+                "createdByUserId": {
+                  "type": "schemaobjectid"
+                },
+                "_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "description",
+                "createdByType",
+                "createdByUserId"
+              ]
+            }
+          },
+          "scheduledDurationHours": {
+            "type": "number"
+          },
+          "meetingLink": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "SCHEDULED",
+              "CANCELLED",
+              "UNSCHEDULED",
+              "CONCLUDED",
+              "IN_PROGRESS",
+              "RESCHEDULED"
+            ]
+          },
+          "minutes": {
+            "type": "string"
+          },
+          "meetingNotes": {
+            "type": "string"
+          },
+          "recordingLink": {
+            "type": "string"
+          },
+          "actualDurationMinutes": {
+            "type": "number"
+          },
+          "transcript": {
+            "type": "string"
+          },
+          "conclusion": {
+            "type": "string"
+          },
+          "jioMeetData": {
+            "type": "object",
+            "required": false,
+            "properties": {}
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "schemaobjectid"
+            }
+          },
+          "attendances": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "checkInTime": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "verificationMethod": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "PRESENT",
+                    "ABSENT",
+                    "LATE"
+                  ]
+                },
+                "remarks": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "schemaobjectid"
+                }
+              },
+              "required": [
+                "checkInTime",
+                "verificationMethod",
+                "status",
+                "userId"
+              ]
+            }
+          },
+          "guests": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "phoneNumber": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "designation": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "phoneNumber"
+              ]
+            }
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "attachment": {
+                  "type": "string"
+                },
+                "filename": {
+                  "type": "string"
+                },
+                "mimeType": {
+                  "type": "string"
+                },
+                "uploadedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "uploadedAt"
+              ]
+            }
+          },
+          "panchayatId": {
+            "type": "schemaobjectid"
+          },
+          "scheduledById": {
+            "type": "schemaobjectid"
+          },
+          "_id": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Authentication": {
+        "title": "Authentication",
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "admin"
+          },
+          "password": {
+            "type": "string",
+            "example": "yourpassword"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "status": {
+            "type": "number"
+          }
+        }
+      },
+      "Success": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object"
+          },
+          "status": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "responses": {
+      "UnauthorizedError": {
+        "description": "Access token is missing or invalid",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotFoundError": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "Authentication and login operations"
+    },
+    {
+      "name": "Citizens",
+      "description": "Citizen profile and identity operations"
+    },
+    {
+      "name": "Gram Sabhas",
+      "description": "Gram Sabha meeting management"
+    },
+    {
+      "name": "Issues",
+      "description": "Issue reporting and resolution"
+    },
+    {
+      "name": "Officials",
+      "description": "Gram Sabha official functions"
+    },
+    {
+      "name": "Panchayats",
+      "description": "Panchayat configuration and data"
+    },
+    {
+      "name": "Users",
+      "description": "User account management"
+    },
+    {
+      "name": "Platform Configs",
+      "description": "Platform-wide configuration settings"
+    }
+  ],
+  "paths": {
+    "/api/auth/admin/login": {
+      "post": {
+        "tags": [
+          "Admin Auths"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/auth/admin/refresh-token": {
+      "post": {
+        "tags": [
+          "Admin Auths"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/auth/admin/me": {
+      "get": {
+        "tags": [
+          "Admin Auths"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/register-admin": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Authentication"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/login": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Authentication"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/refresh-token": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Authentication"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/forgot-password": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Authentication"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reset-password/{token}": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: token"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Authentication"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/change-password": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Authentication"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/auth/citizen/face-login/init": {
+      "post": {
+        "tags": [
+          "Citizen Auths"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/auth/citizen/face-login/verify": {
+      "post": {
+        "tags": [
+          "Citizen Auths"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/auth/citizen/refresh-token": {
+      "post": {
+        "tags": [
+          "Citizen Auths"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/auth/citizen/me": {
+      "get": {
+        "tags": [
+          "Citizen Auths"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/citizens/face-login": {
+      "post": {
+        "tags": [
+          "Citizens"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/citizens/profile/{userid}": {
+      "get": {
+        "tags": [
+          "Citizens"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "userid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: userid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/gram-sabha": {
+      "post": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GramSabha"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gram-sabha/panchayat/{panchayatid}": {
+      "get": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/gram-sabha/{id}": {
+      "get": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GramSabha"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/gram-sabha/{id}/attendance": {
+      "post": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GramSabha"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/gram-sabha/{id}/attachments": {
+      "post": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GramSabha"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gram-sabha/panchayat/{panchayatid}/upcoming": {
+      "get": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/gram-sabha/panchayat/{panchayatid}/past": {
+      "get": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/gram-sabha/{id}/rsvp/{usedid}": {
+      "post": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          },
+          {
+            "name": "usedid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: usedid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GramSabha"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          },
+          {
+            "name": "usedid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: usedid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/gram-sabha/{id}/rsvp-stats": {
+      "get": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/gram-sabha/{id}/mark-attendance": {
+      "post": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GramSabha"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gram-sabha/{id}/attendance-stats": {
+      "get": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/gram-sabha/panchayat/{panchayatid}/today": {
+      "get": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/gram-sabha/recording/start": {
+      "post": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GramSabha"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gram-sabha/recordings/stop": {
+      "post": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GramSabha"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gram-sabha/recordings/list": {
+      "post": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GramSabha"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/issues": {
+      "post": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Issue"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/issues/panchayat/{panchayatid}": {
+      "get": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/issues/user/{userid}": {
+      "get": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "userid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: userid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/issues/{issueid}": {
+      "get": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "issueid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: issueid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/issues/{issueid}/attachment/{attachmentid}": {
+      "get": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "issueid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: issueid"
+          },
+          {
+            "name": "attachmentid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: attachmentid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/issues/upload-attachment": {
+      "post": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Issue"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/issues/{issueid}/transcription": {
+      "get": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "issueid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: issueid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/issues/{issueid}/transcription/retry": {
+      "post": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "issueid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: issueid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Issue"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/issues/batch-minimal": {
+      "post": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Issue"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/summaries/panchayat/{panchayatid}": {
+      "get": {
+        "tags": [
+          "Issue Summaries"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/summaries/panchayat/{panchayatid}/agenda": {
+      "patch": {
+        "tags": [
+          "Issue Summaries"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/locations/hierarchy": {
+      "get": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/locations/states": {
+      "get": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/locations/districts/{state}": {
+      "get": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: state"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/locations/blocks/{state}/{district}": {
+      "get": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: state"
+          },
+          {
+            "name": "district",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: district"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/locations/panchayats/{state}/{district}/{block}": {
+      "get": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: state"
+          },
+          {
+            "name": "district",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: district"
+          },
+          {
+            "name": "block",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: block"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/locations/validate": {
+      "post": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/locations/suggest": {
+      "get": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/locations/stats": {
+      "get": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/auth/official/login": {
+      "post": {
+        "tags": [
+          "Official Auths"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/auth/official/refresh-token": {
+      "post": {
+        "tags": [
+          "Official Auths"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/auth/official/me": {
+      "get": {
+        "tags": [
+          "Official Auths"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/auth/official/forgot-password": {
+      "post": {
+        "tags": [
+          "Official Auths"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/auth/official/reset-password/{token}": {
+      "post": {
+        "tags": [
+          "Official Auths"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: token"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/auth/official/change-password": {
+      "post": {
+        "tags": [
+          "Official Auths"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/auth/official/link-citizen": {
+      "post": {
+        "tags": [
+          "Official Auths"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/auth/official/unlink-citizen": {
+      "post": {
+        "tags": [
+          "Official Auths"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/officials": {
+      "get": {
+        "tags": [
+          "Officials"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Officials"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Official"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/officials/{id}": {
+      "get": {
+        "tags": [
+          "Officials"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Officials"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Official"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/officials/change-password": {
+      "post": {
+        "tags": [
+          "Officials"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Official"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/officials/{id}/reset-password": {
+      "post": {
+        "tags": [
+          "Officials"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Official"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/officials/{id}/toggle-status": {
+      "patch": {
+        "tags": [
+          "Officials"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Official"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/officials/{id}/link-citizen": {
+      "post": {
+        "tags": [
+          "Officials"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Official"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/officials/{id}/issues": {
+      "get": {
+        "tags": [
+          "Officials"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/officials/profile/{id}": {
+      "get": {
+        "tags": [
+          "Officials"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/panchayats": {
+      "get": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Panchayat"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/panchayats/by-lgd/{lgdcode}": {
+      "get": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "lgdcode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: lgdcode"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/panchayats/by-location/{state}/{district}/{block}/{panchayat}": {
+      "get": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: state"
+          },
+          {
+            "name": "district",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: district"
+          },
+          {
+            "name": "block",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: block"
+          },
+          {
+            "name": "panchayat",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayat"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/panchayats/validate-location-path": {
+      "post": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Panchayat"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/panchayats/search-login": {
+      "get": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/panchayats/{id}/wards": {
+      "post": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Panchayat"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/panchayats/{panchayatid}/wards/{wardid}": {
+      "put": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          },
+          {
+            "name": "wardid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: wardid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Panchayat"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          },
+          {
+            "name": "wardid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: wardid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/panchayats/{id}": {
+      "get": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Panchayat"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/panchayats/{id}/stats": {
+      "get": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/panchayats/stats": {
+      "get": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/platform-configurations": {
+      "get": {
+        "tags": [
+          "Platform Configs"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/platform-configurations/{key}": {
+      "get": {
+        "tags": [
+          "Platform Configs"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: key"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Platform Configs"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: key"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Platform Configs"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: key"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/users": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/users/search": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/users/register-face": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/api/register-face": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{voterid}/face": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "voterid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: voterid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/users/face-image/{faceimageid}": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "faceimageid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: faceimageid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/users/{voterid}": {
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "voterid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: voterid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/panchayat/{panchayatid}": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/users/{id}/thumbnail": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,4 +1,3 @@
-// FinalAgendaScreen.js — Material UI version (fixed issue linking logic)
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
@@ -14,18 +13,23 @@ import {
   Stack,
   InputAdornment,
   CircularProgress,
-  Snackbar
+  Snackbar,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Link as LinkIcon,
   Close as CloseIcon,
   Search as SearchIcon,
-  Visibility as VisibilityIcon
+  Visibility as VisibilityIcon,
+  ExpandLess as ExpandLessIcon,
+  ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
 import { useLanguage } from '../utils/LanguageContext';
-import { getLabelKeyFromValue } from '../utils/categoryUtils';
+import { getCategories, getSubcategories } from '../utils/categoryUtils';
 import { updateAgendaSummary } from '../api/summary';
 import { fetchAllIssues, fetchMinimalIssuesByIds, fetchIssueById } from '../api/issues';
 import IssueDetailsModal from './IssueDetailsModal';
@@ -58,19 +62,17 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
     });
   };
 
-  const getIssueDisplayData = (issue) => {
+    const getIssueDisplayData = (issue) => {
     if (!issue) return { title: '', description: '' };
-    
-    const title = issue.transcription?.description?.[language] ||
-                  issue.transcription?.description?.en ||
-                  issue.transcription_text ||
-                  issue.text || strings.noDescription;
-    
-    const categoryLabel = strings[getLabelKeyFromValue(issue.category)] || issue.category;
-    const subcategoryLabel = strings[getLabelKeyFromValue(issue.subcategory)] || issue.subcategory;
-    const description = `${categoryLabel} - ${subcategoryLabel}`;
-    
-    return { title, description };
+    // Choose enhanced transcription based on UI language
+    const enhanced = language === 'hi'
+      ? issue.transcription?.enhancedHindiTranscription
+      : issue.transcription?.enhancedEnglishTranscription;
+    // Fallback to raw transcription text
+    const rawText = issue.transcription?.text;
+    const fallback = issue.transcription_text || issue.text;
+    const text = enhanced || rawText || fallback || 'No transcript available';
+    return { title: text, description: text };
   };
 
   const { details = {}, selectedIssues: rawIssues = [], agendaItems = [] } = meeting || {};
@@ -81,16 +83,24 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
   const [searchTerm, setSearchTerm] = useState('');
   const [editingItem, setEditingItem] = useState(null);
   const [editForm, setEditForm] = useState({ title: '', description: '', estimatedDuration: 15 });
-  const [editErrors, setEditErrors] = useState({ title: '', estimatedDuration: 15 });
+  const [editErrors, setEditErrors] = useState({ title: '', estimatedDuration: '' });
   const [newItem, setNewItem] = useState({ title: '', description: '', estimatedDuration: 15 });
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [viewedIssue, setViewedIssue] = useState(null);
+  // Track hovered issue for marquee effect in manage issues modal
+  const [hoveredIssueId, setHoveredIssueId] = useState(null);
+  // Filters for manage issues modal
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [subcategoryFilter, setSubcategoryFilter] = useState('');
+  const [linkStatusFilter, setLinkStatusFilter] = useState('all');
   const [linkableIssues, setLinkableIssues] = useState([]);
   const [issuesLoading, setIssuesLoading] = useState(false);
   const [issues, setIssues] = useState(rawIssues);
+  // Collapsible filters section
+  const [filtersOpen, setFiltersOpen] = useState(true);
 
   // Use useMemo to ensure issues and agendaState update when props change
   const normalizedAgendaItems = useMemo(() => {
@@ -169,14 +179,35 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
   };
 
   const getFilteredIssues = () => {
-    const filtered = linkableIssues.filter(issue => {
+    return linkableIssues.filter(issue => {
+      // Search filter
       const { title } = getIssueDisplayData(issue);
-      const search = searchTerm || '';
-      const matches = title.toLowerCase().includes(search.toLowerCase());
-      return matches;
+      if (searchTerm && !title.toLowerCase().includes(searchTerm.toLowerCase())) {
+        return false;
+      }
+      // Category filter
+      if (categoryFilter && issue.category !== categoryFilter) {
+        return false;
+      }
+      // Subcategory filter
+      if (subcategoryFilter && issue.subcategory !== subcategoryFilter) {
+        return false;
+      }
+      // Link status filter
+      const linkedTo = agendaState.find(i => i.linkedIssues.includes(issue._id));
+      const status = linkedTo
+        ? linkedTo.id === issueLinkingModal
+          ? 'current'
+          : 'other'
+        : 'none';
+      if (linkStatusFilter !== 'all' && status !== linkStatusFilter) {
+        return false;
+      }
+      return true;
     });
-    return filtered;
   };
+  // Current agenda item for modal context
+  const currentAgendaItem = agendaState.find(item => item.id === issueLinkingModal) || {};
 
   const toggleIssueLink = async (agendaItemId, issueId) => {
     const issue = linkableIssues.find(i => i._id === issueId);
@@ -368,19 +399,26 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
   };
 
   return (
-    <Box sx={{ maxWidth: 960, mx: 'auto', my: 0 }}>
+    <Box sx={{ mx: "auto", my: 0 }}>
       <Box sx={{ px: 3, mt: 4, mb: 4 }}>
         {agendaState.map((item) => (
           <Box
             key={item.id}
+            // Only enable manage issues click when not editing this item
+            onClick={
+              editingItem !== item.id
+                ? () => handleOpenLinkIssuesModal(item.id)
+                : undefined
+            }
             sx={{
               mb: 2,
               p: 2,
-              border: '1px solid #ccc',
+              border: "1px solid #ccc",
               borderRadius: 1,
-              bgcolor: '#fafbfc',
-              transition: 'box-shadow 0.2s',
-              '&:hover': { boxShadow: 2 }
+              bgcolor: "#fafbfc",
+              transition: "box-shadow 0.2s",
+              cursor: editingItem !== item.id ? "pointer" : "default",
+              "&:hover": editingItem !== item.id ? { boxShadow: 2 } : {},
             }}
           >
             {editingItem === item.id ? (
@@ -414,46 +452,88 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
                   value={editForm.estimatedDuration}
                   onChange={(e) => {
                     const newDuration = parseInt(e.target.value) || 15;
-                    setEditForm({ ...editForm, estimatedDuration: newDuration });
+                    setEditForm({
+                      ...editForm,
+                      estimatedDuration: newDuration,
+                    });
                   }}
                   error={Boolean(editErrors.estimatedDuration)}
                   helperText={editErrors.estimatedDuration}
                   sx={{ mb: 2 }}
                 />
                 <Stack direction="row" spacing={2}>
-                  <Button variant="contained" color="primary" onClick={() => {
-                    updateAgendaItem(item.id, editForm);
-                  }}>Save</Button>
-                  <Button onClick={() => {
-                    setEditingItem(null);
-                    setEditErrors({ title: '', estimatedDuration: 15 });
-                  }}>Cancel</Button>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={() => {
+                      updateAgendaItem(item.id, editForm);
+                    }}
+                  >
+                    {strings.save}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setEditingItem(null);
+                      setEditErrors({ title: "", estimatedDuration: "" });
+                    }}
+                  >
+                    {strings.cancel}
+                  </Button>
                 </Stack>
               </Box>
             ) : (
               <>
                 <Stack direction="row" alignItems="center">
-                  {/* <Chip label={`#${item.order}`} size="small" color="info" /> */}
-                  <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
-                    {getMultilingualText(item, 'title')}
+                  <Typography
+                    variant="body1"
+                    sx={{
+                      flexGrow: 1,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      cursor: "pointer",
+                    }}
+                    onClick={() => handleOpenLinkIssuesModal(item.id)}
+                  >
+                    {getMultilingualText(item, "title")}
                   </Typography>
                   <Chip
-                    label={item.estimatedDuration ? `${item.estimatedDuration} min` : '15 min'}
+                    label={`${item.linkedIssues?.length || 0} issues`}
+                    size="small"
+                    color="info"
+                    clickable
+                    onClick={() => handleOpenLinkIssuesModal(item.id)}
+                    sx={{ ml: 1 }}
+                  />
+                  <Chip
+                    label={
+                      item.estimatedDuration
+                        ? `${item.estimatedDuration} min`
+                        : "15 min"
+                    }
                     size="small"
                     color="secondary"
                     sx={{ ml: 1 }}
                   />
                   <Stack direction="row">
-                    <IconButton onClick={() => {
-                      setEditingItem(item.id);
-                      setEditForm({
-                        title: getMultilingualText(item, 'title'),
-                        description: getMultilingualText(item, 'description'),
-                        estimatedDuration: item.estimatedDuration ? item.estimatedDuration : 15
-                      });
-                    }}><EditIcon fontSize="small" /></IconButton>
                     <IconButton
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingItem(item.id);
+                        setEditForm({
+                          title: getMultilingualText(item, "title"),
+                          description: getMultilingualText(item, "description"),
+                          estimatedDuration: item.estimatedDuration
+                            ? item.estimatedDuration
+                            : 15,
+                        });
+                      }}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      onClick={(e) => {
+                        e.stopPropagation();
                         deleteAgendaItem(item._id || item.id);
                       }}
                     >
@@ -461,44 +541,57 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
                     </IconButton>
                   </Stack>
                 </Stack>
-                <Typography variant="body2" color="text.secondary">{getMultilingualText(item, 'description')}</Typography>
-                <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  {getLinkedIssues(item.linkedIssues).map(issue => (
-                    <Chip key={issue._id} label={getIssueDisplayData(issue).title} variant="outlined" size="small" icon={<LinkIcon fontSize="small" />} />
-                  ))}
-                </Box>
-                <Button size="small" onClick={() => {
-                  handleOpenLinkIssuesModal(item.id);
-                }} sx={{ mt: 1 }}>{strings.manageIssues}</Button>
               </>
             )}
           </Box>
         ))}
       </Box>
 
-      <Modal open={Boolean(issueLinkingModal)} onClose={() => {
-        setIssueLinkingModal(null);
-      }}>
-        <Box sx={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          bgcolor: 'background.paper',
-          boxShadow: 24,
-          borderRadius: 2,
-          p: 4,
-          width: { xs: '90%', md: 700 },
-          maxHeight: '80vh',
-          display: 'flex',
-          flexDirection: 'column'
-        }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-            <Typography variant="h6">Link Issues</Typography>
-            <IconButton onClick={() => {
-              setIssueLinkingModal(null);
-            }}><CloseIcon /></IconButton>
+      <Modal
+        open={Boolean(issueLinkingModal)}
+        onClose={() => {
+          setIssueLinkingModal(null);
+        }}
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            bgcolor: "background.paper",
+            boxShadow: 24,
+            borderRadius: 2,
+            p: 4,
+            width: { xs: "90%", md: 900 },
+            maxHeight: "90vh",
+            overflowY: "auto",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            mb={2}
+          >
+            <Typography variant="h6" gutterBottom>
+              {strings.title}: {getMultilingualText(currentAgendaItem, "title")}
+            </Typography>
+            <IconButton
+              onClick={() => {
+                setIssueLinkingModal(null);
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
           </Stack>
+          {/* Display selected agenda item prominently */}
+
+          <Typography variant="body1" paragraph>
+            {strings.description}: {getMultilingualText(currentAgendaItem, "description")}
+          </Typography>
           <TextField
             fullWidth
             placeholder="Search issues"
@@ -512,77 +605,197 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
                 <InputAdornment position="start">
                   <SearchIcon />
                 </InputAdornment>
-              )
+              ),
             }}
             sx={{ mb: 2 }}
           />
-          <Box sx={{ overflowY: 'auto', flexGrow: 1 }}>
-            {issuesLoading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-                <CircularProgress />
-              </Box>
-            ) : getFilteredIssues().map(issue => {
-              const issueId = issue._id;
-              const { title, description } = getIssueDisplayData(issue);
-
-              const linkedItem = agendaState.find(item =>
-                item.linkedIssues?.some(id => id?.toString() === issueId?.toString())
-              );
-              let linkStatus = 'none';
-              if (linkedItem) {
-                linkStatus = linkedItem.id === issueLinkingModal ? 'current' : 'other';
-              }
-
-              return (
-                <Stack direction="row" alignItems="center" spacing={1} key={issueId}
-                  sx={theme => {
-                    const styles = {
-                      p: 1,
-                      border: `1px solid ${theme.palette.divider}`,
-                      borderRadius: 1,
-                      mb: 1,
-                      cursor: 'pointer',
-                      transition: 'background 0.2s, color 0.2s',
-                    };
-                    if (linkStatus === 'current') {
-                      styles.bgcolor = theme.palette.primary.main;
-                      styles.color = theme.palette.common.white;
-                      styles.fontWeight = 'bold';
-                      styles['&:hover'] = { bgcolor: theme.palette.primary.dark };
-                    } else if (linkStatus === 'other') {
-                      styles.bgcolor = theme.palette.grey[400];
-                      styles.color = theme.palette.getContrastText(theme.palette.grey[400]);
-                      styles['&:hover'] = { bgcolor: theme.palette.grey[500] };
-                    } else {
-                      styles.bgcolor = theme.palette.background.paper;
-                      styles.color = theme.palette.text.primary;
-                      styles['&:hover'] = { bgcolor: theme.palette.action.hover };
-                    }
-                    return styles;
+          {/* Collapsible Filters Section */}
+          <Box sx={{ px: 3, mb: 4 }}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              sx={{ mb: 2 }}
+            >
+              <Typography variant="subtitle2">Filters</Typography>
+              <IconButton onClick={() => setFiltersOpen(!filtersOpen)}>
+                {filtersOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              </IconButton>
+            </Stack>
+            {filtersOpen && (
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={2}
+                mb={2}
+                sx={{ flexWrap: "wrap" }}
+              >
+                <FormControl size="small" sx={{ minWidth: 140 }}>
+                  <InputLabel>{strings.filterCategory}</InputLabel>
+                  <Select
+                    label={strings.filterCategory}
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                  >
+                    <MenuItem value="">{strings.filterAll}</MenuItem>
+                    {getCategories().map((cat) => (
+                      <MenuItem key={cat.value} value={cat.value}>
+                        {strings[cat.labelKey]}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl size="small" sx={{ minWidth: 140 }}>
+                  <InputLabel>{strings.filterSubcategory}</InputLabel>
+                  <Select
+                    label={strings.filterSubcategory}
+                    value={subcategoryFilter}
+                    onChange={(e) => setSubcategoryFilter(e.target.value)}
+                    disabled={!categoryFilter}
+                  >
+                    <MenuItem value="">{strings.filterAll}</MenuItem>
+                    {getSubcategories(categoryFilter).map((sub) => (
+                      <MenuItem key={sub.value} value={sub.value}>
+                        {strings[sub.labelKey]}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl size="small" sx={{ minWidth: 180 }}>
+                  <InputLabel>{strings.filterStatusAll}</InputLabel>
+                  <Select
+                    label={strings.filterStatusAll}
+                    value={linkStatusFilter}
+                    onChange={(e) => setLinkStatusFilter(e.target.value)}
+                  >
+                    <MenuItem value="all">{strings.filterStatusAll}</MenuItem>
+                    <MenuItem value="current">
+                      {strings.filterStatusCurrent}
+                    </MenuItem>
+                    <MenuItem value="other">
+                      {strings.filterStatusOther}
+                    </MenuItem>
+                    <MenuItem value="none">{strings.filterStatusNone}</MenuItem>
+                  </Select>
+                </FormControl>
+                {/* Reset all filters */}
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setCategoryFilter("");
+                    setSubcategoryFilter("");
+                    setLinkStatusFilter("all");
                   }}
                 >
-                  <Box
-                    sx={{ flexGrow: 1 }}
-                    onClick={() => toggleIssueLink(issueLinkingModal, issueId)}
+                  {strings.filterReset}
+                </Button>
+              </Stack>
+            )}
+          </Box>
+
+          <Typography variant="caption" color="textSecondary" sx={{ mb: 2 }}>
+            {strings.filterStatusExplanation}
+          </Typography>
+          <Box>
+            {issuesLoading ? (
+              <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <>
+                {getFilteredIssues().length === 0 ? (
+                  <Typography
+                    align="center"
+                    color="textSecondary"
+                    sx={{ p: 2 }}
                   >
-                    <Typography variant="body2">{title}</Typography>
-                    <Typography variant="caption" color="text.secondary">{description}</Typography>
-                  </Box>
-                  <IconButton
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewIssue(issueId);
-                    }}
-                    sx={{
-                      color: linkStatus === 'current' ? 'white' : 'inherit'
-                    }}
-                  >
-                    <VisibilityIcon fontSize="small" />
-                  </IconButton>
-                </Stack>
-              );
-            })}
+                    {strings.noDataToDisplay}
+                  </Typography>
+                ) : (
+                  getFilteredIssues().map((issue) => {
+                    const issueId = issue._id;
+                    const { title } = getIssueDisplayData(issue);
+                    const linkedItem = agendaState.find((i) =>
+                      i.linkedIssues.includes(issueId)
+                    );
+                    const linkStatus = linkedItem
+                      ? linkedItem.id === issueLinkingModal
+                        ? "current"
+                        : "other"
+                      : "none";
+
+                    return (
+                      <Stack
+                        key={issueId}
+                        direction="row"
+                        alignItems="center"
+                        spacing={1}
+                        sx={(theme) => ({
+                          p: 1,
+                          border: `1px solid ${theme.palette.divider}`,
+                          borderRadius: 1,
+                          mb: 1,
+                          cursor: "pointer",
+                          bgcolor:
+                            linkStatus === "current"
+                              ? theme.palette.primary.main
+                              : linkStatus === "other"
+                              ? theme.palette.grey[400]
+                              : theme.palette.background.paper,
+                          color:
+                            linkStatus === "current"
+                              ? theme.palette.common.white
+                              : linkStatus === "other"
+                              ? theme.palette.getContrastText(
+                                  theme.palette.grey[400]
+                                )
+                              : theme.palette.text.primary,
+                        })}
+                      >
+                        <Box
+                          sx={{ flexGrow: 1, minWidth: 0 }}
+                          onClick={() =>
+                            toggleIssueLink(issueLinkingModal, issueId)
+                          }
+                          onMouseEnter={() => setHoveredIssueId(issueId)}
+                          onMouseLeave={() => setHoveredIssueId(null)}
+                          onTouchStart={() => setHoveredIssueId(issueId)}
+                          onTouchEnd={() => setHoveredIssueId(null)}
+                        >
+                          {hoveredIssueId === issueId ? (
+                            <marquee>{title}</marquee>
+                          ) : (
+                            <Typography
+                              variant="body2"
+                              noWrap
+                              sx={{
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {title}
+                            </Typography>
+                          )}
+                        </Box>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewIssue(issueId);
+                          }}
+                          sx={{
+                            color:
+                              linkStatus === "current" ? "white" : "inherit",
+                          }}
+                        >
+                          <VisibilityIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    );
+                  })
+                )}
+              </>
+            )}
           </Box>
         </Box>
       </Modal>

@@ -873,7 +873,7 @@ router.post('/batch-minimal', anyAuthenticated, async (req, res) => {
     // Fetch minimal fields plus transcription.description
     const issues = await Issue.find(
       { _id: { $in: ids } },
-      { _id: 1, title: 1, category: 1, subcategory: 1, status: 1, 'transcription.description': 1 }
+      { _id: 1, title: 1, category: 1, subcategory: 1, status: 1, 'transcription.description': 1, 'transcription.enhancedHindiTranscription': 1, 'transcription.enhancedEnglishTranscription': 1, 'transcription.text': 1 }
     );
     // Map to minimal object with description
     const minimal = issues.map(issue => ({
@@ -883,7 +883,10 @@ router.post('/batch-minimal', anyAuthenticated, async (req, res) => {
       subcategory: issue.subcategory,
       status: issue.status,
       transcription: {
-        description: issue.transcription && issue.transcription.description ? issue.transcription.description : undefined
+        description: issue.transcription && issue.transcription.description ? issue.transcription.description : undefined,
+        enhancedHindiTranscription: issue.transcription && issue.transcription.enhancedHindiTranscription ? issue.transcription.enhancedHindiTranscription : undefined,
+        enhancedEnglishTranscription: issue.transcription && issue.transcription.enhancedEnglishTranscription ? issue.transcription.enhancedEnglishTranscription : undefined,
+        text: issue.transcription && issue.transcription.text ? issue.transcription.text : undefined
       }
     }));
     res.json({ success: true, issues: minimal });
