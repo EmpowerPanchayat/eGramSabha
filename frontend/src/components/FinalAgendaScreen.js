@@ -29,9 +29,12 @@ import { getLabelKeyFromValue } from '../utils/categoryUtils';
 import { updateAgendaSummary } from '../api/summary';
 import { fetchAllIssues, fetchMinimalIssuesByIds, fetchIssueById } from '../api/issues';
 import IssueDetailsModal from './IssueDetailsModal';
+import { useAuth } from '../utils/authContext';
+import api from '../utils/axiosConfig';
 
 export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onBack, onComplete, panchayatId }) => {
   const { language, strings } = useLanguage();
+  const { user } = useAuth();
   
   const normalizeAgendaItems = (items) => {
     if (!items) {
@@ -39,43 +42,19 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
     }
     return items.map((item, index) => {
       const normalizedItem = {
-        id: item.id || `agenda_${index + 1}`,
+        id: item._id?.toString() || item.id?.toString() || `agenda_${index + 1}`,
+        _id: item._id || item.id,
         title: item.title || '',
         description: item.description || '',
         linkedIssues: item.linked_issues || item.linkedIssues || [],
         estimatedDuration: item.estimatedDuration || 15,
         order: item.order || index + 1,
+        createdByType: item.createdByType || 'SYSTEM',
+        ...(item.createdByType === 'USER' && item.createdByUserId
+          ? { createdByUserId: item.createdByUserId }
+          : {}),
       };
       return normalizedItem;
-    });
-  };
-
-  const normalizeIssues = (issues) => {
-    if (!issues || !Array.isArray(issues)) {
-      return [];
-    }
-    return (issues || []).map((issue, index) => {
-      // Check if issue is already normalized (has title field)
-      if (issue.title) {
-        return {
-          id: issue.id,
-          title: issue.title,
-          description: issue.description,
-        };
-      }
-      
-      // Fallback to original normalization logic for raw issues
-      const description = issue.transcription?.description?.[language] || 
-                          issue.transcription?.description?.en ||
-                          issue.transcription_text || // Fallback to original transcription
-                          issue.text; // Final fallback to issue text
-
-      const normalizedIssue = {
-        id: issue._id || issue.id,
-        title: description,
-        description: `${issue.category} - ${issue.subcategory}`,
-      };
-      return normalizedIssue;
     });
   };
 
@@ -85,7 +64,7 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
     const title = issue.transcription?.description?.[language] ||
                   issue.transcription?.description?.en ||
                   issue.transcription_text ||
-                  issue.text || 'No description available';
+                  issue.text || strings.noDescription;
     
     const categoryLabel = strings[getLabelKeyFromValue(issue.category)] || issue.category;
     const subcategoryLabel = strings[getLabelKeyFromValue(issue.subcategory)] || issue.subcategory;
@@ -102,7 +81,7 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
   const [searchTerm, setSearchTerm] = useState('');
   const [editingItem, setEditingItem] = useState(null);
   const [editForm, setEditForm] = useState({ title: '', description: '', estimatedDuration: 15 });
-  const [editErrors, setEditErrors] = useState({ title: '', estimatedDuration: '' });
+  const [editErrors, setEditErrors] = useState({ title: '', estimatedDuration: 15 });
   const [newItem, setNewItem] = useState({ title: '', description: '', estimatedDuration: 15 });
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -119,20 +98,18 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
   }, [language, agendaItems]);
 
   // State for editable agenda items
-  const [agendaState, setAgendaState] = useState(normalizedAgendaItems);
+  const [agendaState, setAgendaState] = useState(normalizedAgendaItems || []);
 
   // Update agendaState when normalizedAgendaItems change (only if length changes)
   useEffect(() => {
     if (agendaState.length !== normalizedAgendaItems.length) {
-      setAgendaState(normalizedAgendaItems);
+      setAgendaState(normalizedAgendaItems || []);
     }
   }, [normalizedAgendaItems]);
 
   useEffect(() => {
     onUpdateAgenda(agendaState);
   }, [agendaState]);
-
-  const totalDuration = agendaState.reduce((sum, item) => sum + (item.estimatedDuration || 0), 0);
 
   // Helper to get all unique linked issue IDs from agenda items
   const getAllLinkedIssueIds = (agendaItems) => {
@@ -231,7 +208,7 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
     try {
       const payload = updatedItems.map(ensureMultilingualFields);
       await updateAgendaSummary(panchayatId, payload);
-      onUpdateAgenda(payload); // Sync parent state
+      await fetchAgendaSummary();
     } catch (err) {
       setSaveError(err.message || 'Failed to save agenda');
       setTimeout(() => setSaveError(''), 3000);
@@ -253,31 +230,34 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
 
   // Helper to ensure agenda item fields are objects with language keys
   const ensureMultilingualFields = (item) => {
-    const ensureObj = (val) => {
+    const convertMapToObj = (val) => {
+      if (val instanceof Map) return Object.fromEntries(val);
       if (typeof val === 'object' && val !== null) return val;
       if (typeof val === 'string') return { [language]: val };
       return { en: '' };
     };
     return {
       ...item,
-      title: ensureObj(item.title),
-      description: ensureObj(item.description),
+      _id: item._id || item.id,
+      title: convertMapToObj(item.title),
+      description: convertMapToObj(item.description),
+      createdByType: item.createdByType || 'SYSTEM',
+      ...(item.createdByType === 'USER' && item.createdByUserId
+        ? { createdByUserId: item.createdByUserId }
+        : {}),
     };
   };
 
-  const addNewAgendaItem = () => {
-    if (!newItem.title.trim()) return;
-    const item = {
-      id: Date.now().toString(),
-      title: newItem.title,
-      description: newItem.description,
-      linkedIssues: [],
-      estimatedDuration: newItem.estimatedDuration,
-      order: agendaState.length + 1
-    };
-    setAgendaState([...agendaState, item]);
-    setNewItem({ title: '', description: '', estimatedDuration: 15 });
-    setShowAddForm(false);
+  const fetchAgendaSummary = async () => {
+    try {
+      const res = await api.get(`/summaries/panchayat/${user.panchayatId}`);
+      if (res.data?.summary?.agendaItems) {
+        const normalized = normalizeAgendaItems(res.data.summary.agendaItems);
+        setAgendaState(normalized);
+      }
+    } catch (err) {
+      console.error('Failed to fetch summary:', err);
+    }
   };
 
   const updateAgendaItem = async (id, updates) => {
@@ -301,14 +281,14 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
     setAgendaState(updated);
     setEditingItem(null);
     setEditForm({ title: '', description: '', estimatedDuration: 15 });
-    setEditErrors({ title: '', estimatedDuration: '' });
+    setEditErrors({ title: '', estimatedDuration: 15 });
     // Immediately persist to backend, ensuring multilingual fields
     try {
       const payload = updated.map(ensureMultilingualFields);
       await updateAgendaSummary(panchayatId, payload);
+      await fetchAgendaSummary();
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
-      onUpdateAgenda(payload); // Sync parent state to prevent flicker
     } catch (err) {
       setSaveError(err.message || 'Failed to save agenda');
       setTimeout(() => setSaveError(''), 3000);
@@ -316,7 +296,13 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
   };
 
   const deleteAgendaItem = async (id) => {
-    const filtered = agendaState.filter(item => item.id !== id);
+    if (!panchayatId) {
+      console.error('Panchayat ID not available.');
+      return;
+    }
+    const original = [...agendaState];
+    const matchesId = (item) => (item._id ?? item.id)?.toString() === id.toString();
+    const filtered = agendaState.filter(item => !matchesId(item));
     const reordered = filtered.map((item, index) => ({
       ...item,
       order: index + 1,
@@ -327,8 +313,9 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
     try {
       const payload = reordered.map(ensureMultilingualFields);
       await updateAgendaSummary(panchayatId, payload);
-      onUpdateAgenda(payload);
+      await fetchAgendaSummary();
     } catch (err) {
+      setAgendaState(original);
       setSaveError(err.message || 'Failed to delete agenda item');
       setTimeout(() => setSaveError(''), 3000);
     }
@@ -351,17 +338,28 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
     setIssueLinkingModal(agendaItemId);
     setIssuesLoading(true);
     try {
-      // Fetch only 'REPORTED' issues that are not yet linked in the current session
-      const { data } = await fetchAllIssues({ panchayatId, status: 'REPORTED', limit: 1000 });
-      // Combine with already linked issues so they appear in the modal
-      const linkedIds = new Set(agendaState.flatMap(item => item.linkedIssues));
-      const currentlySelectedIssues = issues.filter(issue => linkedIds.has(issue._id));
-      
-      const combined = [...data, ...currentlySelectedIssues];
-      // Remove duplicates
-      const uniqueIssues = Array.from(new Map(combined.map(item => [item._id, item])).values());
+      const { data } = await fetchAllIssues({
+        panchayatId,
+        status: 'REPORTED',
+        limit: 1000
+      });
 
-      setLinkableIssues(uniqueIssues);
+      // All unique issue IDs currently linked in agendaState
+      const linkedIds = new Set(
+        agendaState.flatMap(item =>
+          (item.linkedIssues || []).map(id => id?.toString())
+        )
+      );
+
+      // Combine fresh data with previously loaded linked issues not in the response
+      const extraLinkedIssues = issues.filter(issue =>
+        !data.some(f => f._id === issue._id) && linkedIds.has(issue._id?.toString())
+      );
+
+      const combined = [...data, ...extraLinkedIssues];
+      const unique = Array.from(new Map(combined.map(i => [i._id, i])).values());
+
+      setLinkableIssues(unique);
     } catch (error) {
       setSaveError('Failed to load issues. Please try again.');
     } finally {
@@ -371,7 +369,7 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
 
   return (
     <Box sx={{ maxWidth: 960, mx: 'auto', my: 0 }}>
-      <Box sx={{ px: 3, mt: 4 }}>
+      <Box sx={{ px: 3, mt: 4, mb: 4 }}>
         {agendaState.map((item) => (
           <Box
             key={item.id}
@@ -415,7 +413,7 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
                   type="number"
                   value={editForm.estimatedDuration}
                   onChange={(e) => {
-                    const newDuration = parseInt(e.target.value) || 0;
+                    const newDuration = parseInt(e.target.value) || 15;
                     setEditForm({ ...editForm, estimatedDuration: newDuration });
                   }}
                   error={Boolean(editErrors.estimatedDuration)}
@@ -428,7 +426,7 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
                   }}>Save</Button>
                   <Button onClick={() => {
                     setEditingItem(null);
-                    setEditErrors({ title: '', estimatedDuration: '' });
+                    setEditErrors({ title: '', estimatedDuration: 15 });
                   }}>Cancel</Button>
                 </Stack>
               </Box>
@@ -440,7 +438,7 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
                     {getMultilingualText(item, 'title')}
                   </Typography>
                   <Chip
-                    label={`${item.estimatedDuration} min`}
+                    label={item.estimatedDuration ? `${item.estimatedDuration} min` : '15 min'}
                     size="small"
                     color="secondary"
                     sx={{ ml: 1 }}
@@ -451,12 +449,16 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
                       setEditForm({
                         title: getMultilingualText(item, 'title'),
                         description: getMultilingualText(item, 'description'),
-                        estimatedDuration: item.estimatedDuration
+                        estimatedDuration: item.estimatedDuration ? item.estimatedDuration : 15
                       });
                     }}><EditIcon fontSize="small" /></IconButton>
-                    <IconButton onClick={() => {
-                      deleteAgendaItem(item.id);
-                    }}><DeleteIcon fontSize="small" /></IconButton>
+                    <IconButton
+                      onClick={() => {
+                        deleteAgendaItem(item._id || item.id);
+                      }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
                   </Stack>
                 </Stack>
                 <Typography variant="body2" color="text.secondary">{getMultilingualText(item, 'description')}</Typography>
@@ -467,7 +469,7 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
                 </Box>
                 <Button size="small" onClick={() => {
                   handleOpenLinkIssuesModal(item.id);
-                }} sx={{ mt: 1 }}>Manage Issues</Button>
+                }} sx={{ mt: 1 }}>{strings.manageIssues}</Button>
               </>
             )}
           </Box>
@@ -523,7 +525,9 @@ export const FinalAgendaScreen = ({ meeting, onUpdateAgenda, onUpdateIssues, onB
               const issueId = issue._id;
               const { title, description } = getIssueDisplayData(issue);
 
-              const linkedItem = agendaState.find(item => item.linkedIssues.includes(issueId));
+              const linkedItem = agendaState.find(item =>
+                item.linkedIssues?.some(id => id?.toString() === issueId?.toString())
+              );
               let linkStatus = 'none';
               if (linkedItem) {
                 linkStatus = linkedItem.id === issueLinkingModal ? 'current' : 'other';

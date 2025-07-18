@@ -410,6 +410,7 @@ const translations = {
     totalRegisteredUsers: "Total Registered Users",
     noAgenda: "No agenda available",
     translationInProgress: "Some translations are in progress. Please wait a few moments.",
+    noDescription: "No description available",
 
     // Upcoming Meetings
     upcomingMeeting: "Upcoming Gram Sabha Meeting",
@@ -924,6 +925,7 @@ const translations = {
     totalRegisteredUsers: "कुल पंजीकृत उपयोगकर्ता",
     noAgenda: "कोई एजेंडा उपलब्ध नहीं है",
     translationInProgress: "कुछ अनुवाद प्रगति में हैं। कृपया कुछ क्षण प्रतीक्षा करें।",
+    noDescription: "कोई विवरण उपलब्ध नहीं है",
 
     // Upcoming Meetings
     upcomingMeeting: "आगामी ग्राम सभा बैठक",

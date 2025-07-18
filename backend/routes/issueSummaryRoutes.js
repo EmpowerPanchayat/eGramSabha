@@ -37,86 +37,110 @@ router.get('/panchayat/:panchayatId', anyAuthenticated, async (req, res) => {
 
 // PATCH /issue-summary/panchayat/:panchayatId/agenda
 router.patch('/panchayat/:panchayatId/agenda', anyAuthenticated, async (req, res) => {
-    const { panchayatId } = req.params;
-    const { agendaItems } = req.body;
+  const { panchayatId } = req.params;
+  const { agendaItems } = req.body;
+  const userId = req.user._id;
 
-    if (!mongoose.Types.ObjectId.isValid(panchayatId)) {
-        return res.status(400).json({ success: false, message: 'Invalid panchayatId' });
+  if (!mongoose.Types.ObjectId.isValid(panchayatId)) {
+    return res.status(400).json({ success: false, message: 'Invalid panchayatId' });
+  }
+  if (!Array.isArray(agendaItems)) {
+    return res.status(400).json({ success: false, message: 'agendaItems must be an array' });
+  }
+  
+  try {
+    let summary = await IssueSummary.findOne({ panchayatId });
+
+    if (!summary) {
+      summary = await IssueSummary.create({ panchayatId, agendaItems: [], issues: [] });
     }
-    if (!Array.isArray(agendaItems)) {
-        return res.status(400).json({ success: false, message: 'agendaItems must be an array' });
-    }
-    // If agendaItems is an empty array, delete the summary record
+
+    // Build set of incoming agenda item IDs
+    const incomingIds = new Set(agendaItems.map(i => i._id?.toString()));
+
+    // If agendaItems list is empty, delete entire summary
     if (agendaItems.length === 0) {
-        try {
-            const deleted = await IssueSummary.findOneAndDelete({ panchayatId });
-            if (deleted) {
-                if (Array.isArray(deleted.issues) && deleted.issues.length > 0) {
-                    await Issue.updateMany(
-                        { _id: { $in: deleted.issues } },
-                        { $set: { isSummarized: false } }
-                    );
-                }
-                return res.json({ success: true, deleted: true });
-            } else {
-                return res.status(404).json({ success: false, message: 'No summary found for this panchayat.' });
-            }
-        } catch (error) {
-            return res.status(500).json({ success: false, message: 'Internal server error' });
-        }
+      const deleted = await IssueSummary.findOneAndDelete({ panchayatId });
+      if (deleted?.issues?.length) {
+        await Issue.updateMany({ _id: { $in: deleted.issues } }, { $set: { isSummarized: false } });
+      }
+      return res.json({ success: true, deleted: true });
     }
 
-    try {
-        // Find the summary
-        const summary = await IssueSummary.findOne({ panchayatId });
-        if (!summary) {
-            return res.status(404).json({ success: false, message: 'No summary found for this panchayat.' });
+    // Separate USER items and remap
+    const newUserItems = agendaItems
+      .filter(i => (i.createdByType || 'USER') === 'USER')
+      .map(item => ({
+        ...item,
+        _id: item._id ? new mongoose.Types.ObjectId(item._id) : new mongoose.Types.ObjectId(),
+        createdByType: 'USER',
+        createdByUserId: new mongoose.Types.ObjectId(item.createdByUserId || userId),
+        title: new Map(Object.entries(item.title || {})),
+        description: new Map(Object.entries(item.description || {})),
+        linkedIssues: item.linkedIssues?.map(id => new mongoose.Types.ObjectId(id)) || []
+      }));
+
+    // SYSTEM items from incoming list (preserve structure)
+    const newSystemItems = agendaItems
+      .filter(i => i.createdByType === 'SYSTEM')
+      .map(item => ({
+        ...item,
+        _id: new mongoose.Types.ObjectId(item._id),
+        title: new Map(Object.entries(item.title || {})),
+        description: new Map(Object.entries(item.description || {})),
+        linkedIssues: item.linkedIssues?.map(id => new mongoose.Types.ObjectId(id)) || [],
+        createdByType: 'SYSTEM'
+      }));
+
+    // Prevent duplicate issue linking
+    const issueToAgendaMap = new Map();
+    for (let i = newUserItems.length - 1; i >= 0; i--) {
+      const item = newUserItems[i];
+      item.linkedIssues = item.linkedIssues.filter(issueId => {
+        const key = issueId.toString();
+        if (!issueToAgendaMap.has(key)) {
+          issueToAgendaMap.set(key, i);
+          return true;
         }
-
-        // Ensure each issue is only linked to one agenda item
-        const issueToAgendaMap = new Map();
-        for (let i = agendaItems.length - 1; i >= 0; i--) {
-            const item = agendaItems[i];
-            if (Array.isArray(item.linkedIssues)) {
-                item.linkedIssues = item.linkedIssues.filter(issueId => {
-                    if (!issueToAgendaMap.has(issueId.toString())) {
-                        issueToAgendaMap.set(issueId.toString(), i);
-                        return true;
-                    }
-                    return false;
-                });
-            }
-        }
-
-        const originalIssueIds = summary.issues.map(id => id.toString());
-        const newLinkedIssueIds = Array.from(issueToAgendaMap.keys());
-        
-        // Update the summary document
-        summary.agendaItems = agendaItems;
-        summary.issues = newLinkedIssueIds.map(id => new mongoose.Types.ObjectId(id));
-        await summary.save();
-
-        // Determine which issues were unlinked and update them
-        const unlinkedIssueIds = originalIssueIds.filter(id => !newLinkedIssueIds.includes(id));
-        if (unlinkedIssueIds.length > 0) {
-            await Issue.updateMany(
-                { _id: { $in: unlinkedIssueIds } },
-                { $set: { isSummarized: false } }
-            );
-        }
-
-        // Ensure all currently linked issues are marked as summarized
-        if (newLinkedIssueIds.length > 0) {
-            await Issue.updateMany(
-                { _id: { $in: newLinkedIssueIds } },
-                { $set: { isSummarized: true } }
-            );
-        }
-
-        res.json({ success: true, agendaItems: summary.agendaItems });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Internal server error' });
+        return false;
+      });
     }
+
+    // Merge
+    const mergedAgenda = [...newUserItems, ...newSystemItems];
+
+    // Update linked issues
+    const updatedIssueIds = mergedAgenda.flatMap(item =>
+      item.linkedIssues.map(id => id.toString())
+    );
+    const uniqueIssueIds = [...new Set(updatedIssueIds)].map(id => new mongoose.Types.ObjectId(id));
+
+    const previouslyLinkedIds = summary.issues.map(id => id.toString());
+    const unlinked = previouslyLinkedIds.filter(id => !updatedIssueIds.includes(id));
+
+    // Save
+    summary.agendaItems = mergedAgenda;
+    summary.issues = uniqueIssueIds;
+    await summary.save();
+
+    // Update isSummarized flags
+    if (unlinked.length > 0) {
+      await Issue.updateMany(
+        { _id: { $in: unlinked } },
+        { $set: { isSummarized: false } }
+      );
+    }
+
+    if (uniqueIssueIds.length > 0) {
+      await Issue.updateMany(
+        { _id: { $in: uniqueIssueIds } },
+        { $set: { isSummarized: true } }
+      );
+    }
+    res.json({ success: true, agendaItems: summary.agendaItems });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+  }
 });
 
 module.exports = router; 

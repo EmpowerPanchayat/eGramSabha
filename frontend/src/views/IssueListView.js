@@ -186,6 +186,12 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
         setSummaryError('');
         try {
             const { summary } = await fetchIssueSummary(user.panchayatId);
+            if (!summary) {
+                setSummaryError('No summary found for this panchayat.');
+                setAgendaItems([]);
+                setSelectedIssues([]);
+                return;
+            }
             setAgendaItems(summary.agendaItems || []);
             setSelectedIssues(summary.issues || []);
         } catch (error) {
@@ -921,7 +927,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                     ) : (
                         <FinalAgendaScreen
                         meeting={meeting}
-                        agendaItems={agendaItems} // 👈 pass full list
+                        agendaItems={agendaItems}
                         onUpdateAgenda={setAgendaItems}
                         panchayatId={user.panchayatId}
                         onUpdateIssues={handleAddIssuesToSummary}

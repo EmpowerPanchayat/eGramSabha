@@ -672,7 +672,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
                                                                             {getMultilingualText(item, 'title') || `Agenda Item ${index + 1}`}
                                                                         </Typography>
                                                                         <Typography variant="body2" color="text.secondary">
-                                                                            {getMultilingualText(item, 'description') || 'No description available'}
+                                                                            {getMultilingualText(item, 'description') || strings.noDescription}
                                                                         </Typography>
                                                                         {item.linkedIssues && item.linkedIssues.length > 0 && (
                                                                             <Typography variant="caption" color="primary" sx={{ mt: 0.5, display: 'block' }}>
