@@ -3,7 +3,7 @@ const router = express.Router();
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
 const fs = require("fs");
-const GramSabha = require("../models/gramSabha");
+const GramSabha = require("../models/GramSabha");
 const RSVP = require("../models/rsvp");
 const auth = require("../middleware/auth");
 const { isPanchayatPresident } = require("../middleware/roleCheck");
@@ -80,7 +80,11 @@ async function updateIssueSummaryForSelectedAgenda(panchayatId, selectedAgendaIt
     const updatedAgendaItems = [
       ...issueSummary.agendaItems.filter(item => !itemsToRemoveIds.includes(item._id?.toString())),
       ...itemsToAddBack
-    ];
+      ].map(item => ({
+        ...item,
+        createdByType: item.createdByType || 'SYSTEM',
+        ...(item.createdByType === 'USER' ? { createdByUserId: item.createdByUserId } : {})
+      }));
     
     // Step 4: Update linked issues
     const linkedIssuesToRemove = itemsToRemove.flatMap(item => (item.linkedIssues || []).map(id => id.toString()));
@@ -414,6 +418,8 @@ router.patch(
               title: item.title,
               description: item.description,
               linkedIssues: item.linkedIssues || [],
+              createdByType: item.createdByType || 'SYSTEM',
+              createdByUserId: item.createdByType === 'USER' ? item.createdByUserId : null,
               _id: item._id // Preserve the _id for proper matching
             }));
           } else {

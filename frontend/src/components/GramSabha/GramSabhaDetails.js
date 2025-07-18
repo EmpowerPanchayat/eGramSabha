@@ -585,6 +585,24 @@ const GramSabhaDetails = ({ meetingId, user }) => {
     );
   }
 
+  let showTranslationAlert = false;
+
+  const supportedLanguages = ['en', 'hi', 'hindi'];
+  const isMissingTranslation = (field) => {
+    if (!field || typeof field !== 'object') return false;
+
+    const hasAtLeastOneFilled = Object.values(field).some(val => val?.trim());
+    const isMissingAnyLang = supportedLanguages.some(lang => !field[lang]?.trim());
+
+    return hasAtLeastOneFilled && isMissingAnyLang;
+  };
+
+  if (meeting.agenda?.some(item =>
+    isMissingTranslation(item.title) || isMissingTranslation(item.description)
+  )) {
+    showTranslationAlert = true;
+  }
+
   return (
     <Box>
       {error && (
@@ -1037,13 +1055,18 @@ const GramSabhaDetails = ({ meetingId, user }) => {
             <Paper variant="outlined" sx={{ p: 3, bgcolor: 'background.default' }}>
               {meeting.agenda && Array.isArray(meeting.agenda) && meeting.agenda.length > 0 ? (
                 <Box>
+                  {showTranslationAlert && (
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      {strings.translationInProgress}
+                    </Alert>
+                  )}
                   {meeting.agenda.map((item, index) => (
                     <Box key={item._id || index} sx={{ mb: 2, pb: 2, borderBottom: index < meeting.agenda.length - 1 ? '1px solid #e0e0e0' : 'none' }}>
                       <Typography variant="subtitle1" fontWeight="medium" gutterBottom>
                         {getMultilingualText(item, 'title') || `Agenda Item ${index + 1}`}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {getMultilingualText(item, 'description') || 'No description available'}
+                        {getMultilingualText(item, 'description') || strings.noDescription}
                       </Typography>
                       {item.linkedIssues && item.linkedIssues.length > 0 && (
                         <Typography variant="caption" color="primary" sx={{ mt: 0.5, display: 'block' }}>

@@ -4,7 +4,7 @@ const Panchayat = require('../models/Panchayat');
 const Ward = require('../models/Ward');
 const Issue = require('../models/Issue');
 const Official = require('../models/Official');
-const GramSabha = require('../models/gramSabha');
+const GramSabha = require('../models/GramSabha');
 
 // Auto-generate Swagger schemas from Mongoose models
 const generateSchemas = () => {
