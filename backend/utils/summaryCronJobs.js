@@ -63,11 +63,11 @@ const initiateSummaryGeneration = cron.schedule(INITIATE_SUMMARY_CRON, async () 
                 response = await agendaService.initiateUpdateSummary(
                     currentAgenda,
                     unsummarizedIssues,
-                    panchayat.language
+                    panchayat?.language.toLowerCase()
                 );
             } else {
                 requestType = 'CREATE';
-                response = await agendaService.initiateNewSummary(unsummarizedIssues, panchayat?.language);
+                response = await agendaService.initiateNewSummary(unsummarizedIssues, panchayat?.language.toLowerCase());
             }
 
             await new SummaryRequest({
@@ -315,12 +315,12 @@ const retryFailedSummaryRequests = cron.schedule(RETRY_FAILED_SUMMARY_CRON, asyn
                 response = await agendaService.initiateUpdateSummary(
                 currentAgenda,
                 unsummarizedIssues,
-                panchayat.language
+                panchayat?.language.toLowerCase()
                 );
             } else if (request.requestType === 'CREATE') {
                 response = await agendaService.initiateNewSummary(
                 unsummarizedIssues,
-                panchayat?.language
+                panchayat?.language.toLowerCase()
                 );
             } else {
                 request.status = 'FAILED';
