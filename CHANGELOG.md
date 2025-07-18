@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Fix data issue on update in Registration View ([#69](https://github.com/EmpowerPanchayat/eGramSabha/pull/69))
 - Filtering of issues on the basis of Status ([#84](https://github.com/EmpowerPanchayat/eGramSabha/issues/84))
 - Attendance progress bar and message display.([#74](https://github.com/EmpowerPanchayat/eGramSabha/issues/74))
+- Language casing to the requests sent to LLM.([#103](https://github.com/EmpowerPanchayat/eGramSabha/issues/103))
 
 ### Changed
 

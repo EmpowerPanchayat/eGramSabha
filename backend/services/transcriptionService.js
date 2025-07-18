@@ -17,7 +17,7 @@ class TranscriptionService {
         try {
             const Panchayat = require('../models/Panchayat');
             const panchayat = await Panchayat.findById(panchayatId);
-            const language = panchayat?.language || 'Hindi';
+            const language = panchayat?.language.toLowerCase() || 'hindi';
             return language;
         } catch (error) {
             return 'Hindi'; // Default fallback
