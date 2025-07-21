@@ -168,8 +168,8 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                 body: JSON.stringify({
                     ...formattedData,
                     panchayatId: user.panchayatId,
-                    creatorId: user.linkedUser?.id || user._id,
-                    createdForId: formattedData.createdFor,
+                    creatorId: user.linkedUser?.id || user._id || user.id,
+                    createdForId: formattedData?.createdFor || user._id || user.id,
                     status: 'REPORTED'
                 })
             });
