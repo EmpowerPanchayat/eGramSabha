@@ -13,7 +13,7 @@ const Issue = require("../models/Issue");
 const multer = require("multer");
 const mongoose = require("mongoose");
 const User = require("../models/User");
-const { autoUpdateMeetingStatus } = require('../utils/meetingUtils');
+const { autoUpdateMeetingStatus } = require("../utils/meetingUtils");
 
 const { JIOMEET_APP_ID, JIOMEET_API, BACKEND_URL } = process.env;
 const privateKey = fs.readFileSync(process.env.PRIVATE_KEY_PATH, "utf8");
@@ -45,82 +45,105 @@ function calculateFaceDistance(descriptor1, descriptor2) {
 }
 
 // Helper function to update issue summary and linked issues
-async function updateIssueSummaryForSelectedAgenda(panchayatId, selectedAgendaItems, currentMeetingAgenda = []) {
+async function updateIssueSummaryForSelectedAgenda(
+  panchayatId,
+  selectedAgendaItems,
+  currentMeetingAgenda = []
+) {
   try {
     let parsedSelectedItems = selectedAgendaItems || [];
     let parsedCurrentAgenda = currentMeetingAgenda || [];
-    
-    if (typeof selectedAgendaItems === 'string') {
+
+    if (typeof selectedAgendaItems === "string") {
       parsedSelectedItems = JSON.parse(selectedAgendaItems);
     }
-    
-    if (typeof currentMeetingAgenda === 'string') {
+
+    if (typeof currentMeetingAgenda === "string") {
       parsedCurrentAgenda = JSON.parse(currentMeetingAgenda);
     }
-    
+
     // Get the current issue summary
     const issueSummary = await IssueSummary.findOne({ panchayatId });
     if (!issueSummary) {
       return;
     }
-    
+
     // Step 1: Add back unselected items from the current meeting agenda to the summary
-    const selectedIds = parsedSelectedItems.map(item => (item._id ? item._id.toString() : null)).filter(Boolean);
-    const itemsToAddBack = parsedCurrentAgenda.filter(item => !selectedIds.includes(item._id?.toString()));
-    
+    const selectedIds = parsedSelectedItems
+      .map((item) => (item._id ? item._id.toString() : null))
+      .filter(Boolean);
+    const itemsToAddBack = parsedCurrentAgenda.filter(
+      (item) => !selectedIds.includes(item._id?.toString())
+    );
+
     // Step 2: Remove newly selected items from the summary
-    const itemsToRemove = parsedSelectedItems.filter(item => {
+    const itemsToRemove = parsedSelectedItems.filter((item) => {
       const itemId = item._id?.toString();
-      return itemId && !parsedCurrentAgenda.some(current => current._id?.toString() === itemId);
+      return (
+        itemId &&
+        !parsedCurrentAgenda.some(
+          (current) => current._id?.toString() === itemId
+        )
+      );
     });
-    
-    const itemsToRemoveIds = itemsToRemove.map(item => item._id?.toString()).filter(Boolean);
-    
+
+    const itemsToRemoveIds = itemsToRemove
+      .map((item) => item._id?.toString())
+      .filter(Boolean);
+
     // Step 3: Update the issue summary
     const updatedAgendaItems = [
-      ...issueSummary.agendaItems.filter(item => !itemsToRemoveIds.includes(item._id?.toString())),
-      ...itemsToAddBack
-      ].map(item => ({
-        ...item,
-        createdByType: item.createdByType || 'SYSTEM',
-        ...(item.createdByType === 'USER' ? { createdByUserId: item.createdByUserId } : {})
-      }));
-    
+      ...issueSummary.agendaItems.filter(
+        (item) => !itemsToRemoveIds.includes(item._id?.toString())
+      ),
+      ...itemsToAddBack,
+    ].map((item) => ({
+      ...item,
+      createdByType: item.createdByType || "SYSTEM",
+      ...(item.createdByType === "USER"
+        ? { createdByUserId: item.createdByUserId }
+        : {}),
+    }));
+
     // Step 4: Update linked issues
-    const linkedIssuesToRemove = itemsToRemove.flatMap(item => (item.linkedIssues || []).map(id => id.toString()));
-    const linkedIssuesToAddBack = itemsToAddBack.flatMap(item => (item.linkedIssues || []).map(id => id.toString()));
-    
-    const existingIssueIds = issueSummary.issues.map(id => id.toString());
+    const linkedIssuesToRemove = itemsToRemove.flatMap((item) =>
+      (item.linkedIssues || []).map((id) => id.toString())
+    );
+    const linkedIssuesToAddBack = itemsToAddBack.flatMap((item) =>
+      (item.linkedIssues || []).map((id) => id.toString())
+    );
+
+    const existingIssueIds = issueSummary.issues.map((id) => id.toString());
     const updatedIssueIds = [
-      ...existingIssueIds.filter(id => !linkedIssuesToRemove.includes(id)),
-      ...linkedIssuesToAddBack.filter(id => !existingIssueIds.includes(id))
+      ...existingIssueIds.filter((id) => !linkedIssuesToRemove.includes(id)),
+      ...linkedIssuesToAddBack.filter((id) => !existingIssueIds.includes(id)),
     ];
-    
+
     // Update the issue summary
     const updateResult = await IssueSummary.findOneAndUpdate(
       { panchayatId },
       {
         $set: {
           agendaItems: updatedAgendaItems,
-          issues: updatedIssueIds.map(id => new mongoose.Types.ObjectId(id))
-        }
+          issues: updatedIssueIds.map((id) => new mongoose.Types.ObjectId(id)),
+        },
       },
       { new: true }
     );
-    
+
     if (updateResult) {
       // Update status of linked issues
       if (linkedIssuesToRemove.length > 0) {
         await Issue.updateMany(
           { _id: { $in: linkedIssuesToRemove } },
-          { $set: { status: 'PICKED_IN_AGENDA' } }
+          { $set: { status: "PICKED_IN_AGENDA" } }
         );
       }
-      
+
       if (linkedIssuesToAddBack.length > 0) {
         await Issue.updateMany(
           { _id: { $in: linkedIssuesToAddBack } },
-          { $set: { status: 'REPORTED' } }
+          { $set: { status: "REPORTED" } }
         );
       }
     }
@@ -153,33 +176,39 @@ router.post(
       // Validate that either agenda or selectedAgendaItems is provided
       let parsedAgenda = agenda || [];
       let parsedSelectedItems = [];
-      
+
       if (selectedAgendaItems) {
         try {
-          parsedSelectedItems = typeof selectedAgendaItems === 'string' 
-            ? JSON.parse(selectedAgendaItems) 
-            : selectedAgendaItems;
+          parsedSelectedItems =
+            typeof selectedAgendaItems === "string"
+              ? JSON.parse(selectedAgendaItems)
+              : selectedAgendaItems;
         } catch (err) {
           return res.status(400).json({
             success: false,
-            message: "Invalid selectedAgendaItems format. Must be a JSON array.",
+            message:
+              "Invalid selectedAgendaItems format. Must be a JSON array.",
           });
         }
       }
 
       // If no agenda is provided but selectedAgendaItems is, create agenda from selected items
       if ((!agenda || agenda.length === 0) && parsedSelectedItems.length > 0) {
-        parsedAgenda = parsedSelectedItems.map(item => ({
+        parsedAgenda = parsedSelectedItems.map((item) => ({
           title: item.title,
           description: item.description,
           linkedIssues: item.linkedIssues || [],
-          createdByType: item.createdByType || 'SYSTEM',
-          createdByUserId: item.createdByType === 'USER' ? item.createdByUserId : null
+          createdByType: item.createdByType || "SYSTEM",
+          createdByUserId:
+            item.createdByType === "USER" ? item.createdByUserId : null,
         }));
       }
 
       // Validate that we have some agenda content
-      if ((!parsedAgenda || parsedAgenda.length === 0) && parsedSelectedItems.length === 0) {
+      if (
+        (!parsedAgenda || parsedAgenda.length === 0) &&
+        parsedSelectedItems.length === 0
+      ) {
         return res.status(400).json({
           success: false,
           message: "Either agenda or selectedAgendaItems must be provided.",
@@ -187,7 +216,7 @@ router.post(
       }
 
       try {
-        if (typeof parsedAgenda === 'string') {
+        if (typeof parsedAgenda === "string") {
           parsedAgenda = JSON.parse(parsedAgenda);
           if (!Array.isArray(parsedAgenda)) {
             return res.status(400).json({
@@ -204,12 +233,13 @@ router.post(
       }
 
       // Ensure agenda is an array of objects with title, description, linkedIssues
-      parsedAgenda = parsedAgenda.map(item => ({
+      parsedAgenda = parsedAgenda.map((item) => ({
         title: item.title,
         description: item.description,
         linkedIssues: item.linkedIssues || [],
-        createdByType: item.createdByType || 'SYSTEM',
-        createdByUserId: item.createdByType === 'USER' ? item.createdByUserId : null
+        createdByType: item.createdByType || "SYSTEM",
+        createdByUserId:
+          item.createdByType === "USER" ? item.createdByUserId : null,
       }));
 
       // Generate default title if not provided
@@ -268,13 +298,13 @@ router.post(
             topic: generatedTitle,
             startTime: startTime.toISOString(),
             endTime: endTime.toISOString(),
-            // isAutoRecordingEnabled: true,
+            isAutoRecordingEnabled: true,
           };
           const payload = { app: JIOMEET_APP_ID, timestamp: Date.now() };
           const jioMeetToken = jwt.sign(payload, privateKey, {
             algorithm: "RS256",
           });
-          
+
           // Adding JioMeet API call
           const response = await axios.post(
             `${JIOMEET_API}/schedule/meeting`,
@@ -286,7 +316,7 @@ router.post(
               },
             }
           );
-          
+
           jioMeetData = response.data;
           meetingLink = response.data.hostUrl;
         } catch (jioMeetError) {
@@ -312,7 +342,11 @@ router.post(
 
       // Update issue summary and linked issues if selected agenda items are provided
       if (parsedSelectedItems.length > 0) {
-        await updateIssueSummaryForSelectedAgenda(panchayatId, parsedSelectedItems, []);
+        await updateIssueSummaryForSelectedAgenda(
+          panchayatId,
+          parsedSelectedItems,
+          []
+        );
       }
 
       res.status(201).json({
@@ -326,9 +360,11 @@ router.post(
         },
       });
     } catch (error) {
-      res
-        .status(500)
-        .json({ success: false, message: "Error creating Gram Sabha", error: error.message });
+      res.status(500).json({
+        success: false,
+        message: "Error creating Gram Sabha",
+        error: error.message,
+      });
     }
   }
 );
@@ -344,7 +380,7 @@ router.get("/panchayat/:panchayatId", async (req, res) => {
 
     // Auto-update status for each meeting
     gramSabhas = await Promise.all(
-      gramSabhas.map(meeting => autoUpdateMeetingStatus(meeting))
+      gramSabhas.map((meeting) => autoUpdateMeetingStatus(meeting))
     );
 
     res.send(gramSabhas);
@@ -364,13 +400,18 @@ router.get("/:id", async (req, res) => {
     if (!gramSabha) {
       return res.status(404).send();
     }
-    
+
     // Manual population of linkedIssues
     for (const agendaItem of gramSabha.agenda || []) {
-      if (Array.isArray(agendaItem.linkedIssues) && agendaItem.linkedIssues.length > 0) {
-        const issues = await Issue.find({ _id: { $in: agendaItem.linkedIssues } })
-          .select('transcription creatorId createdForId')
-          .populate('createdForId', 'name')
+      if (
+        Array.isArray(agendaItem.linkedIssues) &&
+        agendaItem.linkedIssues.length > 0
+      ) {
+        const issues = await Issue.find({
+          _id: { $in: agendaItem.linkedIssues },
+        })
+          .select("transcription creatorId createdForId")
+          .populate("createdForId", "name")
           .lean();
         agendaItem.linkedIssues = issues;
       }
@@ -406,25 +447,27 @@ router.patch(
       // Handle selectedAgendaItems if provided
       let parsedSelectedItems = [];
       let originalAgenda = []; // Capture original agenda before any updates
-      
+
       if (req.body.selectedAgendaItems) {
         try {
-          parsedSelectedItems = typeof req.body.selectedAgendaItems === 'string' 
-            ? JSON.parse(req.body.selectedAgendaItems) 
-            : req.body.selectedAgendaItems;
-          
+          parsedSelectedItems =
+            typeof req.body.selectedAgendaItems === "string"
+              ? JSON.parse(req.body.selectedAgendaItems)
+              : req.body.selectedAgendaItems;
+
           // Capture the original agenda before updating
           originalAgenda = gramSabha.agenda || [];
-          
+
           // Update the meeting's agenda with the selected items
           if (parsedSelectedItems.length > 0) {
-            gramSabha.agenda = parsedSelectedItems.map(item => ({
+            gramSabha.agenda = parsedSelectedItems.map((item) => ({
               title: item.title,
               description: item.description,
               linkedIssues: item.linkedIssues || [],
-              createdByType: item.createdByType || 'SYSTEM',
-              createdByUserId: item.createdByType === 'USER' ? item.createdByUserId : null,
-              _id: item._id // Preserve the _id for proper matching
+              createdByType: item.createdByType || "SYSTEM",
+              createdByUserId:
+                item.createdByType === "USER" ? item.createdByUserId : null,
+              _id: item._id, // Preserve the _id for proper matching
             }));
           } else {
             // If no items selected, clear the agenda
@@ -438,7 +481,7 @@ router.patch(
       }
 
       // Parse agenda string if needed
-      if (req.body.agenda && typeof req.body.agenda === 'string') {
+      if (req.body.agenda && typeof req.body.agenda === "string") {
         try {
           req.body.agenda = JSON.parse(req.body.agenda);
           if (!Array.isArray(req.body.agenda)) {
@@ -507,16 +550,16 @@ router.patch(
 
         gramSabha.attachments = [...gramSabha.attachments, ...newAttachments];
       }
-      
+
       // Handle JioMeet updates if configuration is available
       if (
         (updates.includes("title") ||
-        updates.includes("dateTime") ||
-        updates.includes("date") ||
-        updates.includes("time") ||
-        updates.includes("scheduledDurationHours")) &&
-        JIOMEET_APP_ID && 
-        JIOMEET_API && 
+          updates.includes("dateTime") ||
+          updates.includes("date") ||
+          updates.includes("time") ||
+          updates.includes("scheduledDurationHours")) &&
+        JIOMEET_APP_ID &&
+        JIOMEET_API &&
         process.env.PRIVATE_KEY_PATH
       ) {
         try {
@@ -532,13 +575,14 @@ router.patch(
             topic: req.body.title || gramSabha.title,
             startTime: startTime.toISOString(),
             endTime: endTime.toISOString(),
+            isAutoRecordingEnabled: true,
           };
 
           const payload = { app: JIOMEET_APP_ID, timestamp: Date.now() };
           const jioMeetToken = jwt.sign(payload, privateKey, {
             algorithm: "RS256",
           });
-          
+
           // Update the meeting in JioMeet
           const response = await axios.post(
             `${JIOMEET_API}/schedule/meeting`,
@@ -550,7 +594,7 @@ router.patch(
               },
             }
           );
-          
+
           // Update JioMeet data in the database
           gramSabha.jioMeetData = response.data;
           gramSabha.meetingLink = response.data.hostUrl;
@@ -565,7 +609,11 @@ router.patch(
 
       // Update issue summary and linked issues if selected agenda items are provided
       if (parsedSelectedItems.length > 0 || req.body.selectedAgendaItems) {
-        await updateIssueSummaryForSelectedAgenda(gramSabha.panchayatId, parsedSelectedItems, originalAgenda);
+        await updateIssueSummaryForSelectedAgenda(
+          gramSabha.panchayatId,
+          parsedSelectedItems,
+          originalAgenda
+        );
       }
 
       // Return the updated gram sabha with attachment data URLs for frontend
@@ -1091,7 +1139,7 @@ router.get("/panchayat/:panchayatId/today", async (req, res) => {
 
     // Auto-update status for each meeting
     gramSabhas = await Promise.all(
-      gramSabhas.map(meeting => autoUpdateMeetingStatus(meeting))
+      gramSabhas.map((meeting) => autoUpdateMeetingStatus(meeting))
     );
 
     res.json(gramSabhas);
@@ -1102,15 +1150,16 @@ router.get("/panchayat/:panchayatId/today", async (req, res) => {
   }
 });
 
-//Not needed now --------------------------------------------------------------------------------
 router.post("/recording/start", async (req, res) => {
   const { jiomeetId, roomPIN } = req.body;
+
   try {
     const payload = { app: JIOMEET_APP_ID, timestamp: Date.now() };
     const token = jwt.sign(payload, privateKey, {
       algorithm: "RS256",
     });
-    // Call JioMeet API to start recording
+
+    // Call JioMeet Start Recording API
     const response = await axios.post(
       `${JIOMEET_API}/recordings/start`,
       req.body,
@@ -1121,78 +1170,52 @@ router.post("/recording/start", async (req, res) => {
         },
       }
     );
-    res.status(200).json({ success: true, data: response.data });
-  } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch today's meetings" });
-  }
-});
 
-router.post("/recordings/stop", async (req, res) => {
-  const { jiomeetId, roomPIN } = req.body;
+    const { historyId, recordingStatus, prefix } = response.data;
 
-  if (!jiomeetId || !roomPIN) {
-    return res.status(412).json({
-      success: false,
-      message: "Validation Error",
-      error: {
-        customCode: 412,
-        message: "Validation Error",
-        errorsArray: [
-          !jiomeetId && {
-            property: "jiomeetId",
-            message: "should have required property 'jiomeetId'",
-          },
-          !roomPIN && {
-            property: "roomPIN",
-            message: "should have required property 'roomPIN'",
-          },
-        ].filter(Boolean),
-      },
-    });
-  }
-
-  try {
-    const payload = {
-      app: JIOMEET_APP_ID,
-      timestamp: Date.now(),
-    };
-
-    const token = jwt.sign(payload, privateKey, {
-      algorithm: "RS256",
+    // 🔍 Find the GramSabha by nested fields using dot notation
+    const gramSabha = await GramSabha.findOne({
+      "jioMeetData.jiomeetId": jiomeetId,
+      "jioMeetData.roomPIN": roomPIN,
     });
 
-    const stopRes = await axios.post(
-      `${JIOMEET_API}/recordings/stop`,
-      { jiomeetId, roomPIN },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-    const { historyId } = stopRes.data;
-
-    if (!historyId) {
-      return res.status(400).json({
+    if (!gramSabha) {
+      return res.status(404).json({
         success: false,
-        message: "Recording stopped but historyId not returned",
+        message: "Gram Sabha not found",
       });
     }
 
+    // 📝 Update jioMeetData with recording details (non-destructive)
+    gramSabha.jioMeetData = {
+      ...gramSabha.jioMeetData,
+      recordingStatus,
+      historyId,
+      prefix,
+    };
+
+    await gramSabha.save();
+
     return res.status(200).json({
       success: true,
-      message: "Recording stopped successfully",
-      historyId,
+      message: "Recording started and historyId saved",
+      data: {
+        jiomeetId,
+        historyId,
+        recordingStatus,
+        prefix,
+      },
     });
   } catch (error) {
-    res.status(500).json({
+    console.error(
+      "Start recording error:",
+      error.message,
+      error.response?.data
+    );
+    return res.status(500).json({
       success: false,
-      message: "Failed to stop recording",
-      error: error?.response?.data || error.message,
+      message: "Failed to start recording",
+      error: error.message,
     });
   }
 });
@@ -1226,6 +1249,7 @@ router.post("/recordings/list", async (req, res) => {
   }
 
   try {
+    // 🔐 Create signed token
     const payload = {
       app: JIOMEET_APP_ID,
       timestamp: Date.now(),
@@ -1235,6 +1259,7 @@ router.post("/recordings/list", async (req, res) => {
       algorithm: "RS256",
     });
 
+    // 📡 Fetch recording list from JioMeet
     const listRes = await axios.post(
       `${JIOMEET_API}/recordings/list`,
       { jiomeetId, roomPIN, historyId },
@@ -1246,10 +1271,36 @@ router.post("/recordings/list", async (req, res) => {
       }
     );
 
+    const { callRecordings = [] } = listRes.data;
+
+    // 🔍 Find the GramSabha using nested jioMeetData
+    const gramSabha = await GramSabha.findOne({
+      "jioMeetData.jiomeetId": jiomeetId,
+      "jioMeetData.roomPIN": roomPIN,
+    });
+
+    if (!gramSabha) {
+      return res.status(404).json({
+        success: false,
+        message: "Gram Sabha not found",
+      });
+    }
+
+    // 📝 Update jioMeetData (non-destructive)
+    gramSabha.jioMeetData = {
+      ...gramSabha.jioMeetData,
+      historyId,
+      recordingStatus:
+        callRecordings.length > 0 ? "available" : "not_available",
+      recordings: callRecordings,
+    };
+
+    await gramSabha.save();
+
     return res.status(200).json({
       success: true,
       message: "Recording details fetched successfully",
-      recordingData: listRes.data,
+      recordings: callRecordings,
     });
   } catch (error) {
     res.status(500).json({
@@ -1259,5 +1310,49 @@ router.post("/recordings/list", async (req, res) => {
     });
   }
 });
-//----------------------------------------------------------------------------------------------------
+
+router.get("/recordings/download", async (req, res) => {
+  const { videoUrl } = req.query;
+
+  if (!videoUrl) {
+    return res.status(400).json({
+      success: false,
+      message: "Missing required parameter: videoUrl",
+    });
+  }
+
+  try {
+    // ✅ Create JWT token
+    const payload = {
+      app: JIOMEET_APP_ID,
+      timestamp: Date.now(),
+    };
+
+    const token = jwt.sign(payload, privateKey, {
+      algorithm: "RS256",
+    });
+
+    // ✅ Fetch video stream from JioMeet API
+    const response = await axios.get(videoUrl, {
+      responseType: "stream", // So we can pipe the video stream
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    // 📦 Set headers to force download in browser
+    res.setHeader("Content-Disposition", "attachment; filename=recording.mp4");
+    res.setHeader("Content-Type", "video/mp4");
+
+    // 🌀 Pipe the video stream to the client
+    response.data.pipe(res);
+  } catch (err) {
+    console.error("Download error:", err?.response?.data || err.message);
+    res.status(500).json({
+      success: false,
+      message: "Failed to download video",
+      error: err?.response?.data || err.message,
+    });
+  }
+});
 module.exports = router;

@@ -184,9 +184,9 @@ const translations = {
     audioRecorded: "Audio recorded successfully",
     issueReported: "Issue/Suggestion reported successfully",
     createdFor: "Created for",
-    createdForDesc:
-      "Who is this issue/suggestion for?",
+    createdForDesc: "Who is this issue/suggestion for?",
     attachments: "Attachments",
+    recordings: "Download Recording",
     fileAttachments: "File Attachments",
     remark: "Additional Remarks",
     createdDate: "Created Date",
@@ -199,7 +199,8 @@ const translations = {
     enhancedHindi: "Hindi",
     originalTranscription: "Original Language",
     transcriptionStatus: "Transcription Status",
-    transcriptionPending: "Audio attachment detected, transcription will be initiated automatically",
+    transcriptionPending:
+      "Audio attachment detected, transcription will be initiated automatically",
     transcriptionProcessing: "Transcription is being processed...",
     transcriptionCompleted: "Transcription completed successfully",
     transcriptionFailed: "Transcription failed",
@@ -348,8 +349,10 @@ const translations = {
     clickToUpload: "Click to upload",
     uploadFiles: "Upload Files",
     fileName: "File Name",
-    meetingConcludedInfo : "Since the meeting is CONCLUDED, you can only upload any attachment if required. To view meeting details, please click on the View Details(eye) button in Actions Section.",
-    noAgendaInfo: "No agenda items available. Please ensure issues have been summarized for this panchayat.",
+    meetingConcludedInfo:
+      "Since the meeting is CONCLUDED, you can only upload any attachment if required. To view meeting details, please click on the View Details(eye) button in Actions Section.",
+    noAgendaInfo:
+      "No agenda items available. Please ensure issues have been summarized for this panchayat.",
 
     // Table Headers
     tableTitle: "Title",
@@ -467,9 +470,11 @@ const translations = {
 
     //Agenda
     gramSabhaAgendaNotice: "Gram Sabha Meeting – Agenda Notice",
-    gramSabhaNoticeText: "All respected villagers are hereby informed that the Gram Sabha meeting is being organized as per the above details. Please be present on time and ensure your participation in the development of the village.",
+    gramSabhaNoticeText:
+      "All respected villagers are hereby informed that the Gram Sabha meeting is being organized as per the above details. Please be present on time and ensure your participation in the development of the village.",
     newIssuesAndPlanHeading: "New Issues and Upcoming Action Plan",
-    newIssuesAndPlanDescription: "In this section, Gram Sabha members can discuss current and future needs, propose new initiatives, and formulate plans for the overall development of the village.",
+    newIssuesAndPlanDescription:
+      "In this section, Gram Sabha members can discuss current and future needs, propose new initiatives, and formulate plans for the overall development of the village.",
     linkedIssues: "Linked Issues",
     filterAll: "All",
     filterCategory: "Category",
@@ -680,9 +685,9 @@ const translations = {
     audioRecorded: "ऑडियो सफलतापूर्वक रिकॉर्ड किया गया",
     issueReported: "मुद्दा/सुझाव सफलतापूर्वक दर्ज किया गया",
     createdFor: "किसके लिए",
-    createdForDesc:
-      "यह मुद्दा/सुझाव किसके लिए है?",
+    createdForDesc: "यह मुद्दा/सुझाव किसके लिए है?",
     attachments: "अटैचमेंट",
+    recordings: "रिकॉर्डिंग डाउनलोड करें ",
     fileAttachments: "फ़ाइल अटैचमेंट",
     remark: "अतिरिक्त टिप्पणी",
     createdDate: "बनाने की तिथि",
@@ -695,7 +700,8 @@ const translations = {
     enhancedHindi: "हिंदी",
     originalTranscription: "मूल भाषा",
     transcriptionStatus: "ट्रांस्क्रिप्शन स्थिति",
-    transcriptionPending: "ऑडियो अटैचमेंट डिटेक्ट किया गया, ट्रांस्क्रिप्शन स्वचालित रूप से शुरू होगा",
+    transcriptionPending:
+      "ऑडियो अटैचमेंट डिटेक्ट किया गया, ट्रांस्क्रिप्शन स्वचालित रूप से शुरू होगा",
     transcriptionProcessing: "ट्रांस्क्रिप्शन प्रोसेस हो रहा है...",
     transcriptionCompleted: "ट्रांस्क्रिप्शन सफलतापूर्वक पूरा हुआ",
     transcriptionFailed: "ट्रांस्क्रिप्शन विफल",
@@ -703,7 +709,8 @@ const translations = {
     transcriptionLanguage: "भाषा",
     transcriptionCompletedAt: "पूरा",
     transcriptionError: "ट्रांस्क्रिप्शन विफल",
-    transcriptionRetrySuccess: "ट्रांस्क्रिप्शन पुनः प्रयास सफलतापूर्वक शुरू हुआ",
+    transcriptionRetrySuccess:
+      "ट्रांस्क्रिप्शन पुनः प्रयास सफलतापूर्वक शुरू हुआ",
     transcriptionRetryError: "ट्रांस्क्रिप्शन पुनः प्रयास विफल",
     transcriptionLoading: "ट्रांस्क्रिप्शन लोड हो रहा है...",
     transcriptionNoData: "कोई ट्रांस्क्रिप्शन डेटा उपलब्ध नहीं",
@@ -845,8 +852,10 @@ const translations = {
     clickToUpload: "अपलोड करने के लिए क्लिक करें",
     uploadFiles: "फ़ाइल अपलोड करें",
     fileName: "फ़ाइल का नाम",
-    meetingConcludedInfo: "चूंकि बैठक समाप्त हो चुकी है, आप केवल आवश्यकतानुसार कोई अटैचमेंट अपलोड कर सकते हैं। बैठक विवरण देखने के लिए कृपया क्रियाएँ अनुभाग में विवरण देखें (आंख) बटन पर क्लिक करें।",
-    noAgendaInfo: "कोई एजेंडा आइटम उपलब्ध नहीं है। कृपया सुनिश्चित करें कि इस पंचायत के मुद्दों को संक्षेपित किया गया है।",
+    meetingConcludedInfo:
+      "चूंकि बैठक समाप्त हो चुकी है, आप केवल आवश्यकतानुसार कोई अटैचमेंट अपलोड कर सकते हैं। बैठक विवरण देखने के लिए कृपया क्रियाएँ अनुभाग में विवरण देखें (आंख) बटन पर क्लिक करें।",
+    noAgendaInfo:
+      "कोई एजेंडा आइटम उपलब्ध नहीं है। कृपया सुनिश्चित करें कि इस पंचायत के मुद्दों को संक्षेपित किया गया है।",
 
     // Table Headers
     tableTitle: "शीर्षक",
@@ -998,9 +1007,11 @@ const translations = {
 
     //Agenda
     gramSabhaAgendaNotice: "ग्राम सभा बैठक – कार्यसूची सूचना",
-    gramSabhaNoticeText: "सभी सम्माननीय ग्रामीणों को सूचित किया जाता है कि उपरोक्त विवरणानुसार ग्राम सभा की बैठक आयोजित की जा रही है। कृपया समय पर उपस्थित होकर गाँव के विकास में अपनी भागीदारी सुनिश्चित करें।",
-    newIssuesAndPlanHeading:  "नए मुद्दे एवं आगामी कार्य योजना",
-    newIssuesAndPlanDescription : "इस खंड में, ग्राम सभा के सदस्य वर्तमान और भविष्य की जरूरतों पर चर्चा कर सकते हैं, नए प्रस्ताव रख सकते हैं, और गाँव के समग्र विकास के लिए योजनाएँ बना सकते हैं।",
+    gramSabhaNoticeText:
+      "सभी सम्माननीय ग्रामीणों को सूचित किया जाता है कि उपरोक्त विवरणानुसार ग्राम सभा की बैठक आयोजित की जा रही है। कृपया समय पर उपस्थित होकर गाँव के विकास में अपनी भागीदारी सुनिश्चित करें।",
+    newIssuesAndPlanHeading: "नए मुद्दे एवं आगामी कार्य योजना",
+    newIssuesAndPlanDescription:
+      "इस खंड में, ग्राम सभा के सदस्य वर्तमान और भविष्य की जरूरतों पर चर्चा कर सकते हैं, नए प्रस्ताव रख सकते हैं, और गाँव के समग्र विकास के लिए योजनाएँ बना सकते हैं।",
     linkedIssues: "संबंधित मुद्दे",
     filterAll: "सभी",
     filterCategory: "श्रेणी",

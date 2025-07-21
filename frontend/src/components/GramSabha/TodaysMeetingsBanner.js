@@ -5,6 +5,8 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
+import { useJoin } from "@jiomeet/core-template-web";
+import { JMClient } from "@jiomeet/core-sdk-web";
 import {
   Box,
   Typography,
@@ -47,7 +49,11 @@ import {
 } from "@mui/icons-material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import StopIcon from "@mui/icons-material/Stop";
-import { fetchTodaysMeetings, updateGramSabhaStatus } from "../../api/gram-sabha";
+import {
+  fetchTodaysMeetings,
+  updateGramSabhaStatus,
+  startJioMeetRecording,
+} from "../../api/gram-sabha";
 import { useLanguage } from "../../utils/LanguageContext";
 import GramSabhaDetails from "./GramSabhaDetails";
 import { FaceMesh } from "@mediapipe/face_mesh";
@@ -96,7 +102,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [sliderReady, setSliderReady] = useState(false);
-
+  const { joinMeeting, publishLocalPeerConfig, isCallStarted } = useJoin();
   // Liveliness verification state
   const [verificationState, setVerificationState] = useState({
     faceDetected: false,
@@ -117,7 +123,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     baselineEAR: null,
     blinkStartTime: null,
   });
-
+  const jmClient = new JMClient();
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
   // Memoized thresholds for checks
@@ -194,7 +200,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
       if (videoDevices.length === 0) {
         throw new Error("No video input devices found");
       }
-      
+
       const categorized = { user: null, environment: null };
 
       for (const device of videoDevices) {
@@ -695,7 +701,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   );
 
   const copyToClipboard = useCallback(() => {
-    const detailsText = `Meeting ID: ${meetingDetails.meetingId}
+    const detailsText = `Meeting ID: ${meetingDetails.jiomeetId}
   Meeting Link: ${meetingDetails.meetingLink}
   Room PIN: ${meetingDetails.roomPIN}`;
 
@@ -761,6 +767,76 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     },
     [fetchPlatformConfig, loadAttendanceStats]
   );
+
+  const handleJoinMeeting = async (meetingDetails) => {
+    try {
+      const hostUser = {
+        displayName: "SDKHostUser",
+        role: "host",
+        token: meetingDetails.hostToken,
+      };
+
+      // Step 1: Join as host using SDK
+      const meetingData = {
+        meetingId: meetingDetails.jiomeetId,
+        meetingPin: meetingDetails.roomPIN,
+        userDisplayName: hostUser.displayName,
+        config: {
+          userRole: hostUser.role,
+          token: hostUser.token,
+        },
+      };
+
+      const meetingUrl = await jmClient.joinMeeting(meetingData);
+      console.log("Host joined meeting:", meetingUrl);
+
+      // Step 2: Start recording
+      await jmClient.startRecording();
+      console.log("Recording started");
+      window.open(meetingDetails.meetingLink, "_blank");
+      // Step 3: Poll every 2s for other participants (max wait 30s)
+      let attempts = 0;
+      const maxAttempts = 15;
+      const checkInterval = 2000;
+
+      const intervalId = setInterval(async () => {
+        try {
+          const remotePeers = jmClient.remotePeers;
+
+          console.log("Participants in meeting:", remotePeers);
+
+          if (remotePeers.length > 0) {
+            clearInterval(intervalId);
+
+            // Step 4: Leave the meeting once someone else joins
+            await jmClient.leaveMeeting();
+          } else if (++attempts >= maxAttempts) {
+            clearInterval(intervalId);
+            console.warn("Timeout: No participant joined within 30 seconds.");
+          }
+        } catch (pollErr) {
+          clearInterval(intervalId);
+          console.error("Error checking participants:", pollErr);
+        }
+      }, checkInterval);
+    } catch (error) {
+      console.error("Error during meeting flow:", error);
+      alert(
+        "Meeting failed. Reason: " + (error.message || "Unknown error occurred")
+      );
+    }
+
+    const result = await startJioMeetRecording(
+      meetingDetails.jiomeetId,
+      meetingDetails.roomPIN
+    );
+    if (!result.success) {
+      throw new Error(result.message || "Recording start failed");
+    }
+
+    const historyId = result?.data?.historyId;
+    console.log("Recording started. History ID:", historyId);
+  };
 
   const handleSubmitAttendance = useCallback(async () => {
     if (!voterIdLastFour || voterIdLastFour.length !== 4) {
@@ -1002,10 +1078,10 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                 onClick={() =>
                   handleStartRecording(
                     meeting._id,
-                    meeting.jioMeetData.jiomeetId,
+                    meeting.jioMeetData?.jiomeetId,
                     meeting.meetingLink,
-                    meeting.jioMeetData.roomPIN,
-                    meeting.jioMeetData.hostToken
+                    meeting.jioMeetData?.roomPIN,
+                    meeting.jioMeetData?.hostToken
                   )
                 }
                 startIcon={<VideocamIcon />}
@@ -1039,7 +1115,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
           <DialogContent>
             <DialogContentText>
               <Typography variant="body1">
-                <strong>Meeting ID:</strong> {meetingDetails.meetingId}
+                <strong>Meeting ID:</strong> {meetingDetails.jiomeetId}
               </Typography>
               <Typography variant="body1">
                 <strong>Meeting Link:</strong> {meetingDetails.meetingLink}
@@ -1058,9 +1134,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
               <Button
                 variant="contained"
                 color="primary"
-                onClick={() =>
-                  window.open(meetingDetails.meetingLink, "_blank")
-                }
+                onClick={() => handleJoinMeeting(meetingDetails)}
               >
                 Join Meeting
               </Button>
@@ -1262,7 +1336,11 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                   variant="determinate"
                   value={
                     attendanceStats.quorum > 0
-                      ? Math.min((attendanceStats.present / attendanceStats.quorum) * 100, 100)
+                      ? Math.min(
+                          (attendanceStats.present / attendanceStats.quorum) *
+                            100,
+                          100
+                        )
                       : 0
                   }
                   sx={{ height: 8, borderRadius: 4, mb: 1 }}
@@ -1274,7 +1352,8 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                   alignItems="center"
                 >
                   <Typography variant="caption" color="text.secondary">
-                    {attendanceStats.present} {strings.attendeesPresent} ({strings.quorumIs} {attendanceStats.quorum})
+                    {attendanceStats.present} {strings.attendeesPresent} (
+                    {strings.quorumIs} {attendanceStats.quorum})
                   </Typography>
                   <Chip
                     label={
