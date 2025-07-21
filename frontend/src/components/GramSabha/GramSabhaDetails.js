@@ -353,7 +353,6 @@ const GramSabhaDetails = ({ meetingId, user }) => {
     .then(() => document.body.removeChild(container));
 };
 
-
   const handleDownloadAttendanceReportCSV = () => {
     if (!attendanceStats || !meeting || !attendance) return;
 
@@ -486,7 +485,7 @@ const GramSabhaDetails = ({ meetingId, user }) => {
               <p><strong>${strings.linkedIssues}:</strong></p>
               <table border="1" cellpadding="4" cellspacing="0" style="border-collapse: collapse; width: 100%; font-size: 11px; margin-bottom: 10px; table-layout: fixed;">
                 <thead>
-                  <tr>
+                  <tr style="page-break-inside: avoid;">
                     <th style="width: 10%;text-align: center;">${strings.serialNo}</th>
                     <th style="width: 70%;">${strings.issueDescription}</th>
                     <th style="width: 20%; text-align: center; vertical-align: top;">${strings.issueOwner}</th>
@@ -494,7 +493,7 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                 </thead>
                 <tbody>
                   ${item.linkedIssues.map((issue, idx) => `
-                    <tr>
+                    <tr style="page-break-inside: avoid;">
                       <td style="text-align: center;">${idx + 1}</td>
                       <td>
                         ${language === "hi"
@@ -514,6 +513,7 @@ const GramSabhaDetails = ({ meetingId, user }) => {
             <p><strong>${i + 1}. ${title}</strong></p>
             <p>${desc}</p>
             ${linkedIssues}
+            <br>
           `;
         }).join("")
       : `<p>${strings.noAgenda}</p>`;
