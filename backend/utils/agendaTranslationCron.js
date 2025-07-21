@@ -1,6 +1,6 @@
 const cron = require('node-cron');
 const IssueSummary = require('../models/IssueSummary');
-const GramSabha = require('../models/GramSabha');
+const GramSabha = require('../models/gramSabha');
 const axios = require('axios');
 
 const TRANSLATE_API_URL = process.env.VIDEO_MOM_BACKEND_URL || 'http://localhost:8000';
