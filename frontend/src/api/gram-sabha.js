@@ -1,67 +1,69 @@
-import axios from 'axios';
+import axios from "axios";
 
 // Base URL from environment variables or default
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 // Create axios instance with default config
 const api = axios.create({
-    baseURL: API_URL,
-    headers: {
-        'Content-Type': 'application/json'
-    }
+  baseURL: API_URL,
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
 // Add request interceptor to handle tokens
 api.interceptors.request.use(
-    (config) => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-    },
-    (error) => {
-        return Promise.reject(error);
+  (config) => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
 );
 
 // Add response interceptor to handle token refresh
 api.interceptors.response.use(
-    (response) => response,
-    async (error) => {
-        const originalRequest = error.config;
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
 
-        // If error is 401 and we haven't tried to refresh token yet
-        if (error.response?.status === 401 && !originalRequest._retry) {
-            originalRequest._retry = true;
+    // If error is 401 and we haven't tried to refresh token yet
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
 
-            try {
-                const refreshToken = localStorage.getItem('refreshToken');
-                if (!refreshToken) {
-                    throw new Error('No refresh token available');
-                }
-
-                const response = await api.post('/auth/refresh-token', { refreshToken });
-                const { token, refreshToken: newRefreshToken } = response.data.data;
-
-                // Update tokens in localStorage
-                localStorage.setItem('token', token);
-                localStorage.setItem('refreshToken', newRefreshToken);
-
-                // Update the failed request with new token
-                originalRequest.headers.Authorization = `Bearer ${token}`;
-                return api(originalRequest);
-            } catch (refreshError) {
-                // If refresh token fails, clear auth data and redirect to login
-                localStorage.removeItem('token');
-                localStorage.removeItem('refreshToken');
-                window.location.href = '/admin/login';
-                return Promise.reject(refreshError);
-            }
+      try {
+        const refreshToken = localStorage.getItem("refreshToken");
+        if (!refreshToken) {
+          throw new Error("No refresh token available");
         }
 
-        return Promise.reject(error);
+        const response = await api.post("/auth/refresh-token", {
+          refreshToken,
+        });
+        const { token, refreshToken: newRefreshToken } = response.data.data;
+
+        // Update tokens in localStorage
+        localStorage.setItem("token", token);
+        localStorage.setItem("refreshToken", newRefreshToken);
+
+        // Update the failed request with new token
+        originalRequest.headers.Authorization = `Bearer ${token}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        // If refresh token fails, clear auth data and redirect to login
+        localStorage.removeItem("token");
+        localStorage.removeItem("refreshToken");
+        window.location.href = "/admin/login";
+        return Promise.reject(refreshError);
+      }
     }
+
+    return Promise.reject(error);
+  }
 );
 
 /**
@@ -70,13 +72,15 @@ api.interceptors.response.use(
  * @returns {Promise} - API response
  */
 export const fetchGramSabhaMeetings = async (panchayatId) => {
-    try {
-        const response = await api.get(`/gram-sabha/panchayat/${panchayatId}`);
-        return response.data;
-    } catch (error) {
-        console.error('API Error in fetchGramSabhaMeetings:', error);
-        throw error.response?.data || { message: 'Failed to fetch Gram Sabha meetings' };
-    }
+  try {
+    const response = await api.get(`/gram-sabha/panchayat/${panchayatId}`);
+    return response.data;
+  } catch (error) {
+    console.error("API Error in fetchGramSabhaMeetings:", error);
+    throw (
+      error.response?.data || { message: "Failed to fetch Gram Sabha meetings" }
+    );
+  }
 };
 
 /**
@@ -85,13 +89,15 @@ export const fetchGramSabhaMeetings = async (panchayatId) => {
  * @returns {Promise} - API response
  */
 export const fetchGramSabhaMeeting = async (id) => {
-    try {
-        const response = await api.get(`/gram-sabha/${id}`);
-        return response.data;
-    } catch (error) {
-        console.error('API Error in fetchGramSabhaMeeting:', error);
-        throw error.response?.data || { message: 'Failed to fetch Gram Sabha meeting' };
-    }
+  try {
+    const response = await api.get(`/gram-sabha/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error("API Error in fetchGramSabhaMeeting:", error);
+    throw (
+      error.response?.data || { message: "Failed to fetch Gram Sabha meeting" }
+    );
+  }
 };
 
 /**
@@ -100,17 +106,19 @@ export const fetchGramSabhaMeeting = async (id) => {
  * @returns {Promise} - API response
  */
 export const createGramSabhaMeeting = async (formData) => {
-    try {
-        const response = await api.post('/gram-sabha', formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data'
-            }
-        });
-        return response.data;
-    } catch (error) {
-        console.error('API Error in createGramSabhaMeeting:', error);
-        throw error.response?.data || { message: 'Failed to create Gram Sabha meeting' };
-    }
+  try {
+    const response = await api.post("/gram-sabha", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("API Error in createGramSabhaMeeting:", error);
+    throw (
+      error.response?.data || { message: "Failed to create Gram Sabha meeting" }
+    );
+  }
 };
 
 /**
@@ -120,22 +128,24 @@ export const createGramSabhaMeeting = async (formData) => {
  * @returns {Promise} - API response
  */
 export const updateGramSabhaMeeting = async (id, formData) => {
-    try {
-        // Check if formData has any entries to update
-        if ([...formData.keys()].length === 0) {
-            return { message: 'No changes to update' };
-        }
-
-        const response = await api.patch(`/gram-sabha/${id}`, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data'
-            }
-        });
-        return response.data;
-    } catch (error) {
-        console.error('API Error in updateGramSabhaMeeting:', error);
-        throw error.response?.data || { message: 'Failed to update Gram Sabha meeting' };
+  try {
+    // Check if formData has any entries to update
+    if ([...formData.keys()].length === 0) {
+      return { message: "No changes to update" };
     }
+
+    const response = await api.patch(`/gram-sabha/${id}`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("API Error in updateGramSabhaMeeting:", error);
+    throw (
+      error.response?.data || { message: "Failed to update Gram Sabha meeting" }
+    );
+  }
 };
 
 /**
@@ -144,13 +154,15 @@ export const updateGramSabhaMeeting = async (id, formData) => {
  * @returns {Promise} - API response
  */
 export const deleteGramSabhaMeeting = async (id) => {
-    try {
-        const response = await api.delete(`/gram-sabha/${id}`);
-        return response.data;
-    } catch (error) {
-        console.error('API Error in deleteGramSabhaMeeting:', error);
-        throw error.response?.data || { message: 'Failed to delete Gram Sabha meeting' };
-    }
+  try {
+    const response = await api.delete(`/gram-sabha/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error("API Error in deleteGramSabhaMeeting:", error);
+    throw (
+      error.response?.data || { message: "Failed to delete Gram Sabha meeting" }
+    );
+  }
 };
 
 /**
@@ -160,13 +172,16 @@ export const deleteGramSabhaMeeting = async (id) => {
  * @returns {Promise} - API response
  */
 export const addAttendance = async (id, attendanceData) => {
-    try {
-        const response = await api.post(`/gram-sabha/${id}/attendance`, attendanceData);
-        return response.data;
-    } catch (error) {
-        console.error('API Error in addAttendance:', error);
-        throw error.response?.data || { message: 'Failed to add attendance' };
-    }
+  try {
+    const response = await api.post(
+      `/gram-sabha/${id}/attendance`,
+      attendanceData
+    );
+    return response.data;
+  } catch (error) {
+    console.error("API Error in addAttendance:", error);
+    throw error.response?.data || { message: "Failed to add attendance" };
+  }
 };
 
 /**
@@ -176,17 +191,17 @@ export const addAttendance = async (id, attendanceData) => {
  * @returns {Promise} - API response
  */
 export const addAttachment = async (id, formData) => {
-    try {
-        const response = await api.post(`/gram-sabha/${id}/attachments`, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data'
-            }
-        });
-        return response.data;
-    } catch (error) {
-        console.error('API Error in addAttachment:', error);
-        throw error.response?.data || { message: 'Failed to add attachment' };
-    }
+  try {
+    const response = await api.post(`/gram-sabha/${id}/attachments`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("API Error in addAttachment:", error);
+    throw error.response?.data || { message: "Failed to add attachment" };
+  }
 };
 
 /**
@@ -195,13 +210,17 @@ export const addAttachment = async (id, formData) => {
  * @returns {Promise} - API response
  */
 export const fetchUpcomingMeetings = async (panchayatId) => {
-    try {
-        const response = await api.get(`/gram-sabha/panchayat/${panchayatId}/upcoming`);
-        return response.data;
-    } catch (error) {
-        console.error('API Error in fetchUpcomingMeetings:', error);
-        throw error.response?.data || { message: 'Failed to fetch upcoming meetings' };
-    }
+  try {
+    const response = await api.get(
+      `/gram-sabha/panchayat/${panchayatId}/upcoming`
+    );
+    return response.data;
+  } catch (error) {
+    console.error("API Error in fetchUpcomingMeetings:", error);
+    throw (
+      error.response?.data || { message: "Failed to fetch upcoming meetings" }
+    );
+  }
 };
 
 /**
@@ -210,13 +229,13 @@ export const fetchUpcomingMeetings = async (panchayatId) => {
  * @returns {Promise} - API response
  */
 export const fetchPastMeetings = async (panchayatId) => {
-    try {
-        const response = await api.get(`/gram-sabha/panchayat/${panchayatId}/past`);
-        return response.data;
-    } catch (error) {
-        console.error('API Error in fetchPastMeetings:', error);
-        throw error.response?.data || { message: 'Failed to fetch past meetings' };
-    }
+  try {
+    const response = await api.get(`/gram-sabha/panchayat/${panchayatId}/past`);
+    return response.data;
+  } catch (error) {
+    console.error("API Error in fetchPastMeetings:", error);
+    throw error.response?.data || { message: "Failed to fetch past meetings" };
+  }
 };
 
 /**
@@ -227,13 +246,16 @@ export const fetchPastMeetings = async (panchayatId) => {
  * @returns {Promise} - API response
  */
 export const submitRSVP = async (meetingId, rsvpData, userId) => {
-    try {
-        const response = await api.post(`/gram-sabha/${meetingId}/rsvp/${userId}`, rsvpData);
-        return response.data;
-    } catch (error) {
-        console.error('API Error in submitRSVP:', error);
-        throw error.response?.data || { message: 'Failed to submit RSVP' };
-    }
+  try {
+    const response = await api.post(
+      `/gram-sabha/${meetingId}/rsvp/${userId}`,
+      rsvpData
+    );
+    return response.data;
+  } catch (error) {
+    console.error("API Error in submitRSVP:", error);
+    throw error.response?.data || { message: "Failed to submit RSVP" };
+  }
 };
 
 /**
@@ -243,13 +265,13 @@ export const submitRSVP = async (meetingId, rsvpData, userId) => {
  * @returns {Promise} - API response
  */
 export const getRSVPStatus = async (meetingId, userId) => {
-    try {
-        const response = await api.get(`/gram-sabha/${meetingId}/rsvp/${userId}`);
-        return response.data;
-    } catch (error) {
-        console.error('API Error in getRSVPStatus:', error);
-        throw error.response?.data || { message: 'Failed to get RSVP status' };
-    }
+  try {
+    const response = await api.get(`/gram-sabha/${meetingId}/rsvp/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error("API Error in getRSVPStatus:", error);
+    throw error.response?.data || { message: "Failed to get RSVP status" };
+  }
 };
 
 /**
@@ -258,13 +280,13 @@ export const getRSVPStatus = async (meetingId, userId) => {
  * @returns {Promise} - API response
  */
 export const getRSVPStats = async (meetingId) => {
-    try {
-        const response = await api.get(`/gram-sabha/${meetingId}/rsvp-stats`);
-        return response.data;
-    } catch (error) {
-        console.error('API Error in getRSVPStats:', error);
-        throw error.response?.data || { message: 'Failed to get RSVP statistics' };
-    }
+  try {
+    const response = await api.get(`/gram-sabha/${meetingId}/rsvp-stats`);
+    return response.data;
+  } catch (error) {
+    console.error("API Error in getRSVPStats:", error);
+    throw error.response?.data || { message: "Failed to get RSVP statistics" };
+  }
 };
 
 /**
@@ -273,13 +295,17 @@ export const getRSVPStats = async (meetingId) => {
  * @returns {Promise} - API response
  */
 export const fetchTodaysMeetings = async (panchayatId) => {
-    try {
-        const response = await api.get(`/gram-sabha/panchayat/${panchayatId}/today`);
-        return response.data;
-    } catch (error) {
-        console.error('API Error in fetchTodaysMeetings:', error);
-        throw error.response?.data || { message: 'Failed to fetch today\'s meetings' };
-    }
+  try {
+    const response = await api.get(
+      `/gram-sabha/panchayat/${panchayatId}/today`
+    );
+    return response.data;
+  } catch (error) {
+    console.error("API Error in fetchTodaysMeetings:", error);
+    throw (
+      error.response?.data || { message: "Failed to fetch today's meetings" }
+    );
+  }
 };
 
 /**
@@ -288,13 +314,18 @@ export const fetchTodaysMeetings = async (panchayatId) => {
  * @returns {Promise} - API response
  */
 export const fetchGramSabhaMeetingAttendanceData = async (id) => {
-    try {
-        const response = await api.get(`/gram-sabha/${id}/attendance`);
-        return response.data;
-    } catch (error) {
-        console.error('API Error in fetchGramSabhaMeetingAttendanceData:', error);
-        throw error.response?.data || { message: 'Failed to fetch attendance data of past Gram Sabha meeting to export in a file.' };
-    }
+  try {
+    const response = await api.get(`/gram-sabha/${id}/attendance`);
+    return response.data;
+  } catch (error) {
+    console.error("API Error in fetchGramSabhaMeetingAttendanceData:", error);
+    throw (
+      error.response?.data || {
+        message:
+          "Failed to fetch attendance data of past Gram Sabha meeting to export in a file.",
+      }
+    );
+  }
 };
 
 /**
@@ -344,11 +375,80 @@ export const getAttendanceStats = async (meetingId) => {
  * Update only the status of a Gram Sabha meeting
  */
 export const updateGramSabhaStatus = async (id, status) => {
-    try {
-        const response = await api.patch(`/gram-sabha/${id}`, { status });
-        return response.data;
-    } catch (error) {
-        console.error('API Error in updateGramSabhaStatus:', error);
-        throw error.response?.data || { message: 'Failed to update meeting status' };
-    }
+  try {
+    const response = await api.patch(`/gram-sabha/${id}`, { status });
+    return response.data;
+  } catch (error) {
+    console.error("API Error in updateGramSabhaStatus:", error);
+    throw (
+      error.response?.data || { message: "Failed to update meeting status" }
+    );
+  }
+};
+
+/**
+ * List jioMeet recordings
+ */
+
+export const listJioMeetRecordings = async ({
+  jiomeetId,
+  roomPIN,
+  historyId,
+}) => {
+  try {
+    const response = await api.post("/gram-sabha/recordings/list", {
+      jiomeetId,
+      roomPIN,
+      historyId,
+    });
+    return response.data;
+  } catch (error) {
+    console.error("API Error in listRecordings:", error);
+    throw error.response?.data || { message: "Failed to fetch recordings" };
+  }
+};
+
+/**
+ * Download JioMeet Recording
+ */
+export const downloadJioMeetMRecording = async (videoUrl, filename) => {
+  try {
+    const response = await api.get("/gram-sabha/recordings/download", {
+      params: {
+        videoUrl,
+        filename,
+      },
+      responseType: "blob", // to handle binary data
+    });
+
+    // Download in same tab
+    const blob = new Blob([response.data], { type: "video/mp4" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename || "recording.mp4";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("API Error in downloadRecording:", error);
+    throw error.response?.data || { message: "Failed to download recording" };
+  }
+};
+
+/**
+ * Use JioMeet API to start recording and get historyId in order to retreive recordings later
+ */
+export const startJioMeetRecording = async (jiomeetId, roomPIN) => {
+  try {
+    const response = await api.post("/gram-sabha/recording/start", {
+      jiomeetId,
+      roomPIN,
+    });
+    return response.data;
+  } catch (error) {
+    console.error("API Error in startRecording:", error);
+    throw error.response?.data || { message: "Failed to start recording" };
+  }
 };
