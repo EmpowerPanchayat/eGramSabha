@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Filtering of issues on the basis of Status ([#84](https://github.com/EmpowerPanchayat/eGramSabha/issues/84))
 - Attendance progress bar and message display.([#74](https://github.com/EmpowerPanchayat/eGramSabha/issues/74))
 - Language casing to the requests sent to LLM.([#103](https://github.com/EmpowerPanchayat/eGramSabha/issues/103))
+- Agenda PDF content splitting issue.([#106](https://github.com/EmpowerPanchayat/eGramSabha/issues/106))
 
 ### Changed
 
