@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const GramSabha = require('../models/GramSabha'); // Adjust path as needed
+const GramSabha = require('../models/gramSabha');
 
 async function migrate() {
   try {
