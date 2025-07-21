@@ -1,22 +1,6 @@
 const mongoose = require('mongoose');
 const MODEL_REFS = require('./modelRefs');
-
-const agendaItemSchema = new mongoose.Schema({
-    title: {
-        type: Map,
-        of: String,
-        required: true
-    },
-    description: {
-        type: Map,
-        of: String,
-        required: true
-    },
-    linkedIssues: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: MODEL_REFS.ISSUE,
-    }]
-});
+const agendaItemSchema = require('./agendaItemSchema');
 
 const issueSummarySchema = new mongoose.Schema({
     panchayatId: {

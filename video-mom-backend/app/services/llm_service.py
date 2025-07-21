@@ -594,7 +594,7 @@ class LLMService:
     
     def generate_multilingual_mom(self, transcription: str, primary_language: str = "en") -> Dict[str, str]:
         """Generate Minutes of Meeting in multiple languages"""
-        
+        primary_language = primary_language.lower()
         mom_input = transcription
         
         # Generate multilingual MOM
@@ -603,7 +603,7 @@ class LLMService:
 
     def _generate_multilingual_mom_with_llm(self, transcription: str, primary_language: str) -> Dict[str, str]:
         """Generate MOM in multiple languages using LLM"""
-        
+        primary_language = primary_language.lower()
         # Use regular string concatenation to avoid f-string brace conflicts
         system_prompt = (
             "You are an expert in creating formal Minutes of Meeting (MOM) documents from meeting transcriptions, "
@@ -704,7 +704,7 @@ class LLMService:
     def _synthesize_final_mom(self, combined_summary: str, primary_language: str) -> Dict[str, str]:
         """Creates a final, structured MOM from a collection of key points."""
         logger.info(f"Synthesizing MOM from combined summary of length {len(combined_summary)}")
-        
+        primary_language = primary_language.lower()
         # Use string concatenation to avoid f-string brace conflicts
         system_prompt = (
             "You are an expert in creating formal Minutes of Meeting (MOM) documents from meeting summaries "
@@ -779,6 +779,7 @@ class LLMService:
 
     def generate_multilingual_agenda_from_issues(self, issues: list, primary_language: str = "en") -> Dict[str, str]:
         """Generate agenda from issues in multiple languages"""
+        primary_language = primary_language.lower()
         logger.info(f"Starting multilingual agenda generation for language: {primary_language}")
         
         if not issues:
@@ -800,7 +801,7 @@ class LLMService:
 
     def _generate_multilingual_agenda_with_llm(self, issues: list, primary_language: str) -> Dict[str, str]:
         """Generate agenda from issues in multiple languages using LLM with consistent format"""
-        
+        primary_language = primary_language.lower()
         issues_text = self._format_issues_for_prompt(issues)
         
         # Use regular string concatenation to avoid f-string brace conflicts
@@ -845,12 +846,13 @@ class LLMService:
                 "role": "user",
                 "content": f"""Convert these {len(issues)} issues into clustered agenda items:
 
-{issues_text}
+                {issues_text}
 
-Primary language requested: {primary_language}
+                Primary language requested: {primary_language}
 
-Create comprehensive, well-structured agendas that properly group similar issues together.
-Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda keys."""
+                Create comprehensive, well-structured agendas that properly group similar issues together.
+                "Ensure each agenda item contains BOTH 'linked_issues' (array of issue IDs) and 'issue_ids' (mapping of issue IDs to short labels)."
+                Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda keys."""
             }
         ]
 
@@ -858,7 +860,14 @@ Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda 
             result = self._make_chat_request(messages, max_tokens=8000)
             
             if result and "choices" in result and len(result["choices"]) > 0:
-                content = result["choices"][0]["message"]["content"].strip()
+                choice = result["choices"][0]
+                content = choice["message"]["content"].strip()
+                finish_reason = choice.get("finish_reason", "unknown")
+
+                logger.info(f"LLM response finish_reason: {finish_reason}")
+                if finish_reason == "length":
+                    logger.warning("⚠️ LLM response was likely cut off due to token limit")
+
                 parsed = self._parse_multilingual_response(content, primary_language, "agenda")
                 
                 if parsed:
@@ -893,6 +902,7 @@ Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda 
 
     def update_multilingual_agenda_with_issues(self, current_agenda: list, new_issues: list, primary_language: str = "en") -> Dict[str, str]:
         """Update agenda with new issues in multiple languages"""
+        primary_language = primary_language.lower()
         logger.info(f"Starting multilingual agenda update for language: {primary_language}")
         
         if not new_issues:
@@ -917,10 +927,11 @@ Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda 
         
         current_agenda_text = json.dumps(current_agenda, indent=2, ensure_ascii=False)
         new_issues_text = self._format_issues_for_prompt(new_issues)
-        
+        primary_language = primary_language.lower()
         system_prompt = (
             "You are an expert secretary for Gram Sabha meetings and deeply familiar with Indian Panchayat-level issues and regional languages.\n\n"
-            "Your task is to update a structured meeting agenda by integrating new issues. You must provide the updated agenda in English, Hindi, and a requested primary language.\n\n"
+            "Your task is to update a structured meeting agenda from a list of issues, clustering similar issues together. "
+            "You must provide the updated agenda in English, Hindi, and a requested primary language.\n\n"
 
             "1. Input:\n"
             "- A current agenda (as a JSON-formatted string).\n"
@@ -933,22 +944,28 @@ Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda 
             '  "hindi_agenda": "The updated list of structured agenda items in Hindi"\n'
             "}\n\n"
 
-            "3. Agenda Item Structure (Each item in the list must be a JSON object):\n"
+            "3. Agenda Item Structure (Each item in the list must be a JSON object with the following 4 fields:\n"
             "{\n"
             '   "title": "Very short problem summary (5-8 words)",\n'
             '   "description": "1-line plain language explanation",\n'
+            '   "linked_issues": [ "issue_id1", "issue_id2" ],\n'
             '   "issue_ids": {\n'
-            '        "issue_id": "a 2-3 word summary of issue"\n'
+            '        "issue_id1": "short label",\n'
+            '        "issue_id2": "short label"\n'
             '    }\n'
             "}\n\n"
 
+            "Both `linked_issues` and `issue_ids` are mandatory for each agenda item.\n"
+            "`linked_issues` should be an array of valid issue IDs.\n"
+            "`issue_ids` must be a mapping from issue ID → short summary of that specific issue (2-4 words).\n\n"
+
             "4. Strict Rules:\n"
-            "1. Integrate new issues into EXISTING agenda items if they match thematically.\n"
-            "2. Create NEW items ONLY for truly unique issues that don't fit existing categories.\n"
-            "3. Preserve all original issue IDs without duplication across the old and new items.\n"
-            "4. Keep the structure identical to the input where possible.\n"
-            "5. Never lose or duplicate any issue IDs.\n"
-            "6. Make descriptions clear and simple for villagers to understand.\n"
+            "1. GROUP similar issues by matching their core problems (ignore minor wording differences).\n"
+            "2. For each group, create ONE agenda item with proper `linked_issues` and `issue_ids`.\n"
+            "3. Never split the same issue ID across multiple items.\n"
+            "4. Keep titles specific (include location if relevant).\n"
+            "5. Make descriptions clear and simple for villagers to understand.\n"
+            "6. Ensure consistency across all language versions.\n"
             "7. Return ONLY the JSON object, no additional text or explanations."
         )
 
@@ -961,16 +978,16 @@ Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda 
                 "role": "user",
                 "content": f"""Update this agenda by integrating the new issues:
 
-Current Agenda (structured format):
-{current_agenda_text}
+                Current Agenda (structured format):
+                {current_agenda_text}
 
-New Issues to Integrate:
-{new_issues_text}
+                New Issues to Integrate:
+                {new_issues_text}
 
-Primary language requested: {primary_language}
+                Primary language requested: {primary_language}
 
-Create updated, well-structured agendas that properly integrate the new issues.
-Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda keys."""
+                Create updated, well-structured agendas that properly integrate the new issues.
+                Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda keys."""
             }
         ]
 
@@ -1025,6 +1042,7 @@ Description: {issue.get('description', issue.get('transcription', 'No descriptio
 
     def _parse_multilingual_response(self, content: str, primary_language: str, content_type: str) -> Optional[Dict[str, str]]:
         """Parse multilingual response from LLM"""
+        primary_language = primary_language.lower()
         try:
             if not content:
                 logger.error(f"Empty content received for multilingual {content_type}")
@@ -1077,20 +1095,21 @@ Description: {issue.get('description', issue.get('transcription', 'No descriptio
 
     def _convert_agenda_to_multilingual(self, agenda_text: str, primary_language: str) -> Dict[str, str]:
         """Convert existing agenda text to multiple languages"""
+        primary_language = primary_language.lower()
         messages = [
             {
                 "role": "system",
                 "content": f"""Convert the given agenda to multiple languages.
-Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda keys.
-Maintain the same structure and content, just translate appropriately."""
+                Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda keys.
+                Maintain the same structure and content, just translate appropriately."""
             },
             {
                 "role": "user",
                 "content": f"""Convert this agenda to English and Hindi:
 
-{agenda_text}
+                {agenda_text}
 
-Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda keys."""
+                Return as JSON with {primary_language}_agenda, english_agenda, and hindi_agenda keys."""
             }
         ]
 

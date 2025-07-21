@@ -5,6 +5,9 @@ export const fetchIssueSummary = async (panchayatId) => {
         const response = await api.get(`/summaries/panchayat/${panchayatId}`);
         return response.data;
     } catch (error) {
+        if(error.response && error.response.status === 404) {
+            return { success: false, message: 'No summary found for this panchayat.' };
+        }
         throw error.response ? error.response.data : new Error('Network error');
     }
 };

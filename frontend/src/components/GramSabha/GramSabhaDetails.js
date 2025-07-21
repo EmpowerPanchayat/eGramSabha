@@ -353,7 +353,6 @@ const GramSabhaDetails = ({ meetingId, user }) => {
     .then(() => document.body.removeChild(container));
 };
 
-
   const handleDownloadAttendanceReportCSV = () => {
     if (!attendanceStats || !meeting || !attendance) return;
 
@@ -486,7 +485,7 @@ const GramSabhaDetails = ({ meetingId, user }) => {
               <p><strong>${strings.linkedIssues}:</strong></p>
               <table border="1" cellpadding="4" cellspacing="0" style="border-collapse: collapse; width: 100%; font-size: 11px; margin-bottom: 10px; table-layout: fixed;">
                 <thead>
-                  <tr>
+                  <tr style="page-break-inside: avoid;">
                     <th style="width: 10%;text-align: center;">${strings.serialNo}</th>
                     <th style="width: 70%;">${strings.issueDescription}</th>
                     <th style="width: 20%; text-align: center; vertical-align: top;">${strings.issueOwner}</th>
@@ -494,7 +493,7 @@ const GramSabhaDetails = ({ meetingId, user }) => {
                 </thead>
                 <tbody>
                   ${item.linkedIssues.map((issue, idx) => `
-                    <tr>
+                    <tr style="page-break-inside: avoid;">
                       <td style="text-align: center;">${idx + 1}</td>
                       <td>
                         ${language === "hi"
@@ -514,6 +513,7 @@ const GramSabhaDetails = ({ meetingId, user }) => {
             <p><strong>${i + 1}. ${title}</strong></p>
             <p>${desc}</p>
             ${linkedIssues}
+            <br>
           `;
         }).join("")
       : `<p>${strings.noAgenda}</p>`;
@@ -583,6 +583,24 @@ const GramSabhaDetails = ({ meetingId, user }) => {
         {strings.meetingNotFound}
       </Alert>
     );
+  }
+
+  let showTranslationAlert = false;
+
+  const supportedLanguages = ['en', 'hi', 'hindi'];
+  const isMissingTranslation = (field) => {
+    if (!field || typeof field !== 'object') return false;
+
+    const hasAtLeastOneFilled = Object.values(field).some(val => val?.trim());
+    const isMissingAnyLang = supportedLanguages.some(lang => !field[lang]?.trim());
+
+    return hasAtLeastOneFilled && isMissingAnyLang;
+  };
+
+  if (meeting.agenda?.some(item =>
+    isMissingTranslation(item.title) || isMissingTranslation(item.description)
+  )) {
+    showTranslationAlert = true;
   }
 
   return (
@@ -1037,13 +1055,18 @@ const GramSabhaDetails = ({ meetingId, user }) => {
             <Paper variant="outlined" sx={{ p: 3, bgcolor: 'background.default' }}>
               {meeting.agenda && Array.isArray(meeting.agenda) && meeting.agenda.length > 0 ? (
                 <Box>
+                  {showTranslationAlert && (
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      {strings.translationInProgress}
+                    </Alert>
+                  )}
                   {meeting.agenda.map((item, index) => (
                     <Box key={item._id || index} sx={{ mb: 2, pb: 2, borderBottom: index < meeting.agenda.length - 1 ? '1px solid #e0e0e0' : 'none' }}>
                       <Typography variant="subtitle1" fontWeight="medium" gutterBottom>
                         {getMultilingualText(item, 'title') || `Agenda Item ${index + 1}`}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {getMultilingualText(item, 'description') || 'No description available'}
+                        {getMultilingualText(item, 'description') || strings.noDescription}
                       </Typography>
                       {item.linkedIssues && item.linkedIssues.length > 0 && (
                         <Typography variant="caption" color="primary" sx={{ mt: 0.5, display: 'block' }}>

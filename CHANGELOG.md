@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   - Admins can review, edit, and finalize agenda items.
   - Improved meeting detail view with final agenda integration.
   ([#78](https://github.com/EmpowerPanchayat/eGramSabha/issues/78), resolves [#79](https://github.com/EmpowerPanchayat/eGramSabha/issues/79), [#80](https://github.com/EmpowerPanchayat/eGramSabha/issues/80), [#81](https://github.com/EmpowerPanchayat/eGramSabha/issues/81), [#94](https://github.com/EmpowerPanchayat/eGramSabha/issues/94))
+- Add Agenda Item button on issue summary screen.([#97](https://github.com/EmpowerPanchayat/eGramSabha/issues/97))
 
 ### Removed
 
@@ -40,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Fix data issue on update in Registration View ([#69](https://github.com/EmpowerPanchayat/eGramSabha/pull/69))
 - Filtering of issues on the basis of Status ([#84](https://github.com/EmpowerPanchayat/eGramSabha/issues/84))
 - Attendance progress bar and message display.([#74](https://github.com/EmpowerPanchayat/eGramSabha/issues/74))
+- Language casing to the requests sent to LLM.([#103](https://github.com/EmpowerPanchayat/eGramSabha/issues/103))
+- Agenda PDF content splitting issue.([#106](https://github.com/EmpowerPanchayat/eGramSabha/issues/106))
 
 ### Changed
 
