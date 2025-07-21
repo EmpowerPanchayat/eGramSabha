@@ -245,7 +245,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
         return items.map(item => ({
             ...item,
             createdByType: item.createdByType || 'SYSTEM',
-            createdByUserId: item.createdByType === 'USER' && item.createdByUserId ? item.createdByUserId : undefined
+            createdByUserId: item.createdByType === 'USER' && item.createdByUserId ? item.createdByUserId : null
         }));
     };
 
@@ -354,7 +354,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
                 loadAgendaItems();
             }
         } catch (err) {
-            console.error('❌ Error in handleSubmit:', err);
+            console.error('Error in handleSubmit:', err);
             if (err.message === 'Invalid token' || err.message === 'Token has expired') {
                 logout();
                 setError('Your session has expired. Please login again.');

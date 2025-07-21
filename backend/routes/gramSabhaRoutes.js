@@ -3,7 +3,7 @@ const router = express.Router();
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
 const fs = require("fs");
-const GramSabha = require("../models/GramSabha");
+const GramSabha = require("../models/gramSabha");
 const RSVP = require("../models/rsvp");
 const auth = require("../middleware/auth");
 const { isPanchayatPresident } = require("../middleware/roleCheck");
@@ -172,7 +172,9 @@ router.post(
         parsedAgenda = parsedSelectedItems.map(item => ({
           title: item.title,
           description: item.description,
-          linkedIssues: item.linkedIssues || []
+          linkedIssues: item.linkedIssues || [],
+          createdByType: item.createdByType || 'SYSTEM',
+          createdByUserId: item.createdByType === 'USER' ? item.createdByUserId : null
         }));
       }
 
@@ -205,7 +207,9 @@ router.post(
       parsedAgenda = parsedAgenda.map(item => ({
         title: item.title,
         description: item.description,
-        linkedIssues: item.linkedIssues || []
+        linkedIssues: item.linkedIssues || [],
+        createdByType: item.createdByType || 'SYSTEM',
+        createdByUserId: item.createdByType === 'USER' ? item.createdByUserId : null
       }));
 
       // Generate default title if not provided
