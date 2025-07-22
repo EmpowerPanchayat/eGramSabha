@@ -769,63 +769,63 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   );
 
   const handleJoinMeeting = async (meetingDetails) => {
-    try {
-      const hostUser = {
-        displayName: "SDKHostUser",
-        role: "host",
-        token: meetingDetails.hostToken,
-      };
+    //domain whitelisting required for websdk , skipping as per now
+    // try {
+    //   const hostUser = {
+    //     displayName: "SDKHostUser",
+    //     role: "host",
+    //     token: meetingDetails.hostToken,
+    //   };
 
-      // Step 1: Join as host using SDK
-      const meetingData = {
-        meetingId: meetingDetails.jiomeetId,
-        meetingPin: meetingDetails.roomPIN,
-        userDisplayName: hostUser.displayName,
-        config: {
-          userRole: hostUser.role,
-          token: hostUser.token,
-        },
-      };
+    //   // Step 1: Join as host using SDK
+    //   const meetingData = {
+    //     meetingId: meetingDetails.jiomeetId,
+    //     meetingPin: meetingDetails.roomPIN,
+    //     userDisplayName: hostUser.displayName,
+    //     config: {
+    //       userRole: hostUser.role,
+    //       token: hostUser.token,
+    //     },
+    //   };
 
-      const meetingUrl = await jmClient.joinMeeting(meetingData);
-      console.log("Host joined meeting:", meetingUrl);
+    //   const meetingUrl = await jmClient.joinMeeting(meetingData);
 
-      // Step 2: Start recording
-      await jmClient.startRecording();
-      console.log("Recording started");
-      window.open(meetingDetails.meetingLink, "_blank");
-      // Step 3: Poll every 2s for other participants (max wait 30s)
-      let attempts = 0;
-      const maxAttempts = 15;
-      const checkInterval = 2000;
+    //   // Step 2: Start recording
+    //   await jmClient.startRecording();
+    //   console.log("Recording started");
 
-      const intervalId = setInterval(async () => {
-        try {
-          const remotePeers = jmClient.remotePeers;
+    //   // Step 3: Poll every 2s for other participants (max wait 30s)
+    //   let attempts = 0;
+    //   const maxAttempts = 15;
+    //   const checkInterval = 2000;
 
-          console.log("Participants in meeting:", remotePeers);
+    //   const intervalId = setInterval(async () => {
+    //     try {
+    //       const remotePeers = jmClient.remotePeers;
 
-          if (remotePeers.length > 0) {
-            clearInterval(intervalId);
+    //       console.log("Participants in meeting:", remotePeers);
 
-            // Step 4: Leave the meeting once someone else joins
-            await jmClient.leaveMeeting();
-          } else if (++attempts >= maxAttempts) {
-            clearInterval(intervalId);
-            console.warn("Timeout: No participant joined within 30 seconds.");
-          }
-        } catch (pollErr) {
-          clearInterval(intervalId);
-          console.error("Error checking participants:", pollErr);
-        }
-      }, checkInterval);
-    } catch (error) {
-      console.error("Error during meeting flow:", error);
-      alert(
-        "Meeting failed. Reason: " + (error.message || "Unknown error occurred")
-      );
-    }
+    //       if (remotePeers.length > 0) {
+    //         clearInterval(intervalId);
 
+    //         // Step 4: Leave the meeting once someone else joins
+    //         await jmClient.leaveMeeting();
+    //       } else if (++attempts >= maxAttempts) {
+    //         clearInterval(intervalId);
+    //         console.warn("Timeout: No participant joined within 30 seconds.");
+    //       }
+    //     } catch (pollErr) {
+    //       clearInterval(intervalId);
+    //       console.error("Error checking participants:", pollErr);
+    //     }
+    //   }, checkInterval);
+    // } catch (error) {
+    //   console.error("Error during meeting flow:", error);
+    //   alert(
+    //     "Meeting failed. Reason: " + (error.message || "Unknown error occurred")
+    //   );
+    // }
+    window.open(meetingDetails.meetingLink, "_blank");
     const result = await startJioMeetRecording(
       meetingDetails.jiomeetId,
       meetingDetails.roomPIN
