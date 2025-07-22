@@ -16,8 +16,9 @@ const User = require("../models/User");
 const { autoUpdateMeetingStatus } = require("../utils/meetingUtils");
 
 const { JIOMEET_APP_ID, JIOMEET_API, BACKEND_URL } = process.env;
-const privateKey = fs.readFileSync(process.env.PRIVATE_KEY_PATH, "utf8");
-const publicKey = fs.readFileSync(process.env.PUBLIC_KEY_PATH, "utf8");
+const privateKey = process.env.PRIVATE_KEY.replace(/\\n/g, "\n");
+const publicKey = process.env.PUBLIC_KEY.replace(/\\n/g, "\n");
+
 // Configure multer for memory storage
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -292,7 +293,7 @@ router.post(
       let meetingLink = null;
 
       // Try to create JioMeet meeting if configuration is available
-      if (JIOMEET_APP_ID && JIOMEET_API && process.env.PRIVATE_KEY_PATH) {
+      if (JIOMEET_APP_ID && JIOMEET_API) {
         try {
           const jioMeetRequestBody = {
             topic: generatedTitle,
@@ -559,8 +560,7 @@ router.patch(
           updates.includes("time") ||
           updates.includes("scheduledDurationHours")) &&
         JIOMEET_APP_ID &&
-        JIOMEET_API &&
-        process.env.PRIVATE_KEY_PATH
+        JIOMEET_API
       ) {
         try {
           // Calculate end time based on dateTime and duration
