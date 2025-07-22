@@ -442,7 +442,6 @@ export const downloadJioMeetMRecording = async (videoUrl, filename) => {
  */
 export const startJioMeetRecording = async (jiomeetId, roomPIN) => {
   try {
-    await new Promise((resolve) => setTimeout(resolve, 60000));
     const response = await api.post("/gram-sabha/recording/start", {
       jiomeetId,
       roomPIN,
