@@ -5,11 +5,6 @@ const transcriptionService = require('../services/transcriptionService');
 const { initiateSummaryGeneration, fetchSummaryResults, retryFailedSummaryRequests } = require('./summaryCronJobs');
 const { agendaTranslationCron } = require('./agendaTranslationCron');
 
-// Run every 30 minutes
-const updateMeetingStatuses = cron.schedule('*/30 * * * *', async () => {
-    await updateAllMeetingStatuses();
-});
-
 // Check transcription status every 5 minutes
 const checkTranscriptionStatus = cron.schedule('*/1 * * * *', async () => {
     try {
@@ -177,7 +172,6 @@ const retryTranscriptionInitiation = cron.schedule('*/1 * * * *', async () => {
 // Start the cron jobs
 const startCronJobs = () => {
     agendaTranslationCron.start();
-    updateMeetingStatuses.start();
     checkTranscriptionStatus.start();
     retryFailedTranscriptions.start();
     retryTranscriptionInitiation.start();
@@ -189,7 +183,6 @@ const startCronJobs = () => {
 // Stop the cron jobs
 const stopCronJobs = () => {
     agendaTranslationCron.stop();
-    updateMeetingStatuses.stop();
     checkTranscriptionStatus.stop();
     retryFailedTranscriptions.stop();
     retryTranscriptionInitiation.stop();
@@ -204,7 +197,6 @@ module.exports = {
     checkTranscriptionStatus,
     retryFailedTranscriptions,
     retryTranscriptionInitiation,
-    updateMeetingStatuses,
     initiateSummaryGeneration,
     fetchSummaryResults,
     retryFailedSummaryRequests
