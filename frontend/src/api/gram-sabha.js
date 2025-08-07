@@ -294,16 +294,16 @@ export const getRSVPStats = async (meetingId) => {
  * @param {string} panchayatId - Panchayat ID
  * @returns {Promise} - API response
  */
-export const fetchTodaysMeetings = async (panchayatId) => {
+export const fetchActiveMeetings = async (panchayatId) => {
   try {
     const response = await api.get(
-      `/gram-sabha/panchayat/${panchayatId}/today`
+      `/gram-sabha/panchayat/${panchayatId}/active`
     );
     return response.data;
   } catch (error) {
-    console.error("API Error in fetchTodaysMeetings:", error);
+    console.error("API Error in fetchActiveMeetings:", error);
     throw (
-      error.response?.data || { message: "Failed to fetch today's meetings" }
+      error.response?.data || { message: "Failed to fetch active meetings" }
     );
   }
 };

@@ -7,6 +7,7 @@ const translations = {
     error: "Error",
     success: "Success",
     submit: "Submit",
+    yesSubmit: "Yes, Submit",
     add: "Add",
     cancel: "Cancel",
     save: "Save",
@@ -25,6 +26,9 @@ const translations = {
     block: "Block", // Added
     address: "Address",
     mobileNumber: "Mobile Number",
+    selectAgendaDiscussed: "Select agenda items to mark as discussed:",
+    confirmSubmission: "Confirm Submission",
+    agendaDiscussedConfirmation: "Are you sure you want to submit this agenda? Linked issues will be updated accordingly.",
 
     // ===== NEW: Location-based login error messages =====
     invalidLgdCode:
@@ -432,6 +436,7 @@ const translations = {
 
     // TodaysMeetingsBanner
     todaysMeeting: "Today's Meeting",
+    activeMeetings: "Active Meetings",
     noMeetingsToday: "No meetings scheduled for today",
     markAttendance: "Mark Attendance",
     attendanceStats: "Attendance Statistics",
@@ -506,6 +511,7 @@ const translations = {
     error: "त्रुटि",
     success: "सफलता",
     submit: "जमा करें",
+    yesSubmit: "हाँ, जमा करें",
     "add": "जोड़ें",
     cancel: "रद्द करें",
     save: "सहेजें",
@@ -524,6 +530,9 @@ const translations = {
     block: "ब्लॉक", // Added
     address: "पता",
     mobileNumber: "मोबाइल नंबर",
+    selectAgendaDiscussed: "चर्चा के लिए एजेंडा आइटम चुनें:",
+    confirmSubmission: "जमा की पुष्टि करें",
+    agendaDiscussedConfirmation: "क्या आप सुनिश्चित हैं कि आप इस एजेंडा को जमा करना चाहते हैं? जुड़े मुद्दे तदनुसार अपडेट किए जाएंगे।",
 
     // ===== NEW: Location-based login error messages =====
     invalidLgdCode:
@@ -968,6 +977,7 @@ const translations = {
 
     // TodaysMeetingsBanner
     todaysMeeting: "आज की बैठक",
+    activeMeetings: "सक्रिय बैठकें",
     noMeetingsToday: "आज के लिए कोई बैठक निर्धारित नहीं है",
     markAttendance: "उपस्थिति दर्ज करें",
     attendanceStats: "उपस्थिति आंकड़े",

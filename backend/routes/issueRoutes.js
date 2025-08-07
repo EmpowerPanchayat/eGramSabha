@@ -895,4 +895,17 @@ router.post('/batch-minimal', anyAuthenticated, async (req, res) => {
   }
 });
 
+router.post('/update-status', async (req, res) => {
+  const { issueIds, status } = req.body;
+  try {
+    await Issue.updateMany(
+      { _id: { $in: issueIds } },
+      { $set: { status } }
+    );
+    res.status(200).json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;
