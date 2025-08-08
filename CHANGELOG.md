@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   - Improved meeting detail view with final agenda integration.
   ([#78](https://github.com/EmpowerPanchayat/eGramSabha/issues/78), resolves [#79](https://github.com/EmpowerPanchayat/eGramSabha/issues/79), [#80](https://github.com/EmpowerPanchayat/eGramSabha/issues/80), [#81](https://github.com/EmpowerPanchayat/eGramSabha/issues/81), [#94](https://github.com/EmpowerPanchayat/eGramSabha/issues/94))
 - Add Agenda Item button on issue summary screen.([#97](https://github.com/EmpowerPanchayat/eGramSabha/issues/97))
+- Issue lifecycle after End Meeting.([#125](https://github.com/EmpowerPanchayat/eGramSabha/issues/125))
 
 ### Removed
 
