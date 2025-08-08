@@ -33,6 +33,7 @@ import {
   Snackbar,
   DialogContentText,
   Tooltip,
+  Checkbox
 } from "@mui/material";
 import {
   Event as EventIcon,
@@ -50,7 +51,7 @@ import {
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import StopIcon from "@mui/icons-material/Stop";
 import {
-  fetchTodaysMeetings,
+  fetchActiveMeetings,
   updateGramSabhaStatus,
   startJioMeetRecording,
 } from "../../api/gram-sabha";
@@ -59,10 +60,15 @@ import GramSabhaDetails from "./GramSabhaDetails";
 import { FaceMesh } from "@mediapipe/face_mesh";
 import { Camera } from "@mediapipe/camera_utils";
 import * as faceapi from "face-api.js";
+import STATUS_KEY_VALUE_MAP from "../../constants/issueStatus";
+import { fetchIssueSummary, updateAgendaSummary } from '../../api/summary';
+import "slick-carousel/slick/slick.css";
+import "slick-carousel/slick/slick-theme.css";
+import MeetingSlider from "../MeetingSlider";
 
 const TodaysMeetingsBanner = ({ panchayatId, user }) => {
-  const { strings } = useLanguage();
-  const [todaysMeetings, setTodaysMeetings] = useState([]);
+  const { language, strings } = useLanguage();
+  const [activeMeetings, setActiveMeetings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedMeeting, setSelectedMeeting] = useState(null);
@@ -79,6 +85,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [selectedCameraIndex, setSelectedCameraIndex] = useState(0);
+  let [meeting, setMeeting] = useState({});
   const [attendanceMessage, setAttendanceMessage] = useState({
     type: "",
     text: "",
@@ -110,6 +117,15 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     movement: { verified: false, count: 0 },
   });
   const [activeFeedback, setActiveFeedback] = useState(null);
+  const [showAgendaDialog, setShowAgendaDialog] = useState(false);
+  const [allAgendaItems, setAllAgendaItems] = useState([]);
+  const [selectedAgendaItems, setSelectedAgendaItems] = useState([]);
+  const [loadingAgenda, setLoadingAgenda] = useState(false);
+  const [confirmAgendaSubmitOpen, setConfirmAgendaSubmitOpen] = useState(false);
+  const [currentMeetingIndex, setCurrentMeetingIndex] = useState(0);
+  const [dragStartX, setDragStartX] = useState(0);
+  const [dragCurrentX, setDragCurrentX] = useState(0);
+  const [isDraggingBanner, setIsDraggingBanner] = useState(false);
 
   const faceMeshId = useRef(0);
   const videoRef = useRef(null);
@@ -620,16 +636,12 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
       setLoading(true);
       setError("");
 
-      const data = await fetchTodaysMeetings(panchayatId);
+      const data = await fetchActiveMeetings(panchayatId);
       // Filter out meetings with status "CONCLUDED"
       const activeMeetings = data.filter(
         (meeting) => meeting.status !== "CONCLUDED"
       );
-      setTodaysMeetings(activeMeetings);
-
-      if (activeMeetings.length > 0) {
-        loadAttendanceStats(activeMeetings[0]._id);
-      }
+      setActiveMeetings(activeMeetings);
     } catch (error) {
       console.error("Error loading meetings:", error);
       setError(error.message || "Failed to load today's meetings");
@@ -638,44 +650,37 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     }
   }, [panchayatId]);
 
+  useEffect(() => {
+    const loadAttendance = async () => {
+        await loadAttendanceStats();
+    };
+    loadAttendance();
+  }, [activeMeetings]);
+
   const loadAttendanceStats = useCallback(
-    async (meetingId) => {
+    async () => {
       try {
-        const response = await fetch(
-          `${API_URL}/gram-sabha/${meetingId}/attendance-stats`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch attendance statistics");
-        }
-
-        const data = await response.json();
-
-        setAttendanceStats({
+        const allAttendanceStats = {};
+        activeMeetings.forEach((meeting) => {
+        if (meeting.attendanceStats) {
+          const data = meeting.attendanceStats;
+          allAttendanceStats[meeting._id] = {
           total: data.totalRegistered || 0,
           totalVoters: data.totalVoters || 0,
           present: data.present || 0,
           quorum: data.quorumRequired || 0,
           quorumMet: (data.present || 0) >= (data.quorumRequired || 0),
-        });
+        };
+      }
+    });
+
+    setAttendanceStats(allAttendanceStats);
       } catch (error) {
         console.error("Error loading attendance stats:", error);
-        setAttendanceStats({
-          total: 0,
-          totalVoters: 0,
-          present: 0,
-          quorum: 0,
-          quorumMet: false,
-        });
+        setAttendanceStats({});
       }
     },
-    [API_URL]
+    [API_URL, activeMeetings]
   );
 
   const handleStartRecording = useCallback(
@@ -697,7 +702,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
       });
       setShowMeetingDetails(true);
     },
-    [loadTodaysMeetings]
+    [loadTodaysMeetings, activeMeetings]
   );
 
   const copyToClipboard = useCallback(() => {
@@ -719,15 +724,99 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   const handleEndMeeting = useCallback(async () => {
     if (!meetingDetails?.gramSabhaId) return;
     try {
+      setLoadingAgenda(true);
+      const res = await fetch(`${API_URL}/gram-sabha/${meetingDetails.gramSabhaId}`);
+      const agenda = (await res.json()).agenda || [];
+      setAllAgendaItems(agenda || []);
+      setSelectedAgendaItems(agenda || []);
+      setShowAgendaDialog(true);
+    } catch (_) {
+      setSnackbarMessage("Failed to load agenda items.");
+      setSnackbarOpen(true);
+    } finally {
+      setLoadingAgenda(false);
+    }
+  }, [meetingDetails]);
+
+  const executeAgendaSubmit = async () => {
+    try {
+      const selectedIds = new Set(selectedAgendaItems.map((item) => item._id));
+      const itemsToResummarize = [];
+
+      await Promise.all(
+        allAgendaItems.map(async (item) => {
+          const isSelected = selectedIds.has(item._id);
+          const newStatus = isSelected
+            ? STATUS_KEY_VALUE_MAP["statusDiscussedInGramSabha"]
+            : STATUS_KEY_VALUE_MAP["statusReported"];
+
+          if (!isSelected) {
+            const agendaItemToResummarize = {
+            ...item,
+            linkedIssues: item.linkedIssues?.map(issue => issue._id),
+            };
+            itemsToResummarize.push(agendaItemToResummarize);
+          }
+
+          if (item.linkedIssues && item.linkedIssues.length > 0) {
+            await fetch(`${API_URL}/issues/update-status`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${localStorage.getItem("token")}`,
+              },
+              body: JSON.stringify({
+                issueIds: item.linkedIssues,
+                status: newStatus,
+              }),
+            });
+          }
+        })
+      );
+
+    // Re-add deselected agenda items to the summary without overwriting others
+    if (itemsToResummarize.length > 0) {
+      const existingSummary = await fetchIssueSummary(panchayatId);
+      const existingAgendaItems = existingSummary?.summary?.agendaItems || [];
+
+      // Merge and deduplicate using a Map
+      const agendaMap = new Map();
+      for (const item of existingAgendaItems) {
+        agendaMap.set(item._id, item);
+      }
+      for (const item of itemsToResummarize) {
+        agendaMap.set(item._id, item);
+      }
+
+      const mergedAgendaItems = Array.from(agendaMap.values());
+      await updateAgendaSummary(panchayatId, mergedAgendaItems);
+    }
+
       await updateGramSabhaStatus(meetingDetails.gramSabhaId, "CONCLUDED");
       await loadTodaysMeetings();
-    } catch (_) {
-      setSnackbarMessage("Failed to end meeting. Please try again.");
+      setShowAgendaDialog(false);
+      setShowMeetingDetails(false);
+      setConfirmAgendaSubmitOpen(false);
+    } catch (err) {
+      console.error("Error updating agenda/issue status:", err);
+      setSnackbarMessage("Failed to submit agenda updates.");
       setSnackbarOpen(true);
-      return;
+      setConfirmAgendaSubmitOpen(false);
     }
-    setShowMeetingDetails(false);
-  }, [meetingDetails, loadTodaysMeetings]);
+  };
+
+  // Helper to get multilingual text
+  const getMultilingualText = (item, field) => {
+    if (!item || !item[field]) return '';
+    let textObj = item[field];
+    if (textObj && typeof textObj === 'object' && textObj.get) {
+      textObj = Object.fromEntries(textObj);
+    }
+    if (typeof textObj === 'object' && textObj !== null) {
+      return textObj[language] || textObj.en || textObj.hi || textObj.hindi || '';
+    }
+    return textObj || '';
+  };
 
   // Fetch only settings.camera for config before opening attendance dialog
   const fetchPlatformConfig = useCallback(async () => {
@@ -759,13 +848,14 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   // --- MODIFIED handleMarkAttendance ---
   const handleMarkAttendance = useCallback(
     async (meetingId) => {
+      setMeeting(activeMeetings.find((m) => m._id === meetingId));
       await fetchPlatformConfig();
       setVoterIdLastFour("");
       setAttendanceMessage({ type: "", text: "" });
-      loadAttendanceStats(meetingId);
+      await loadAttendanceStats();
       setShowAttendanceForm(true);
     },
-    [fetchPlatformConfig, loadAttendanceStats]
+    [fetchPlatformConfig, loadAttendanceStats, activeMeetings]
   );
 
   const handleJoinMeeting = async (meetingDetails) => {
@@ -837,7 +927,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     console.log("Recording started. History ID:", historyId);
   };
 
-  const handleSubmitAttendance = useCallback(async () => {
+  const handleSubmitAttendance = useCallback(async (meeting) => {
     if (!voterIdLastFour || voterIdLastFour.length !== 4) {
       setAttendanceMessage({
         type: "error",
@@ -897,7 +987,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
       const imageDataURL = canvas.toDataURL("image/jpeg");
 
       const response = await fetch(
-        `${API_URL}/gram-sabha/${todaysMeetings[0]._id}/mark-attendance`,
+        `${API_URL}/gram-sabha/${meeting._id}/mark-attendance`,
         {
           method: "POST",
           headers: {
@@ -925,13 +1015,13 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
         text: "Attendance marked successfully!",
       });
 
-      await loadAttendanceStats(todaysMeetings[0]._id);
+      await loadAttendanceStats();
       setVoterIdLastFour("");
       stopCamera();
 
       if (
-        attendanceStats.present + 1 >= attendanceStats.quorum &&
-        !attendanceStats.quorumMet
+        attendanceStats[meeting._id]?.present + 1 >= attendanceStats[meeting._id]?.quorum &&
+        !attendanceStats[meeting._id]?.quorumMet
       ) {
         await loadTodaysMeetings();
       }
@@ -951,7 +1041,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     zoomLevel,
     cameraPosition,
     API_URL,
-    todaysMeetings,
+    activeMeetings,
     panchayatId,
     attendanceStats,
     loadAttendanceStats,
@@ -959,7 +1049,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     loadTodaysMeetings,
   ]);
 
-  if (loading && todaysMeetings.length === 0) {
+  if (loading && activeMeetings.length === 0) {
     return (
       <Paper
         elevation={0}
@@ -978,7 +1068,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     );
   }
 
-  if (todaysMeetings.length === 0) {
+  if (activeMeetings.length === 0) {
     return (
       <Paper
         elevation={1}
@@ -997,101 +1087,33 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
     );
   }
 
-  const meeting = todaysMeetings[0];
-  const quorumMet = attendanceStats?.quorumMet;
+  meeting = activeMeetings[currentMeetingIndex];
 
   return (
-    <Box sx={{ mb: 3, width: "100%", display: "flex" }}>
-      <Card
-        elevation={1}
-        sx={{
-          borderRadius: 2,
-          overflow: "hidden",
-          border: "1px solid",
-          borderColor: "divider",
-          width: "100%",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
+    <Box sx={{ mb: 3, width: "100%", display: "flex", flexDirection: "column" }}>
         <CardHeader
           sx={{
             bgcolor: "primary.main",
             color: "white",
             py: 1,
-            "& .MuiCardHeader-title": {
-              fontSize: "1rem",
-              fontWeight: "bold",
-            },
           }}
-          title={strings.todaysMeeting}
+          title={
+            <Typography variant="h3" color="white">
+              {strings.activeMeetings}
+            </Typography>
+          }
           disableTypography
         />
 
-        <CardContent sx={{ px: 3, py: 2 }}>
-          <Typography
-            variant="h6"
-            fontWeight="bold"
-            color="text.primary"
-            gutterBottom
-          >
-            {meeting.title}
-          </Typography>
-
-          <Stack spacing={1.5} sx={{ mb: 2 }}>
-            <Box display="flex" alignItems="center" gap={1}>
-              <LocationIcon fontSize="small" color="primary" />
-              <Typography variant="body1" color="text.secondary">
-                {meeting.location}
-              </Typography>
-            </Box>
-
-            <Box display="flex" alignItems="center" gap={1}>
-              <EventIcon fontSize="small" color="primary" />
-              <Typography variant="body1" color="text.secondary">
-                {new Date(meeting.dateTime).toLocaleString("en-IN", {
-                  day: "numeric",
-                  month: "long",
-                  hour: "numeric",
-                  minute: "numeric",
-                  hour12: true,
-                })}
-              </Typography>
-            </Box>
-          </Stack>
-
-          <Box display="flex" justifyContent="flex-end" gap={2} sx={{ mt: 1 }}>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={() => handleMarkAttendance(meeting._id)}
-              startIcon={<HowToRegIcon />}
-              sx={{ px: 3 }}
-            >
-              {strings.markAttendance}
-            </Button>
-            {isRecording === false && (
-              <Button
-                variant="contained"
-                color="success"
-                onClick={() =>
-                  handleStartRecording(
-                    meeting._id,
-                    meeting.jioMeetData?.jiomeetId,
-                    meeting.meetingLink,
-                    meeting.jioMeetData?.roomPIN,
-                    meeting.jioMeetData?.hostToken
-                  )
-                }
-                startIcon={<VideocamIcon />}
-                disabled={!quorumMet}
-              >
-                {isStarting ? "Starting..." : strings.showMeetingDetails}
-              </Button>
-            )}
-          </Box>
-        </CardContent>
-      </Card>
+      {/* Render all banners side by side, but only show one at a time */}
+      <MeetingSlider
+        meetings={activeMeetings}
+        onMarkAttendance={handleMarkAttendance}
+        onShowMeetingDetails={handleStartRecording}
+        isStarting={isStarting}
+        attendanceStats={attendanceStats}
+        setCurrentMeetingIndex={setCurrentMeetingIndex}
+      />
 
       {/* Meeting Details Dialog */}
       {showMeetingDetails && meetingDetails && (
@@ -1142,7 +1164,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
         </Dialog>
       )}
 
-      {/* Attendance Dialog */}
+      {meeting && showAttendanceForm && (
       <Dialog
         open={showAttendanceForm}
         onClose={() => {
@@ -1159,7 +1181,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
             alignItems: "center",
           }}
         >
-          <Typography variant="h6">{strings.markAttendance}</Typography>
+          <Typography variant="body1">{strings.markAttendance}</Typography>
           <IconButton
             onClick={() => {
               setShowAttendanceForm(false);
@@ -1171,7 +1193,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
         </DialogTitle>
 
         <DialogContent>
-          {attendanceStats && (
+          {attendanceStats[meeting._id] && (
             <Box sx={{ mb: 4, mt: 2 }}>
               <Typography variant="h6" gutterBottom>
                 {strings.attendanceStats}
@@ -1196,7 +1218,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                         color="info.main"
                         fontWeight="bold"
                       >
-                        {attendanceStats.totalVoters || 0}
+                        {attendanceStats[meeting._id]?.totalVoters || 0}
                       </Typography>
                       <Typography
                         variant="body2"
@@ -1235,7 +1257,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                         color="primary.main"
                         fontWeight="bold"
                       >
-                        {attendanceStats.total}
+                        {attendanceStats[meeting._id]?.total}
                       </Typography>
                       <Typography
                         variant="body2"
@@ -1274,7 +1296,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                         color="success.main"
                         fontWeight="bold"
                       >
-                        {attendanceStats.present}
+                        {attendanceStats[meeting._id]?.present}
                       </Typography>
                       <Typography
                         variant="body2"
@@ -1313,7 +1335,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                         color="warning.main"
                         fontWeight="bold"
                       >
-                        {attendanceStats.quorum}
+                        {attendanceStats[meeting._id]?.quorum}
                       </Typography>
                       <Typography
                         variant="body2"
@@ -1334,16 +1356,16 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                 <LinearProgress
                   variant="determinate"
                   value={
-                    attendanceStats.quorum > 0
+                    attendanceStats[meeting._id]?.quorum > 0
                       ? Math.min(
-                          (attendanceStats.present / attendanceStats.quorum) *
+                          (attendanceStats[meeting._id]?.present / attendanceStats[meeting._id]?.quorum) *
                             100,
                           100
                         )
                       : 0
                   }
                   sx={{ height: 8, borderRadius: 4, mb: 1 }}
-                  color={attendanceStats.quorumMet ? "success" : "primary"}
+                  color={attendanceStats[meeting._id]?.quorumMet ? "success" : "primary"}
                 />
                 <Box
                   display="flex"
@@ -1351,16 +1373,16 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                   alignItems="center"
                 >
                   <Typography variant="caption" color="text.secondary">
-                    {attendanceStats.present} {strings.attendeesPresent} (
-                    {strings.quorumIs} {attendanceStats.quorum})
+                    {attendanceStats[meeting._id]?.present} {strings.attendeesPresent} (
+                    {strings.quorumIs} {attendanceStats[meeting._id]?.quorum})
                   </Typography>
                   <Chip
                     label={
-                      attendanceStats.quorumMet
+                      attendanceStats[meeting._id]?.quorumMet
                         ? strings.quorumMet
                         : strings.quorumNotMet
                     }
-                    color={attendanceStats.quorumMet ? "success" : "warning"}
+                    color={attendanceStats[meeting._id]?.quorumMet ? "success" : "warning"}
                     size="small"
                   />
                 </Box>
@@ -1708,7 +1730,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
                   <Button
                     variant="contained"
                     color="primary"
-                    onClick={handleSubmitAttendance}
+                    onClick={() => handleSubmitAttendance(meeting)}
                     disabled={
                       attendanceLoading ||
                       voterIdLastFour.length !== 4 ||
@@ -1737,6 +1759,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
           </Button>
         </DialogActions>
       </Dialog>
+      )}
 
       {/* Meeting Details Dialog */}
       <Dialog
@@ -1744,9 +1767,6 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
         onClose={() => setSelectedMeeting(null)}
         maxWidth="md"
         fullWidth
-        PaperProps={{
-          sx: { borderRadius: 2 },
-        }}
       >
         <DialogTitle sx={{ bgcolor: "primary.main", color: "white" }}>
           {strings.meetingDetails}
@@ -1763,12 +1783,138 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
         </DialogActions>
       </Dialog>
 
+      <Dialog open={showAgendaDialog} onClose={() => setShowAgendaDialog(false)} maxWidth="md" fullWidth>
+      <DialogTitle>{strings.agenda || "Agenda Items"}</DialogTitle>
+      <DialogContent>
+        {loadingAgenda ? (
+          <Box display="flex" justifyContent="center" p={2}>
+            <CircularProgress size={24} />
+          </Box>
+        ) : (
+          <Box>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              {strings.selectAgendaDiscussed}
+            </Typography>
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              {allAgendaItems.map((item, index) => {
+                const isSelected = selectedAgendaItems.some((s) => s._id === item._id);
+                return (
+                  <Box
+                    key={item._id || index}
+                    sx={{
+                      p: 2,
+                      mb: 1,
+                      border: "1px solid #e0e0e0",
+                      borderRadius: 1,
+                      backgroundColor: isSelected ? "#e3f2fd" : "#fafafa",
+                      cursor: "pointer",
+                      "&:hover": {
+                        backgroundColor: isSelected ? "#bbdefb" : "#f5f5f5",
+                      },
+                    }}
+                    onClick={() => {
+                      setSelectedAgendaItems((prev) =>
+                        isSelected
+                          ? prev.filter((s) => s._id !== item._id)
+                          : [...prev, item]
+                      );
+                    }}
+                  >
+                    <Box display="flex" alignItems="flex-start">
+                      <Checkbox checked={isSelected} sx={{ mt: 0 }} />
+                      <Box sx={{ ml: 1, flex: 1 }}>
+                        <Typography variant="subtitle1" fontWeight="medium">
+                          {getMultilingualText(item, "title") || `Agenda Item ${index + 1}`}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {getMultilingualText(item, "description") || strings.noDescription}
+                        </Typography>
+                        {item.linkedIssues?.length > 0 && (
+                          <Typography variant="caption" color="primary" sx={{ mt: 0.5, display: "block" }}>
+                            📋 {item.linkedIssues.length} linked issue{item.linkedIssues.length !== 1 ? "s" : ""}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Paper>
+            {selectedAgendaItems.length > 0 && (
+              <Box
+                sx={{
+                  mt: 2,
+                  p: 2,
+                  backgroundColor: "#e8f5e8",
+                  borderRadius: 1,
+                  border: "1px solid #4caf50",
+                }}
+              >
+                <Typography variant="body2" color="success.main" fontWeight="medium">
+                  ✅ {selectedAgendaItems.length} item
+                  {selectedAgendaItems.length !== 1 ? "s" : ""} selected
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setShowAgendaDialog(false)}>{strings.close}</Button>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={() => setConfirmAgendaSubmitOpen(true)}
+          disabled={loadingAgenda}
+        >
+          {strings.submit}
+        </Button>
+      </DialogActions>
+    </Dialog>
+
       <Snackbar
         open={snackbarOpen}
         autoHideDuration={3000}
         onClose={() => setSnackbarOpen(false)}
         message={snackbarMessage}
       />
+
+      <Dialog
+        open={confirmAgendaSubmitOpen}
+        onClose={() => setConfirmAgendaSubmitOpen(false)}
+      >
+        <DialogTitle>{strings.confirmSubmission}</DialogTitle>
+        <DialogContent>
+          <Typography>
+            {strings.agendaDiscussedConfirmation}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmAgendaSubmitOpen(false)}>
+            {strings.cancel}
+          </Button>
+          <Button
+            onClick={executeAgendaSubmit}
+            color="primary"
+            variant="contained"
+          >
+            {strings.yesSubmit}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <style>
+        {`
+        @keyframes slideInLeft {
+          from { transform: translateX(100%); opacity: 0.3; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes slideInRight {
+          from { transform: translateX(-100%); opacity: 0.3; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        `}
+      </style>
     </Box>
   );
 };

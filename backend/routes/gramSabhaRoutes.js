@@ -13,7 +13,6 @@ const Issue = require("../models/Issue");
 const multer = require("multer");
 const mongoose = require("mongoose");
 const User = require("../models/User");
-const { autoUpdateMeetingStatus } = require("../utils/meetingUtils");
 
 const { JIOMEET_APP_ID, JIOMEET_API, BACKEND_URL } = process.env;
 const privateKey = process.env.PRIVATE_KEY.replace(/\\n/g, "\n");
@@ -378,11 +377,6 @@ router.get("/panchayat/:panchayatId", async (req, res) => {
     })
       .populate("scheduledById", "name")
       .sort({ dateTime: -1 });
-
-    // Auto-update status for each meeting
-    gramSabhas = await Promise.all(
-      gramSabhas.map((meeting) => autoUpdateMeetingStatus(meeting))
-    );
 
     res.send(gramSabhas);
   } catch (error) {
@@ -1122,27 +1116,66 @@ router.get("/:id/attendance-stats", async (req, res) => {
 });
 
 // Get today's meetings for a panchayat
-router.get("/panchayat/:panchayatId/today", async (req, res) => {
+router.get("/panchayat/:panchayatId/active", async (req, res) => {
   try {
+    const panchayatId = req.params.panchayatId;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     let gramSabhas = await GramSabha.find({
-      panchayatId: req.params.panchayatId,
+      panchayatId,
       dateTime: { $gte: today, $lt: tomorrow },
     })
       .select("-attachments")
       .populate("scheduledById", "name")
-      .sort({ dateTime: 1 });
+      .sort({ dateTime: 1 })
+      .lean();
+    
+    // Get panchayat to check quorum criteria and total registered users
+    const panchayat = await Panchayat.findById(panchayatId);
+    if (!panchayat) {
+      return res.status(404).json({
+        success: false,
+        message: "Panchayat not found",
+      });
+    }
 
-    // Auto-update status for each meeting
-    gramSabhas = await Promise.all(
-      gramSabhas.map((meeting) => autoUpdateMeetingStatus(meeting))
+    // Get total registered users in the panchayat
+    const totalRegistered = await User.countDocuments({
+      panchayatId,
+      isRegistered: true,
+    });
+
+    // Get total voters in the panchayat (all users whether registered or not)
+    const totalVoters = await User.countDocuments({
+      panchayatId,
+    });
+
+    // Calculate quorum as 10% of total voters
+    const quorumRequired = Math.ceil(
+      totalVoters * (panchayat.sabhaCriteria / 100 || 0.1)
     );
+    const updatedGramSabhas = gramSabhas.map((gramSabha) => {
+    const presentCount = gramSabha.attendances.length;
 
-    res.json(gramSabhas);
+    const gs = {
+      ...gramSabha,
+      attendanceStats: {
+        success: true,
+        totalRegistered,
+        totalVoters,
+        present: presentCount,
+        quorumRequired,
+        quorumMet: presentCount >= quorumRequired,
+      },
+    };
+    delete gs.attendances;
+    return gs;
+  });
+
+    res.json(updatedGramSabhas);
   } catch (error) {
     res
       .status(500)
