@@ -852,6 +852,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                     </Box>
                 ) : (
                     <>
+                    {user.role && ['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY'].includes(user.role) && (
                     <Box sx={{ px: 3, mt: 4, mb: 4 }}>
                         {!showAddForm && (
                         <Button
@@ -915,6 +916,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                         </Paper>
                         )}
                     </Box>
+                    )}
                     {/* Agenda Summary List */}
                     {summaryLoading ? (
                         <Box sx={{ display: 'flex', justifyContent: 'center', my: 8 }}>
