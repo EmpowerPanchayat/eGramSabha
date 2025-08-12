@@ -59,7 +59,7 @@ export const AuthProvider = ({ children }) => {
             }
 
             // Get the user type from the stored user if available
-            const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
+            const storedUser = JSON.parse(localStorage.getItem('citizenUser') || 'null');
             const userType = storedUser?.userType || null;
 
             const response = await apiRefreshToken(refreshTokenValue, userType);

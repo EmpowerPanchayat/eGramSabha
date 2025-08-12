@@ -132,6 +132,7 @@ const CitizenPortalContent = () => {
   
     setUser(userData);
     localStorage.setItem("citizenUser", JSON.stringify(userData));
+    localStorage.setItem("user", JSON.stringify(userData));
     
     // Just set the view, don't navigate
     setCurrentView(VIEWS.DASHBOARD);
@@ -144,6 +145,7 @@ const CitizenPortalContent = () => {
     setUser(null);
     tokenManager.clearTokens();
     localStorage.removeItem("citizenUser");
+    localStorage.removeItem("user");
     setCurrentView(VIEWS.LOGIN);
 
     // Navigate to home page
