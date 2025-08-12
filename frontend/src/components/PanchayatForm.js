@@ -36,7 +36,7 @@ const PanchayatForm = ({
   // Initial form state based on whether we're editing or creating
   const initialFormState = {
     name: "",
-    lgdCode: "", // LGD Code field
+    lgdCode: null, // LGD Code field
     villages: "",
     geolocation: "",
     population: "",
@@ -158,7 +158,7 @@ const PanchayatForm = ({
     // For LGD Code, only allow numbers and limit length
     else if (name === "lgdCode") {
       if (value === "" || (/^\d*$/.test(value) && value.length <= 10)) {
-        setFormValues({ ...formValues, [name]: value });
+        setFormValues({ ...formValues, [name]: value || null });
       }
       return;
     }
@@ -285,6 +285,11 @@ const PanchayatForm = ({
           ? Number(formValues.sabhaCriteria)
           : undefined,
       };
+
+      // Convert empty LGD code string to null so sparse index works
+      if (!formData.lgdCode) {
+        formData.lgdCode = null;
+      }
 
       // Pass the panchayat ID if we're editing
       if (panchayat && panchayat._id) {
