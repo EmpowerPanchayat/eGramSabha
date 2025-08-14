@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Unable to create new Panchayat issue.([#141](https://github.com/EmpowerPanchayat/eGramSabha/issues/141))
+
 ## [1.0.0] - 2025-08-08
 
 ### Added
