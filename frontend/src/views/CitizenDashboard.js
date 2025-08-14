@@ -142,7 +142,9 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
                     <Grid item xs={12} md={4} lg={3}>
                         <Card elevation={2} sx={{
                             borderRadius: 3,
-                            height: profileCollapsed ? 'auto' : '100%',
+                            width: isMobile ? 380 : 340,
+                            height: "auto",
+                            minHeight: 200,
                             boxShadow: theme.shadows[3],
                             transition: 'all 0.3s ease',
                             overflow: 'hidden'
@@ -290,6 +292,7 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
                                         sx={{
                                             p: 3,
                                             height: '100%',
+                                            width: 380,
                                             borderRadius: 3,
                                             boxShadow: theme.shadows[3],
                                             transition: 'transform 0.2s ease',
@@ -361,6 +364,7 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
                                         sx={{
                                             p: 3,
                                             height: '100%',
+                                            width: 380,
                                             borderRadius: 3,
                                             boxShadow: theme.shadows[3],
                                             transition: 'transform 0.2s ease',
