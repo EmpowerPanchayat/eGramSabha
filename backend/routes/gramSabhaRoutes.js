@@ -1126,7 +1126,12 @@ router.get("/panchayat/:panchayatId/active", async (req, res) => {
 
     let gramSabhas = await GramSabha.find({
       panchayatId,
-      dateTime: { $gte: today, $lt: tomorrow },
+      $or: [
+        // Today's meetings
+        { dateTime: { $gte: today, $lt: tomorrow } },
+        // Past meetings that are still in progress
+        { dateTime: { $lt: today }, status: "IN_PROGRESS" }
+      ]
     })
       .select("-attachments")
       .populate("scheduledById", "name")
