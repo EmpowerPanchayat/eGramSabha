@@ -114,7 +114,12 @@ const PastMeetingsList = ({ panchayatId, user }) => {
 
                 <CardContent sx={{ p: 0 }}>
                     <List>
-                        {meetings.map((meeting, index) => (
+                    {meetings.map((meeting, index) => {
+                        const attended = meeting.attendances?.some(
+                        (att) => att.userId?.toString() === user.id
+                        );
+
+                        return (
                             <React.Fragment key={meeting._id}>
                                 <ListItem>
                                     <ListItemText
@@ -149,6 +154,17 @@ const PastMeetingsList = ({ panchayatId, user }) => {
                                                         })}
                                                     </Typography>
                                                 </Box>
+                                                {/* Attendance status */}
+                                                <Box sx={{ mt: 1 }}>
+                                                    <Typography
+                                                        variant="body2"
+                                                        color={attended ? "success.main" : "error.main"}
+                                                    >
+                                                        {attended
+                                                        ? strings.attended
+                                                        : strings.notAttended}
+                                                    </Typography>
+                                                </Box>
                                             </Box>
                                         }
                                     />
@@ -165,7 +181,8 @@ const PastMeetingsList = ({ panchayatId, user }) => {
                                 </ListItem>
                                 {index < meetings.length - 1 && <Divider />}
                             </React.Fragment>
-                        ))}
+                        );
+                    })}
                     </List>
                 </CardContent>
             </Card>
