@@ -65,6 +65,7 @@ import { fetchIssueSummary, updateAgendaSummary } from '../../api/summary';
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import MeetingSlider from "../MeetingSlider";
+import infra from "../../constants/infra";
 
 const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   const { language, strings } = useLanguage();
@@ -141,6 +142,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   });
   const jmClient = new JMClient();
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+  const INFRA = process.env.REACT_APP_INFRA || infra.jio;
 
   // Memoized thresholds for checks
   useEffect(() => {
@@ -1135,14 +1137,18 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
           </DialogTitle>
           <DialogContent>
             <DialogContentText>
-              <Typography variant="body1">
-                <strong>Meeting ID:</strong> {meetingDetails.jiomeetId}
-              </Typography>
+              {INFRA && INFRA.toUpperCase() === infra.jio && (
+              <>
+                <Typography variant="body1">
+                  <strong>Meeting ID:</strong> {meetingDetails.jiomeetId}
+                </Typography>
+                <Typography variant="body1">
+                  <strong>Room PIN:</strong> {meetingDetails.roomPIN}
+                </Typography>
+              </>
+              )}
               <Typography variant="body1">
                 <strong>Meeting Link:</strong> {meetingDetails.meetingLink}
-              </Typography>
-              <Typography variant="body1">
-                <strong>Room PIN:</strong> {meetingDetails.roomPIN}
               </Typography>
             </DialogContentText>
           </DialogContent>
@@ -1151,15 +1157,28 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
             <Button variant="outlined" color="error" onClick={handleEndMeeting}>
               End Meeting
             </Button>
-            {meetingDetails.meetingLink && (
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={() => handleJoinMeeting(meetingDetails)}
-              >
-                Join Meeting
-              </Button>
-            )}
+              {meetingDetails?.meetingLink && (
+                INFRA.toUpperCase() === infra.jio ? (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={() => handleJoinMeeting(meetingDetails)}
+                  >
+                    Join Meeting
+                  </Button>
+                ) : (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    component="a"
+                    href={meetingDetails.meetingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Join Meeting
+                  </Button>
+                )
+              )}
           </DialogActions>
         </Dialog>
       )}
