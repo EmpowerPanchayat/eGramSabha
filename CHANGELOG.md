@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Workaround for using Google meet link instead of Jio meet Link when required.([#145](https://github.com/EmpowerPanchayat/eGramSabha/issues/145))
 
+### Fixed
+
+- Citizen Portal issues/bugs.([#138](https://github.com/EmpowerPanchayat/eGramSabha/issues/138))
+
 ## [1.0.1] - 2025-08-14
 
 ### Fixed
