@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Workaround for using Google meet link instead of Jio meet Link when required.([#145](https://github.com/EmpowerPanchayat/eGramSabha/issues/145))
+
 ## [1.0.1] - 2025-08-14
 
 ### Fixed
