@@ -319,6 +319,8 @@ const translations = {
     editMeeting: "Edit Gram Sabha Meeting",
     createMeeting: "Create New Gram Sabha Meeting",
     pastMeetings: "Past Meetings",
+    attended: "You attended this meeting",
+    notAttended: "You did not attend this meeting",
     titleOptional: "Title (Optional)",
     titleHelperText: "If left empty, a title will be automatically generated",
     previewTitle: "Preview Title",
@@ -826,6 +828,8 @@ const translations = {
     editMeeting: "ग्राम सभा बैठक संपादित करें",
     createMeeting: "नई ग्राम सभा बैठक बनाएं",
     pastMeetings: "पिछली बैठकें",
+    attended: "आपने इस बैठक में भाग लिया",
+    notAttended: "आपने इस बैठक में भाग नहीं लिया",
     titleOptional: "शीर्षक (वैकल्पिक)",
     titleHelperText:
       "यदि खाली छोड़ा जाता है, तो शीर्षक स्वचालित रूप से उत्पन्न किया जाएगा",

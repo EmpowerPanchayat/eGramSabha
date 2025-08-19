@@ -92,8 +92,8 @@ userSchema.methods.createSecurityToken = function () {
     .update(token)
     .digest('hex');
 
-  // Token expires in 5 minutes
-  this.securityTokenExpires = Date.now() + 300000;
+  // Token expires in 10 minutes
+  this.securityTokenExpires = Date.now() + 600000;
 
   return token;
 };
