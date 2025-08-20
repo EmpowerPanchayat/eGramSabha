@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2025-08-20
+
 ### Added
 
 - Workaround for using Google meet link instead of Jio meet Link when required.([#145](https://github.com/EmpowerPanchayat/eGramSabha/issues/145))
+- Scripts to take backup, import or delete data from DB based on panchayatIds or state names.([#91](https://github.com/EmpowerPanchayat/eGramSabha/issues/91))
 
 ### Fixed
 
@@ -113,7 +116,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/EmpowerPanchayat/eGramSabha/compare/1.0.1...HEAD
+[Unreleased]: https://github.com/EmpowerPanchayat/eGramSabha/compare/1.1.0...HEAD
+[1.0.1]: https://github.com/EmpowerPanchayat/eGramSabha/compare/1.0.1...1.1.0
 [1.0.1]: https://github.com/EmpowerPanchayat/eGramSabha/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.2.0...1.0.0
 [0.2.0]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.1.0...0.2.0
