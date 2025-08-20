@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Citizen Portal issue list view.([#149](https://github.com/EmpowerPanchayat/eGramSabha/issues/149))
+- Save button when mandatory field location is not entered.([#144](https://github.com/EmpowerPanchayat/eGramSabha/issues/144))
 
 ## [1.1.0] - 2025-08-20
 
