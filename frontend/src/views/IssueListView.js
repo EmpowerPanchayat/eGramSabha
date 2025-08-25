@@ -101,6 +101,10 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     const [agendaState, setAgendaState] = useState([]);
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [saveError, setSaveError] = useState('');
+    const titles = {
+        CITIZEN: [strings.myIssues, strings.allIssues],
+        DEFAULT: [strings.issuesList, strings.issueSummary],
+    };
 
     const ensureMultilingualFields = (item) => {
         const convertMapToObj = (val) => {
@@ -264,9 +268,14 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                 params.createdForId = createdForId;
             }
 
-            if (!user.panchayatId) {
-                setError('Panchayat ID not available');
-                return;
+            if (user.userType === "CITIZEN" && tabValue === 0) {
+                const createdForId = user.linkedCitizenId || user.id;
+                params = { ...params, createdForId };
+            } else {
+                if (!user.panchayatId) {
+                    setError('Panchayat ID not available');
+                    return;
+                }
             }
             params = { ...params, panchayatId: user.panchayatId };
 
@@ -289,12 +298,12 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     }, [debouncedSearchTerm, page, rowsPerPage, status, category, subcategory, creatorId, createdForId, tabValue, user.linkedCitizenId, user.id, user.panchayatId]);
 
     useEffect(() => {
-        if (tabValue === 0) {
+        if (tabValue === 0 || user.userType === "CITIZEN") {
             fetchIssues();
-        } else {
+        } else if (tabValue === 1) {
             fetchSummary();
         }
-    }, [category, page, rowsPerPage, status, subcategory, creatorId, createdForId, tabValue, debouncedSearchTerm, fetchIssues, fetchSummary]);
+    }, [category, page, rowsPerPage, status, subcategory, creatorId, createdForId, tabValue, debouncedSearchTerm, fetchIssues, fetchSummary, user.role]);
 
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -508,7 +517,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             <PlaylistAddCheckIcon sx={{ mr: 1 }} />
                             <Typography variant="h5" component="h1">
-                                {tabValue === 0 ? strings.issuesList : strings.issueSummary}
+                                {(titles[user.userType] || titles.DEFAULT)[tabValue]}
                             </Typography>
                         </Box>
                     </Box>
@@ -532,18 +541,18 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                             }}
                         >
                             <Tab
-                                label={strings.allIssues}
+                                label={(titles[user.userType] || titles.DEFAULT)[0]}
                                 icon={<PersonIcon />}
                                 iconPosition="start"
                             />
                             <Tab
-                                label={strings.issueSummary}
+                                label={(titles[user.userType] || titles.DEFAULT)[1]}
                                 icon={<FolderIcon />}
                                 iconPosition="start"
                             />
                         </Tabs>
                     </Paper>
-                {tabValue === 0 ? (
+                {(tabValue === 0) || (user.userType === "CITIZEN" && tabValue === 1) ? (
                     <Box sx={{ p: 3 }}>
                         <Box
                             sx={{
@@ -575,59 +584,63 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
 
                             <IssueStatusDropdown status={status} setStatus={setStatus} />
 
-                            <FormControl size="small">
-                                <Select
-                                    value={creatorId}
-                                    onChange={(e) => {
-                                        setCreatedById(e.target.value);
-                                    }}
-                                    displayEmpty
-                                    fullWidth
-                                    >
-                                    <MenuItem value="" disabled>{strings.creator}</MenuItem>
-                                    {loadingUsers ? (
-                                        <MenuItem disabled>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                                                <CircularProgress size={20} sx={{ mr: 1 }} />
-                                                <Typography>Loading users...</Typography>
-                                            </Box>
-                                        </MenuItem>
-                                    ) : (
-                                        users.map((user) => (
-                                            <MenuItem key={user._id} value={user._id}>
-                                                {user.name} (Voter ID: {user.voterIdNumber})
+                            {user.userType !== "CITIZEN" && (
+                                <>
+                                <FormControl size="small">
+                                    <Select
+                                        value={creatorId}
+                                        onChange={(e) => {
+                                            setCreatedById(e.target.value);
+                                        }}
+                                        displayEmpty
+                                        fullWidth
+                                        >
+                                        <MenuItem value="" disabled>{strings.creator}</MenuItem>
+                                        {loadingUsers ? (
+                                            <MenuItem disabled>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                                                    <CircularProgress size={20} sx={{ mr: 1 }} />
+                                                    <Typography>Loading users...</Typography>
+                                                </Box>
                                             </MenuItem>
-                                        ))
-                                    )}
-                                </Select>
-                            </FormControl>
+                                        ) : (
+                                            users.map((user) => (
+                                                <MenuItem key={user._id} value={user._id}>
+                                                    {user.name} (Voter ID: {user.voterIdNumber})
+                                                </MenuItem>
+                                            ))
+                                        )}
+                                    </Select>
+                                </FormControl>
 
-                            <FormControl size="small">
-                                <Select
-                                    value={createdForId}
-                                    onChange={(e) => {
-                                        setCreatedForId(e.target.value);
-                                    }}
-                                    displayEmpty
-                                    fullWidth
-                                    >
-                                    <MenuItem value="" disabled>{strings.createdFor}</MenuItem>
-                                    {loadingUsers ? (
-                                        <MenuItem disabled>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                                                <CircularProgress size={20} sx={{ mr: 1 }} />
-                                                <Typography>Loading users...</Typography>
-                                            </Box>
-                                        </MenuItem>
-                                    ) : (
-                                        users.map((user) => (
-                                            <MenuItem key={user._id} value={user._id}>
-                                                {user.name} (Voter ID: {user.voterIdNumber})
+                                <FormControl size="small">
+                                    <Select
+                                        value={createdForId}
+                                        onChange={(e) => {
+                                            setCreatedForId(e.target.value);
+                                        }}
+                                        displayEmpty
+                                        fullWidth
+                                        >
+                                        <MenuItem value="" disabled>{strings.createdFor}</MenuItem>
+                                        {loadingUsers ? (
+                                            <MenuItem disabled>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                                                    <CircularProgress size={20} sx={{ mr: 1 }} />
+                                                    <Typography>Loading users...</Typography>
+                                                </Box>
                                             </MenuItem>
-                                        ))
-                                    )}
-                                </Select>
-                            </FormControl>
+                                        ) : (
+                                            users.map((user) => (
+                                                <MenuItem key={user._id} value={user._id}>
+                                                    {user.name} (Voter ID: {user.voterIdNumber})
+                                                </MenuItem>
+                                            ))
+                                        )}
+                                    </Select>
+                                </FormControl>
+                                </>
+                            )}
 
                             <Button
                                 variant="outlined"
@@ -682,8 +695,12 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                     <TableCell sx={{ fontWeight: 'bold' }}>{strings.issueSubcategory}</TableCell>
                                                     <TableCell sx={{ fontWeight: 'bold' }}>{strings.issueStatus}</TableCell>
                                                     <TableCell sx={{ fontWeight: 'bold' }}>{strings.createdOn}</TableCell>
-                                                    <TableCell sx={{ fontWeight: 'bold' }}>{strings.creator}</TableCell>
-                                                    <TableCell sx={{ fontWeight: 'bold' }}>{strings.createdFor}</TableCell>
+                                                    {user.userType !== "CITIZEN" && (
+                                                        <>
+                                                        <TableCell sx={{ fontWeight: 'bold' }}>{strings.creator}</TableCell>
+                                                        <TableCell sx={{ fontWeight: 'bold' }}>{strings.createdFor}</TableCell>
+                                                        </>
+                                                    )}
                                                     <TableCell sx={{ fontWeight: 'bold', width: '100px' }}>{strings.recording}</TableCell>
                                                     <TableCell sx={{ fontWeight: 'bold', width: '80px' }} align="right">{strings.actions}</TableCell>
                                                 </TableRow>
@@ -715,22 +732,26 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                         </TableCell>
                                                         <TableCell>{getStatusChip(issue.status)}</TableCell>
                                                         <TableCell>{formatDate(issue.createdAt)}</TableCell>
-                                                        <TableCell>
-                                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                                <PersonIcon sx={{ mr: 1, fontSize: '1rem' }} />
-                                                                <Typography variant="body2">
-                                                                    {issue.creator?.name || 'Unknown'}
-                                                                </Typography>
-                                                            </Box>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                                <PersonIcon sx={{ mr: 1, fontSize: '1rem' }} />
-                                                                <Typography variant="body2">
-                                                                    {issue.createdFor?.name || 'Unknown'}
-                                                                </Typography>
-                                                            </Box>
-                                                        </TableCell>
+                                                        {user.userType !== "CITIZEN" && (
+                                                            <>
+                                                            <TableCell>
+                                                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                                    <PersonIcon sx={{ mr: 1, fontSize: '1rem' }} />
+                                                                    <Typography variant="body2">
+                                                                        {issue.creator?.name || 'Unknown'}
+                                                                    </Typography>
+                                                                </Box>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                                    <PersonIcon sx={{ mr: 1, fontSize: '1rem' }} />
+                                                                    <Typography variant="body2">
+                                                                        {issue.createdFor?.name || 'Unknown'}
+                                                                    </Typography>
+                                                                </Box>
+                                                            </TableCell>
+                                                            </>
+                                                        )}
                                                         <TableCell>
                                                             {issue.attachments && issue.attachments.find(att => att.mimeType.startsWith('audio/')) && (
                                                                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -809,12 +830,16 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                                                     </Box>
                                                 </Box>
 
-                                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                                    <PersonIcon sx={{ mr: 1, fontSize: '1rem' }} />
-                                                    <Typography variant="body2">
-                                                        {issue.creator?.name || 'Unknown'}
-                                                    </Typography>
-                                                </Box>
+                                                {tabValue !== 1 && (
+                                                    <>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                                        <PersonIcon sx={{ mr: 1, fontSize: '1rem' }} />
+                                                        <Typography variant="body2">
+                                                            {issue.creator?.name || 'Unknown'}
+                                                        </Typography>
+                                                    </Box>
+                                                    </>
+                                                )}
 
                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                     <Box>
@@ -943,6 +968,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
             {/* Issue Details Dialog */}
             <IssueDetailsModal
                 issue={selectedIssue}
+                tabValue={tabValue}
                 open={dialogOpen}
                 onClose={handleCloseDialog}
                 maxWidth="md"
@@ -954,399 +980,6 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                     }
                 }}
             >
-                {selectedIssue && (
-                    <>
-                        <DialogTitle
-                            sx={{
-                                bgcolor: 'primary.main',
-                                color: 'white',
-                                pr: 6
-                            }}
-                        >
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                <FolderIcon sx={{ mr: 1 }} />
-                                {strings.issueDetailView}
-                            </Box>
-                            <IconButton
-                                aria-label="close"
-                                onClick={handleCloseDialog}
-                                sx={{
-                                    position: 'absolute',
-                                    right: 8,
-                                    top: 8,
-                                    color: 'white'
-                                }}
-                            >
-                                <CloseIcon />
-                            </IconButton>
-                        </DialogTitle>
-                        <DialogContent dividers>
-                            <Stack spacing={4}>
-                                {/* Basic Information Section */}
-                                <Box>
-                                    <Typography variant="h6" color="primary" gutterBottom>
-                                        {strings.basicInformation}
-                                    </Typography>
-                                    <Grid container spacing={6}>
-                                        <Grid item xs={12} sm={6}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                                <CategoryIcon sx={{ mr: 1, color: 'primary.main' }} />
-                                                <Typography variant="subtitle2" color="text.secondary">
-                                                    {strings.issueCategory}
-                                                </Typography>
-                                            </Box>
-                                            <Typography variant="body1">
-                                                {strings[getLabelKeyFromValue(selectedIssue.category)]}
-                                            </Typography>
-                                        </Grid>
-
-                                        <Grid item xs={12} sm={6}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                                <CategoryIcon sx={{ mr: 1, color: 'primary.main' }} />
-                                                <Typography variant="subtitle2" color="text.secondary">
-                                                    {strings.issueSubcategory}
-                                                </Typography>
-                                            </Box>
-                                            <Typography variant="body1">
-                                                {strings[getLabelKeyFromValue(selectedIssue.subcategory)]}
-                                            </Typography>
-                                        </Grid>
-
-                                        <Grid item xs={12} sm={6}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                                <PlaylistAddCheckIcon sx={{ mr: 1, color: 'primary.main' }} />
-                                                <Typography variant="subtitle2" color="text.secondary">
-                                                    {strings.issueStatus}
-                                                </Typography>
-                                            </Box>
-                                            <Box>
-                                                {getStatusChip(selectedIssue.status)}
-                                            </Box>
-                                        </Grid>
-
-                                        <Grid item xs={12} sm={6}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                                <PriorityHighIcon sx={{ mr: 1, color: 'primary.main' }} />
-                                                <Typography variant="subtitle2" color="text.secondary">
-                                                    {strings.issuePriority}
-                                                </Typography>
-                                            </Box>
-                                            <Box>
-                                                {getPriorityChip(selectedIssue.priority)}
-                                            </Box>
-                                        </Grid>
-                                    </Grid>
-                                </Box>
-
-                                {/* Timeline Section */}
-                                <Box>
-                                    <Typography variant="h6" color="primary" gutterBottom>
-                                        {strings.timeline}
-                                    </Typography>
-                                    <Grid container spacing={3}>
-                                        <Grid item xs={12} sm={6}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                                <CalendarTodayIcon sx={{ mr: 1, color: 'primary.main' }} />
-                                                <Typography variant="subtitle2" color="text.secondary">
-                                                    {strings.createdDate}
-                                                </Typography>
-                                            </Box>
-                                            <Typography variant="body1">
-                                                {formatDate(selectedIssue.createdAt)}
-                                            </Typography>
-                                        </Grid>
-
-                                        {selectedIssue.toBeResolvedBefore && (
-                                            <Grid item xs={12} sm={6}>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                                    <CalendarTodayIcon sx={{ mr: 1, color: 'primary.main' }} />
-                                                    <Typography variant="subtitle2" color="text.secondary">
-                                                        {strings.targetDate}
-                                                    </Typography>
-                                                </Box>
-                                                <Typography variant="body1">
-                                                    {formatDate(selectedIssue.toBeResolvedBefore)}
-                                                </Typography>
-                                            </Grid>
-                                        )}
-                                    </Grid>
-                                </Box>
-
-                                {/* Additional Information Section */}
-                                <Box>
-                                    <Typography variant="h6" color="primary" gutterBottom>
-                                        {strings.additionalInformation}
-                                    </Typography>
-                                    <Grid container spacing={3}>
-                                        {selectedIssue.createdForId && (
-                                            <Grid item xs={12} sm={6}>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                                    <PersonIcon sx={{ mr: 1, color: 'primary.main' }} />
-                                                    <Typography variant="subtitle2" color="text.secondary">
-                                                        {strings.createdFor}
-                                                    </Typography>
-                                                </Box>
-                                                <Typography variant="body1">
-                                                    {selectedIssue.createdForId?.name}
-                                                </Typography>
-                                            </Grid>
-                                        )}
-
-                                        <Grid item xs={12} sm={6}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                                <PersonIcon sx={{ mr: 1, color: 'primary.main' }} />
-                                                <Typography variant="subtitle2" color="text.secondary">
-                                                    {strings.creator}
-                                                </Typography>
-                                            </Box>
-                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                <PersonIcon sx={{ mr: 1, fontSize: '1rem' }} />
-                                                <Typography variant="body1">
-                                                    {selectedIssue.creator?.name || 'Unknown'}
-                                                </Typography>
-                                            </Box>
-                                        </Grid>
-
-                                        {selectedIssue.remark && (
-                                            <Grid item xs={12}>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                                    <NoteIcon sx={{ mr: 1, color: 'primary.main' }} />
-                                                    <Typography variant="subtitle2" color="text.secondary">
-                                                        {strings.remark}
-                                                    </Typography>
-                                                </Box>
-                                                <Paper
-                                                    variant="outlined"
-                                                    sx={{
-                                                        p: 2,
-                                                        bgcolor: 'background.default',
-                                                        borderRadius: 2
-                                                    }}
-                                                >
-                                                    <Typography variant="body2">
-                                                        {selectedIssue.remark}
-                                                    </Typography>
-                                                </Paper>
-                                            </Grid>
-                                        )}
-                                    </Grid>
-                                </Box>
-
-                                {/* Transcription Section */}
-                                {(selectedIssue.transcription || transcriptionData) && (
-                                    <Box>
-                                        <Typography variant="h6" color="primary" gutterBottom>
-                                            {strings.audioTranscription}
-                                        </Typography>
-                                        <Paper
-                                            variant="outlined"
-                                            sx={{
-                                                p: 3,
-                                                bgcolor: 'background.default',
-                                                borderRadius: 2
-                                            }}
-                                        >
-                                            {transcriptionLoading ? (
-                                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 2 }}>
-                                                    <CircularProgress size={24} sx={{ mr: 2 }} />
-                                                    <Typography>{strings.transcriptionLoading}</Typography>
-                                                </Box>
-                                            ) : transcriptionData ? (
-                                                <Box>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                                                        <Typography variant="subtitle2" color="text.secondary" sx={{ mr: 2 }}>
-                                                            {strings.transcriptionStatus}:
-                                                        </Typography>
-                                                        {getTranscriptionStatusChip(transcriptionData.status)}
-                                                        {transcriptionData.language && (
-                                                            <Chip
-                                                                size="small"
-                                                                label={`${strings.transcriptionLanguage}: ${transcriptionData.language}`}
-                                                                variant="outlined"
-                                                                sx={{ ml: 1 }}
-                                                            />
-                                                        )}
-                                                    </Box>
-                                                    
-                                                    {transcriptionData.status === 'COMPLETED' && transcriptionData.text && (
-                                                        <Box>
-                                                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                                                {strings.transcriptionText}:
-                                                            </Typography>
-                                                            
-                                                            {/* Enhanced English Transcription (Primary) */}
-                                                            {transcriptionData.enhancedEnglishTranscription && (
-                                                                <Box sx={{ mb: 2 }}>
-                                                                    <Typography variant="subtitle2" color="primary" gutterBottom>
-                                                                        {strings.enhancedEnglish}:
-                                                                    </Typography>
-                                                                    <Paper
-                                                                        variant="outlined"
-                                                                        sx={{
-                                                                            p: 2,
-                                                                            bgcolor: 'grey.50',
-                                                                            borderRadius: 1,
-                                                                            maxHeight: 150,
-                                                                            overflow: 'auto'
-                                                                        }}
-                                                                    >
-                                                                        <Typography variant="body2">
-                                                                            {transcriptionData.enhancedEnglishTranscription}
-                                                                        </Typography>
-                                                                    </Paper>
-                                                                </Box>
-                                                            )}
-                                                            
-                                                            {/* Enhanced Hindi Transcription */}
-                                                            {transcriptionData.enhancedHindiTranscription && (
-                                                                <Box sx={{ mb: 2 }}>
-                                                                    <Typography variant="subtitle2" color="primary" gutterBottom>
-                                                                        {strings.enhancedHindi}:
-                                                                    </Typography>
-                                                                    <Paper
-                                                                        variant="outlined"
-                                                                        sx={{
-                                                                            p: 2,
-                                                                            bgcolor: 'grey.50',
-                                                                            borderRadius: 1,
-                                                                            maxHeight: 150,
-                                                                            overflow: 'auto'
-                                                                        }}
-                                                                    >
-                                                                        <Typography variant="body2">
-                                                                            {transcriptionData.enhancedHindiTranscription}
-                                                                        </Typography>
-                                                                    </Paper>
-                                                                </Box>
-                                                            )}
-                                                            
-                                                            {/* Original Transcription */}
-                                                            {transcriptionData.originalTranscription && (
-                                                                <Box sx={{ mb: 2 }}>
-                                                                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                                                        {strings.originalTranscription}:
-                                                                    </Typography>
-                                                                    <Paper
-                                                                        variant="outlined"
-                                                                        sx={{
-                                                                            p: 2,
-                                                                            bgcolor: 'grey.100',
-                                                                            borderRadius: 1,
-                                                                            maxHeight: 100,
-                                                                            overflow: 'auto'
-                                                                        }}
-                                                                    >
-                                                                        <Typography variant="body2" color="text.secondary">
-                                                                            {transcriptionData.originalTranscription}
-                                                                        </Typography>
-                                                                    </Paper>
-                                                                </Box>
-                                                            )}
-                                                            
-                                                            {/* Fallback to main text if no enhanced versions */}
-                                                            {!transcriptionData.enhancedEnglishTranscription && !transcriptionData.enhancedHindiTranscription && (
-                                                                <Paper
-                                                                    variant="outlined"
-                                                                    sx={{
-                                                                        p: 2,
-                                                                        bgcolor: 'grey.50',
-                                                                        borderRadius: 1,
-                                                                        maxHeight: 200,
-                                                                        overflow: 'auto'
-                                                                    }}
-                                                                >
-                                                                    <Typography variant="body2">
-                                                                        {transcriptionData.text}
-                                                                    </Typography>
-                                                                </Paper>
-                                                            )}
-                                                            
-                                                            {/* Transcription Metadata */}
-                                                            {/* {(transcriptionData.processingMode || transcriptionData.transcriptionProvider) && (
-                                                                <Box sx={{ mt: 2 }}>
-                                                                    <Typography variant="caption" color="text.secondary" display="block">
-                                                                        Processing Mode: {transcriptionData.processingMode || 'N/A'}
-                                                                    </Typography>
-                                                                    <Typography variant="caption" color="text.secondary" display="block">
-                                                                        Provider: {transcriptionData.transcriptionProvider || 'N/A'}
-                                                                    </Typography>
-                                                                </Box>
-                                                            )}
-                                                            
-                                                            {transcriptionData.completedAt && (
-                                                                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                                                                    Completed: {formatDate(transcriptionData.completedAt)}
-                                                                </Typography>
-                                                            )} */}
-                                                        </Box>
-                                                    )}
-                                                    
-                                                    {transcriptionData.status === 'PROCESSING' && (
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', py: 2 }}>
-                                                            <CircularProgress size={20} sx={{ mr: 2 }} />
-                                                            <Typography>{strings.transcriptionProcessing}</Typography>
-                                                        </Box>
-                                                    )}
-                                                    
-                                                    {transcriptionData.status === 'FAILED' && (
-                                                        <Box>
-                                                            <Alert severity="error" sx={{ mb: 2 }}>
-                                                                {strings.transcriptionError}: {transcriptionData.error || 'Unknown error'}
-                                                            </Alert>
-                                                            <Button
-                                                                variant="outlined"
-                                                                color="primary"
-                                                                onClick={handleRetryTranscription}
-                                                                disabled={transcriptionLoading}
-                                                                startIcon={transcriptionLoading ? <CircularProgress size={16} /> : <RefreshIcon />}
-                                                            >
-                                                                {strings.retryTranscription}
-                                                            </Button>
-                                                        </Box>
-                                                    )}
-                                                </Box>
-                                            ) : (
-                                                <Typography color="text.secondary">
-                                                    {strings.transcriptionNoData}
-                                                </Typography>
-                                            )}
-                                        </Paper>
-                                    </Box>
-                                )}
-
-                                {/* Attachments Section */}
-                                {selectedIssue.attachments && selectedIssue.attachments.length > 0 && (
-                                    <Box>
-                                        <Typography variant="h6" color="primary" gutterBottom>
-                                            {strings.attachments}
-                                        </Typography>
-                                        <Box sx={{ mt: 2 }}>
-                                            {selectedIssue.attachments.map((attachment, index) => (
-                                                <AttachmentViewer
-                                                    key={attachment._id || index}
-                                                    attachmentUrl={`${API_URL}/issues/${selectedIssue._id}/attachment/${attachment._id}`}
-                                                    filename={attachment.filename || `Attachment ${index + 1}`}
-                                                    mimeType={attachment.mimeType}
-                                                    authToken={tokenManager.getToken()}
-                                                />
-                                            ))}
-                                        </Box>
-                                    </Box>
-                                )}
-                            </Stack>
-                        </DialogContent>
-                        <DialogActions sx={{ p: 2 }}>
-                            <Button
-                                variant="outlined"
-                                onClick={handleCloseDialog}
-                                startIcon={<CloseIcon />}
-                                size="large"
-                            >
-                                {strings.close}
-                            </Button>
-                        </DialogActions>
-                    </>
-                )}
             </IssueDetailsModal>
         </Container>
     );
