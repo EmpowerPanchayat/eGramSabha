@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Citizen Portal issue list view.([#149](https://github.com/EmpowerPanchayat/eGramSabha/issues/149))
+
 ## [1.1.0] - 2025-08-20
 
 ### Added
