@@ -19,7 +19,7 @@ import tokenManager from '../utils/tokenManager';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
-const IssueDetailsModal = ({ issue, open, onClose }) => {
+const IssueDetailsModal = ({ issue, tabValue, open, onClose }) => {
     const { strings } = useLanguage();
     const [transcriptionData, setTranscriptionData] = useState(null);
     const [transcriptionLoading, setTranscriptionLoading] = useState(false);
@@ -153,18 +153,25 @@ const IssueDetailsModal = ({ issue, open, onClose }) => {
                     <Box>
                         <Typography variant="h6" color="primary" gutterBottom>{strings.additionalInformation}</Typography>
                         <Grid container spacing={3}>
-                            <Grid item xs={12} sm={6}>
-                                <Typography variant="subtitle2" color="text.secondary"><PersonIcon sx={{ mr: 1, verticalAlign: 'bottom' }} />{strings.creator}</Typography>
-                                <Typography variant="body1">{issue.creator?.name || 'Unknown'}</Typography>
-                            </Grid>
-                            {issue.remark && (
+                            {tabValue !== 1 && (
+                                <>
+                                <Grid item xs={12} sm={6}>
+                                    <Typography variant="subtitle2" color="text.secondary"><PersonIcon sx={{ mr: 1, verticalAlign: 'bottom' }} />{strings.creator}</Typography>
+                                    <Typography variant="body1">{issue?.creator?.name || 'Unknown'}</Typography>
+                                </Grid>
+
+                                <Grid item xs={12} sm={6}>
+                                    <Typography variant="subtitle2" color="text.secondary"><PersonIcon sx={{ mr: 1, verticalAlign: 'bottom' }} />{strings.createdFor}</Typography>
+                                    <Typography variant="body1">{issue?.createdFor?.name || 'Unknown'}</Typography>
+                                </Grid>
+                                </>
+                            )}
                                 <Grid item xs={12}>
                                     <Typography variant="subtitle2" color="text.secondary"><NoteIcon sx={{ mr: 1, verticalAlign: 'bottom' }} />{strings.remark}</Typography>
                                     <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
-                                        <Typography variant="body2">{issue.remark}</Typography>
+                                        <Typography variant="body2">{issue?.remark}</Typography>
                                     </Paper>
                                 </Grid>
-                            )}
                         </Grid>
                     </Box>
 
