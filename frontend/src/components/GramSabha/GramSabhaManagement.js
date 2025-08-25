@@ -1020,6 +1020,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
               loading ||
               !formData.date ||
               !formData.time ||
+              !formData.location||
               selectedAgendaItems.length === 0
             }
           >
