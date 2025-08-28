@@ -268,6 +268,7 @@ const RegistrationView = ({ user, navigateTo, children, onUserUpdate }) => {
         mb: 3,
         p: 2
       }}>
+        {navigateTo ? (
         <Button
           startIcon={<ArrowBackIcon />}
           onClick={() => navigateTo('users')}
@@ -275,7 +276,7 @@ const RegistrationView = ({ user, navigateTo, children, onUserUpdate }) => {
           size="small"
         >
           Back to Search
-        </Button>
+        </Button>) : <div />}
         <Chip
           icon={user.isRegistered ? <HowToRegIcon /> : <PendingIcon />}
           label={user.isRegistered ? 'Registered' : 'Pending Registration'}

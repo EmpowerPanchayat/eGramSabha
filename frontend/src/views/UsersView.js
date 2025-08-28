@@ -33,8 +33,12 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ClearIcon from '@mui/icons-material/Clear';
+import PeopleIcon from '@mui/icons-material/People';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { useLanguage } from '../utils/LanguageContext';
 
-const UsersView = ({ users, setSelectedUser, selectedPanchayat }) => {
+const UsersView = ({ users, loggedInUser, setSelectedUser, selectedPanchayat, setShowAllCitizen }) => {
+  const { strings } = useLanguage();
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
@@ -189,14 +193,47 @@ const UsersView = ({ users, setSelectedUser, selectedPanchayat }) => {
 
   return (
     <Box>
-      <Paper elevation={1} sx={{ p: 3, mb: 4 }}>
-        <Typography variant="h2" component="h1" gutterBottom>
-          Members
-        </Typography>
-        <Typography variant="body1" paragraph>
-          Manage registered Gram Sabha members for {selectedPanchayat.name}.
-        </Typography>
-      </Paper>
+      {loggedInUser.userType === 'ADMIN'&& (
+        <Paper elevation={1} sx={{ p: 3, mb: 4 }}>
+          <Typography variant="h2" component="h1" gutterBottom>
+            Members
+          </Typography>
+          <Typography variant="body1" paragraph>
+            Manage registered Gram Sabha members for {selectedPanchayat.name}.
+          </Typography>
+        </Paper>
+      )}
+      {loggedInUser.userType === 'OFFICIAL'&& (
+        <Box
+          sx={{
+              p: 3,
+              backgroundColor: 'primary.main',
+              color: 'white',
+              borderTopLeftRadius: 8,
+              borderTopRightRadius: 8,
+              position: 'relative',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <IconButton
+                onClick={() => { setShowAllCitizen(false); setSelectedUser(null); }}
+                sx={{ mr: 1, color: 'white' }}
+                size="small"
+            >
+              <ArrowBackIcon />
+            </IconButton>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <PeopleIcon sx={{ mr: 1 }} />
+              <Typography variant="h5" component="h1">
+                  {strings.members}
+              </Typography>
+            </Box>
+          </Box>
+      </Box>
+      )}
 
       <Paper elevation={2} sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -354,7 +391,7 @@ const UsersView = ({ users, setSelectedUser, selectedPanchayat }) => {
                         Status {renderSortIcon('status')}
                       </Box>
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }} align="right">Actions</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }} alignItems="center">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -385,11 +422,12 @@ const UsersView = ({ users, setSelectedUser, selectedPanchayat }) => {
                           />
                         )}
                       </TableCell>
-                      <TableCell align="right">
+                      <TableCell alignItems="center">
                         <Button
                           variant="contained"
                           size="small"
                           onClick={() => setSelectedUser(user)}
+                          sx={{ width: 70 }}
                         >
                           {user.isRegistered ? 'View' : 'Register'}
                         </Button>

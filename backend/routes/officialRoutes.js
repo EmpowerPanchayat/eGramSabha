@@ -142,6 +142,12 @@ router.post('/', isAuthenticated, hasRole(['ADMIN']), async (req, res) => {
                 });
             }
         }
+        else if (role !== 'GUEST' && role !== 'SECRETARY') {
+            return res.status(400).json({
+                success: false,
+                message: 'Please link a citizen from the panchayat'
+            });
+        }
 
         // Generate a random password
         const generatedPassword = username;

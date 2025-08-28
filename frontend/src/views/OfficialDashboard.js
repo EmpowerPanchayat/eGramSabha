@@ -8,10 +8,7 @@ import {
     Grid,
     Card,
     CardContent,
-    CardActions,
-    Divider,
     Avatar,
-    Chip,
     Alert,
     CircularProgress,
     Stack,
@@ -31,20 +28,11 @@ import {
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
-import PersonIcon from '@mui/icons-material/Person';
-import BadgeIcon from '@mui/icons-material/Badge';
-import HomeIcon from '@mui/icons-material/Home';
-import PhoneIcon from '@mui/icons-material/Phone';
+import PeopleIcon from '@mui/icons-material/People';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import LogoutIcon from '@mui/icons-material/Logout';
-import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
-import LocationOnIcon from '@mui/icons-material/LocationOn';
 import LanguageSwitcher from '../components/LanguageSwitcher';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import NotificationsIcon from '@mui/icons-material/Notifications';
-import SettingsIcon from '@mui/icons-material/Settings';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
-import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import FlagIcon from '@mui/icons-material/Flag';
 import AssignmentIcon from '@mui/icons-material/Assignment';
@@ -53,14 +41,16 @@ import LockIcon from '@mui/icons-material/Lock';
 import MeetingRoomIcon from '@mui/icons-material/MeetingRoom';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import { useLanguage } from '../utils/LanguageContext';
-import { fetchUserIssues, getFaceImageUrl } from '../api/index';
-import { fetchOfficialIssues, fetchPanchayatStats } from '../api/officials';
+import { fetchPanchayatStats } from '../api/officials';
 import PasswordChangeForm from './PasswordChangeForm';
 import { changePassword } from '../api/profile';
 import { useAuth } from '../utils/authContext';
 import { useNavigate } from 'react-router-dom';
-import GramSabhaManagement from '../components/GramSabha/GramSabhaManagement';
 import TodaysMeetingsBanner from '../components/GramSabha/TodaysMeetingsBanner';
+import { fetchUsers } from '../api';
+import { RegistrationView, UsersView } from '.';
+import FaceRegistration from '../components/FaceRegistration';
+import * as faceapi from 'face-api.js';
 
 const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha }) => {
     const { strings } = useLanguage();
@@ -71,14 +61,17 @@ const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha }) =
     const [panchayatInfo, setPanchayatInfo] = useState(null);
     const [userState, setUserState] = useState(user);
     const [imageUrl, setImageUrl] = useState(null);
-    const [userStats, setUserStats] = useState(null);
     const [panchayatStats, setPanchayatStats] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [profileCollapsed, setProfileCollapsed] = useState(false);
     const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
     const [passwordChangeLoading, setPasswordChangeLoading] = useState(false);
     const [passwordChangeError, setPasswordChangeError] = useState('');
+    const [users, setUsers] = useState([]);
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [showAllCitizen, setShowAllCitizen] = useState(false);
+    const [message, setMessage] = useState({ type: '', text: '' });
+    const [modelsLoaded, setModelsLoaded] = useState(false);
     const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
     useEffect(() => {
@@ -139,6 +132,39 @@ const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha }) =
         fetchOfficialDetails();
     }, [user, API_URL]);
 
+    useEffect(() => {
+        if (panchayatInfo?._id) {
+            fetchUsers(panchayatInfo._id).then((data) => setUsers(data));
+        }
+    }, [panchayatInfo]);
+
+    // Load face-api models
+    useEffect(() => {
+        const loadModels = async () => {
+            setLoading(true);
+            try {
+                // Use a CDN instead of local files
+                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+                ]);
+
+                setModelsLoaded(true);
+                console.log('Face-api models loaded successfully from CDN');
+            } catch (error) {
+                console.error('Error loading models:', error);
+                setMessage({ type: 'error', text: 'Failed to load facial recognition models.' });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadModels();
+    }, []);
+
     const getStatusCounts = () => {
         if (!panchayatStats) return { pending: 0, inProgress: 0, resolved: 0 };
         return {
@@ -149,24 +175,6 @@ const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha }) =
     };
 
     const statusCounts = getStatusCounts();
-
-    const getStatusColor = (status) => {
-        switch (status) {
-            case 'REPORTED': return theme.palette.warning.main;
-            case 'IN_PROGRESS': return theme.palette.info.main;
-            case 'RESOLVED': return theme.palette.success.main;
-            default: return theme.palette.text.secondary;
-        }
-    };
-
-    const getStatusIcon = (status) => {
-        switch (status) {
-            case 'REPORTED': return <FlagIcon color="error" />;
-            case 'IN_PROGRESS': return <AssignmentIcon color="warning" />;
-            case 'RESOLVED': return <CheckCircleIcon color="success" />;
-            default: return <FlagIcon color="error" />;
-        }
-    };
 
     // Handle password change
     const handlePasswordChange = async (currentPassword, newPassword) => {
@@ -191,7 +199,58 @@ const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha }) =
         navigate('/admin/login');
     };
 
-    return (
+    // Handle user update (after registration)
+    const handleUserUpdate = (updatedUser) => {
+        setSelectedUser(updatedUser); // Update selectedUser with new data
+        // Update the users list with the updated user
+        setUsers(prevUsers =>
+            prevUsers.map(u =>
+                u._id === updatedUser._id ? { ...u, ...updatedUser } : u
+            )
+        );
+    };
+
+    return showAllCitizen ? (
+        <Container maxWidth="xl" sx={{ py: 3 }}>
+            <Box>
+                {selectedUser && (
+                    <IconButton
+                        title={strings.back}
+                        onClick={() => setSelectedUser(null)}
+                        sx={{
+                            background: "rgba(255,255,255,0.8)",
+                            top: 50,
+                            left: 30,
+                        }}
+                    >
+                        <ArrowBackIcon />
+                    </IconButton>
+                )}
+                {!selectedUser ? (
+                    <UsersView
+                        users={users}
+                        loggedInUser={user}
+                        setSelectedUser={setSelectedUser}
+                        selectedPanchayat={panchayatInfo}
+                        setShowAllCitizen={setShowAllCitizen}
+                    />
+                ) : (
+                    <RegistrationView
+                        user={selectedUser}
+                        onUserUpdate={handleUserUpdate}
+                    >
+                        <FaceRegistration
+                            user={selectedUser}
+                            modelsLoaded={modelsLoaded}
+                            onUserUpdate={handleUserUpdate}
+                            setMessage={setMessage}
+                            setLoading={setLoading}
+                        />
+                    </RegistrationView>
+                )}
+            </Box>
+        </Container>
+    ) : (
         <Container maxWidth="xl" sx={{ py: 3 }}>
             {/* Header with greeting and language selector */}
             <Paper
@@ -236,9 +295,18 @@ const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha }) =
                         }
                     }}
                 >
-                    <Badge badgeContent={statusCounts.pending} color="error">
+                    <IconButton
+                        color="inherit"
+                        onClick={() => setShowAllCitizen(true)}
+                        title={strings.members}
+                        size={isMobile ? "small" : "medium"}
+                    >
+                        <PeopleIcon fontSize={isMobile ? "small" : "medium"} />
+                    </IconButton>
+                    
+                    {/* <Badge badgeContent={statusCounts.pending} color="error">
                         <NotificationsIcon fontSize={isMobile ? "small" : "medium"} />
-                    </Badge>
+                    </Badge> */}
                     <IconButton
                         color="inherit"
                         onClick={() => setPasswordDialogOpen(true)}

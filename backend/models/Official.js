@@ -59,9 +59,13 @@ const officialSchema = new mongoose.Schema({
         type: Date
     },
     linkedCitizenId: {
+        // This links the official to an existing citizen user
         type: mongoose.Schema.Types.ObjectId,
         ref: MODEL_REFS.USER,
-        // This links the official to an existing citizen user
+        required: function () {
+            // Required if role is not ADMIN, GUEST or SECRETARY
+            return this.role !== 'ADMIN' && this.role !== 'GUEST' && this.role !== 'SECRETARY';
+        }
     },
     wardId: {
         type: mongoose.Schema.Types.ObjectId,
