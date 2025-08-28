@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Edit user details feature for official and no need to link citizen in case of guest user or Panchayat Secretaries on admin.([#139](https://github.com/EmpowerPanchayat/eGramSabha/issues/139))
+
 ### Fixed
 
 - Citizen Portal issue list view.([#149](https://github.com/EmpowerPanchayat/eGramSabha/issues/149))
