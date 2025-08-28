@@ -74,7 +74,7 @@ const OfficialForm = ({ official = null, selectedPanchayat, onSubmit, onCancel }
                 phone: official.phone || '',
                 role: official.role || 'GUEST',
                 panchayatId: selectedPanchayat?._id || '',
-                linkedCitizenId: official.linkedCitizenId || ''
+                linkedCitizenId: official.linkedCitizenId || null
             });
 
             // Set selected citizen if official has one linked
@@ -123,8 +123,8 @@ const OfficialForm = ({ official = null, selectedPanchayat, onSubmit, onCancel }
         }
         if (!formData.role) return 'Role is required';
         if (!formData.panchayatId) return 'Panchayat is required';
-        // Only require linkedCitizenId when editing an existing official
-        if (official && !formData.linkedCitizenId) return 'Please link a citizen from the panchayat';
+        // Only require linkedCitizenId when editing an existing official (except GUEST or SECRETARY)
+        if (official && (formData.role && (formData.role !== "GUEST" && formData.role !== "SECRETARY")) && !formData.linkedCitizenId) return 'Please link a citizen from the panchayat';
         return null;
     };
 
@@ -192,7 +192,6 @@ const OfficialForm = ({ official = null, selectedPanchayat, onSubmit, onCancel }
                             <TextField
                                 {...params}
                                 label="Select Citizen"
-                                required
                                 InputProps={{
                                     ...params.InputProps,
                                     startAdornment: (
