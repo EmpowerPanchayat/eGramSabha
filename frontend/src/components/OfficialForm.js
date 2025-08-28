@@ -123,7 +123,7 @@ const OfficialForm = ({ official = null, selectedPanchayat, onSubmit, onCancel }
         }
         if (!formData.role) return 'Role is required';
         if (!formData.panchayatId) return 'Panchayat is required';
-        // Only require linkedCitizenId when editing an existing official (except GUEST or SECRETARY)
+        // Does not require linkedCitizenId for GUEST or SECRETARY roles
         if (official && (formData.role && (formData.role !== "GUEST" && formData.role !== "SECRETARY")) && !formData.linkedCitizenId) return 'Please link a citizen from the panchayat';
         return null;
     };
@@ -192,6 +192,7 @@ const OfficialForm = ({ official = null, selectedPanchayat, onSubmit, onCancel }
                             <TextField
                                 {...params}
                                 label="Select Citizen"
+                                required={formData.role !== 'GUEST' && formData.role !== 'SECRETARY'}
                                 InputProps={{
                                     ...params.InputProps,
                                     startAdornment: (
