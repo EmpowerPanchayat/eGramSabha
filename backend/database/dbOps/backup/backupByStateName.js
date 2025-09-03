@@ -1,4 +1,4 @@
-//node scripts/dbScripts/backup/backupByStateName.js Haryana Punjab
+//node database/dbOps/backup/backupByStateName.js Haryana Punjab
 
 const mongoose = require('mongoose');
 const Panchayat = require('../../../models/Panchayat');

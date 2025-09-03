@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const fs = require('fs');
 const csv = require('csv-parser');
 const path = require('path');
-const User = require('../models/User');
+const User = require('../../models/User');
 
 // MongoDB connection
 const connectToDatabase = async () => {

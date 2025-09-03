@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
-const storageService = require('../storage/storageService');
-const User = require('../models/User');
+const storageService = require('../../storage/storageService');
+const User = require('../../models/User');
 
 const UPLOADS_DIR = path.join(__dirname, '../uploads');
 

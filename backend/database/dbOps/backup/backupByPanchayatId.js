@@ -1,4 +1,4 @@
-// node scripts/dbScripts/backup/backupByPanchayatId.js <PanchayatId1> <PanchayatId2>
+// node database/dbOps/backup/backupByPanchayatId.js <PanchayatId1> <PanchayatId2>
 
 const mongoose = require('mongoose');
 const fs = require('fs');
@@ -28,7 +28,7 @@ async function backupPanchayats(panchayatIds, backupDirName = 'backup_panchayats
   if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir);
 
   // --- Call exportSchema.js before backup ---
-  const exportScriptPath = path.join(__dirname, '../../validation/exportSchema.js');
+  const exportScriptPath = path.join(__dirname, '../../utils/exportSchema.js');
   console.log('Exporting schema before backup...');
   execSync(`node "${exportScriptPath}" "${backupDir}"`, { stdio: 'inherit' });
 

@@ -1,5 +1,5 @@
-// \backend\scripts\backups> node ..\validation\validatebeforeImport.js .\backup_Haryana\
-// \backend\scripts\backups> node ..\validation\validatebeforeImport.js .\backup_67f77646e3620fec252a618d\
+// \backend\database\dbBackups> node ..\utils\validatebeforeImport.js .\backup_Haryana\
+// \backend\database\dbBackups> node ..\utils\validatebeforeImport.js .\backup_67f77646e3620fec252a618d\
 
 const fs = require("fs");
 const path = require("path");
@@ -33,7 +33,13 @@ function mapTypes(types) {
     return { anyOf: [{ type: "string", format: "date-time" }, { type: "null" }] };
   }
   if (types.includes("objectid")) {
-    return { type: "string", pattern: "^[a-fA-F0-9]{24}$" };
+    // ObjectId can be a valid 24-char hex string or null
+    return {
+      anyOf: [
+        { type: "string", pattern: "^[a-fA-F0-9]{24}$" },
+        { type: "null" }
+      ]
+    };
   }
   if (types.includes("mixed")) {
     return { type: ["object", "string", "number", "boolean", "array", "null"] };
@@ -51,10 +57,12 @@ function mapTypes(types) {
 // ------------------
 function buildProperties(summary) {
   const props = {};
+  const required = new Set();
 
   for (const [field, def] of Object.entries(summary)) {
     const parts = field.split(".");
     let current = props;
+    let reqTracker = required;
 
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
@@ -62,32 +70,61 @@ function buildProperties(summary) {
       if (i === parts.length - 1) {
         // Leaf → assign schema
         current[part] = mapTypes(def.types);
+        if (def.required) {
+          reqTracker.add(part);
+        }
       } else {
         if (!current[part]) {
           current[part] = { type: "object", properties: {} };
         }
+        if (!current[part].properties) {
+          current[part].properties = {};
+        }
+        if (!current[part].requiredSet) {
+          current[part].requiredSet = new Set();
+        }
+
+        // walk down one level
         current = current[part].properties;
+        reqTracker = current[part]?.requiredSet || new Set();
       }
     }
   }
 
-  return props;
+  // Recursively convert all .requiredSet to arrays
+  function finalize(obj) {
+    for (const [k, v] of Object.entries(obj)) {
+      if (v.properties) {
+        finalize(v.properties);
+      }
+      if (v.requiredSet) {
+        v.required = Array.from(v.requiredSet);
+        delete v.requiredSet;
+      }
+    }
+  }
+  finalize(props);
+
+  return { props, required: Array.from(required) };
 }
 
 // ------------------
 // Convert summary → AJV schema
 // ------------------
 function schemaSummaryToAjvSchema(summary, allowExtra = false) {
+  const { props, required } = buildProperties(summary);
+
   return {
     $schema: "http://json-schema.org/draft-07/schema#",
     type: "array",
     items: {
       type: "object",
       properties: {
-        ...buildProperties(summary),
+        ...props,
         // whitelist fields: free pass (any type)
         ...Object.fromEntries(WHITELISTED_FIELDS.map(f => [f, {}]))
       },
+      required: required,
       additionalProperties: allowExtra ? true : false
     }
   };
@@ -147,7 +184,7 @@ function runValidation(backupDir) {
 // ------------------
 const backupDir = process.argv[2];
 if (!backupDir) {
-  console.error("Usage: node validation/validateBeforeImport.js <BackupDir> [--loose]");
+  console.error("Usage: node utils/validateBeforeImport.js <BackupDir> [--loose]");
   process.exit(1);
 }
 

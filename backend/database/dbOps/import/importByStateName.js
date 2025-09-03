@@ -1,4 +1,4 @@
-// node scripts/dataMigration/importByStateName.js Haryana Punjab
+// node database/dbOps/import/importByStateName.js Haryana Punjab
 
 const importPanchayats = require('./importByPanchayatId');
 

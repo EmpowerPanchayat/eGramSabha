@@ -1,5 +1,5 @@
-// \backend\scripts\dbBackups> node ..\validation\exportSchema.js .\backup_Haryana\
-// \backend\scripts\dbBackups> node ..\validation\exportSchema.js .\backup_682c40492e34934aabdd1849\
+// \backend\database\dbBackups> node ..\utils\exportSchema.js .\backup_Haryana\
+// \backend\database\dbBackups> node ..\utils\exportSchema.js .\backup_682c40492e34934aabdd1849\
 
 const fs = require('fs');
 const path = require('path');
@@ -52,7 +52,12 @@ function exportSchemas(backupDir) {
 
       schemaSummary[pathname] = {
         types: [getFieldType(schemaType)],
-        required: !!schemaType.isRequired
+        // Handle required:
+        // - true/false → keep as is
+        // - function or array (conditional required) → treat as false
+        required: (typeof schemaType.options.required === "boolean")
+                    ? schemaType.options.required
+                    : false
       };
     });
 
@@ -64,7 +69,7 @@ function exportSchemas(backupDir) {
 
 const backupDir = process.argv[2];
 if (!backupDir) {
-  console.error('Usage: node validation/exportSchema.js <BackupDir>');
+  console.error('Usage: node utils/exportSchema.js <BackupDir>');
   process.exit(1);
 }
 exportSchemas(backupDir);
