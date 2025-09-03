@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Edit user details feature for official and no need to link citizen in case of guest user or Panchayat Secretaries on admin.([#139](https://github.com/EmpowerPanchayat/eGramSabha/issues/139))
+- Initial and seed DB scripts.([#155](https://github.com/EmpowerPanchayat/eGramSabha/issues/155))
 
 ### Fixed
 
