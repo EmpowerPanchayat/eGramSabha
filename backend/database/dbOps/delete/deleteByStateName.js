@@ -1,4 +1,4 @@
-// node scripts\dbScripts\delete\deleteByStateName.js Haryana Punjab
+// node database\dbOps\delete\deleteByStateName.js Haryana Punjab
 
 const mongoose = require('mongoose');
 const Panchayat = require('../../../models/Panchayat');

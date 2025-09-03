@@ -1,4 +1,4 @@
-// node scripts/dataMigration/importByPanchayatId.js backup_<PanchayatId1>_<PanchayatId2>_...
+// node database/dbOps/import/importByPanchayatId.js backup_<PanchayatId1>_<PanchayatId2>_...
 
 const mongoose = require('mongoose');
 const fs = require('fs');
@@ -21,7 +21,7 @@ async function importPanchayats(backupDirName) {
   const backupDir = path.join(backupBase, backupDirName);
 
   // --- Call validateBeforeImport.js first ---
-  const validateScriptPath = path.join(__dirname, '../../validation/validateBeforeImport.js');
+  const validateScriptPath = path.join(__dirname, '../../utils/validateBeforeImport.js');
   console.log('Running validation before import...');
   execSync(`node "${validateScriptPath}" "${backupDir}"`, { stdio: 'inherit' });
 
@@ -42,12 +42,14 @@ async function importPanchayats(backupDirName) {
     if (model.modelName === 'Official') {
       for (const official of data) {
         if (official.role === 'ADMIN') {
-          // Try update, or insert if not present
-          await model.updateOne(
-            { role: 'ADMIN' },
-            { $set: official },
-            { upsert: true }
-          );
+          // Check if an ADMIN already exists
+          const existingAdmin = await model.findOne({ role: 'ADMIN' });
+          if (!existingAdmin) {
+            await model.create(official);
+            console.log('Inserted ADMIN official');
+          } else {
+            console.log('ADMIN already exists, skipping insert');
+          }
         } else {
           await model.updateOne(
             { _id: official._id },

@@ -144,6 +144,8 @@ panchayatSchema.index(
       state: 1,
     },
     name: "location_text_index",
+    default_language: "none", // disable stemming (safer for Indian languages)
+    language_override: "dummyLang" // point to a non-existent field, so it never conflicts
   }
 );
 
