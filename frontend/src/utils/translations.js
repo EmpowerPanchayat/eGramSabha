@@ -29,7 +29,8 @@ const translations = {
     mobileNumber: "Mobile Number",
     selectAgendaDiscussed: "Select agenda items to mark as discussed:",
     confirmSubmission: "Confirm Submission",
-    agendaDiscussedConfirmation: "Are you sure you want to submit this agenda? Linked issues will be updated accordingly.",
+    agendaDiscussedConfirmation:
+      "Are you sure you want to submit this agenda? Linked issues will be updated accordingly.",
 
     // ===== NEW: Location-based login error messages =====
     invalidLgdCode:
@@ -420,8 +421,27 @@ const translations = {
     noResponse: "No Response",
     totalRegisteredUsers: "Total Registered Users",
     noAgenda: "No agenda available",
-    translationInProgress: "Some translations are in progress. Please wait a few moments.",
+    translationInProgress:
+      "Some translations are in progress. Please wait a few moments.",
     noDescription: "No description available",
+    viewAgendaDocument: "View Agenda Document",
+    agendaDocument: "Agenda Document",
+    previewOnly: "Preview Only",
+    signatories: "Signatories",
+    contactMethod: "Contact Method",
+    contactValue: "Contact Value",
+    status: "Status",
+    phone: "Phone",
+    email: "Email",
+    custom: "Custom",
+    designation: "Designation",
+    enterCustomContact: "Enter different contact/email",
+    noEmail: "No email available",
+    noPhone: "No phone available",
+    pending: "Pending",
+    sendAgendaForSigning: "Send Agenda for Signing",
+    close: "Close",
+    agendaSentForSigning: "Agenda sent for signing successfully",
 
     // Upcoming Meetings
     upcomingMeeting: "Upcoming Gram Sabha Meeting",
@@ -491,14 +511,16 @@ const translations = {
     filterStatusCurrent: "Linked with current item",
     filterStatusOther: "Linked with other items",
     filterStatusNone: "Unlinked issues",
-    filterStatusExplanation: "Background colors indicate link status: blue = linked to this item; grey = linked to other items; white = unlinked",
+    filterStatusExplanation:
+      "Background colors indicate link status: blue = linked to this item; grey = linked to other items; white = unlinked",
     filterReset: "Reset filters",
     filters: "Filters",
     linkStatusAll: "All issues",
     linkStatusCurrent: "Linked with current item",
     linkStatusOther: "Linked with other items",
     linkStatusNone: "Unlinked issues",
-    linkStatusExplanation: "Background colors: blue = current, grey = other, white = unlinked",
+    linkStatusExplanation:
+      "Background colors: blue = current, grey = other, white = unlinked",
     secretary: "Secretary",
     sarpanch: "Sarpanch",
     gramPanchayat: "Gram Panchayat",
@@ -515,7 +537,7 @@ const translations = {
     success: "सफलता",
     submit: "जमा करें",
     yesSubmit: "हाँ, जमा करें",
-    "add": "जोड़ें",
+    add: "जोड़ें",
     cancel: "रद्द करें",
     save: "सहेजें",
     delete: "हटाएं",
@@ -536,7 +558,8 @@ const translations = {
     mobileNumber: "मोबाइल नंबर",
     selectAgendaDiscussed: "चर्चा के लिए एजेंडा आइटम चुनें:",
     confirmSubmission: "जमा की पुष्टि करें",
-    agendaDiscussedConfirmation: "क्या आप सुनिश्चित हैं कि आप इस एजेंडा को जमा करना चाहते हैं? जुड़े मुद्दे तदनुसार अपडेट किए जाएंगे।",
+    agendaDiscussedConfirmation:
+      "क्या आप सुनिश्चित हैं कि आप इस एजेंडा को जमा करना चाहते हैं? जुड़े मुद्दे तदनुसार अपडेट किए जाएंगे।",
 
     // ===== NEW: Location-based login error messages =====
     invalidLgdCode:
@@ -871,6 +894,24 @@ const translations = {
       "चूंकि बैठक समाप्त हो चुकी है, आप केवल आवश्यकतानुसार कोई अटैचमेंट अपलोड कर सकते हैं। बैठक विवरण देखने के लिए कृपया क्रियाएँ अनुभाग में विवरण देखें (आंख) बटन पर क्लिक करें।",
     noAgendaInfo:
       "कोई एजेंडा आइटम उपलब्ध नहीं है। कृपया सुनिश्चित करें कि इस पंचायत के मुद्दों को संक्षेपित किया गया है।",
+    viewAgendaDocument: "कार्यसूची दस्तावेज़ देखें",
+    agendaDocument: "कार्यसूची दस्तावेज़",
+    previewOnly: "केवल पूर्वावलोकन",
+    signatories: "हस्ताक्षरकर्ता",
+    contactMethod: "संपर्क विधि",
+    contactValue: "संपर्क विवरण",
+    status: "स्थिति",
+    phone: "फ़ोन",
+    email: "ईमेल",
+    custom: "कस्टम",
+    designation: "पद",
+    enterCustomContact: "अलग संपर्क/ईमेल दर्ज करें",
+    noEmail: "कोई ईमेल उपलब्ध नहीं",
+    noPhone: "कोई फ़ोन नंबर उपलब्ध नहीं",
+    pending: "लंबित",
+    sendAgendaForSigning: "हस्ताक्षर के लिए कार्यसूची भेजें",
+    close: "बंद करें",
+    agendaSentForSigning: "कार्यसूची सफलतापूर्वक हस्ताक्षर के लिए भेजी गई",
 
     // Table Headers
     tableTitle: "शीर्षक",
@@ -964,7 +1005,8 @@ const translations = {
     noResponse: "कोई प्रतिक्रिया नहीं",
     totalRegisteredUsers: "कुल पंजीकृत उपयोगकर्ता",
     noAgenda: "कोई एजेंडा उपलब्ध नहीं है",
-    translationInProgress: "कुछ अनुवाद प्रगति में हैं। कृपया कुछ क्षण प्रतीक्षा करें।",
+    translationInProgress:
+      "कुछ अनुवाद प्रगति में हैं। कृपया कुछ क्षण प्रतीक्षा करें।",
     noDescription: "कोई विवरण उपलब्ध नहीं है",
 
     // Upcoming Meetings
@@ -1036,7 +1078,8 @@ const translations = {
     filterStatusCurrent: "वर्तमान आइटम से जुड़े",
     filterStatusOther: "अन्य आइटम से जुड़े",
     filterStatusNone: "अजोड़ मुद्दे",
-    filterStatusExplanation: "पृष्ठभूमि का रंग लिंक की स्थिति दर्शाता है: नीला=वर्तमान आइटम से जुड़ा; धूसर=अन्य आइटम से जुड़ा; सफेद=अजोड़",
+    filterStatusExplanation:
+      "पृष्ठभूमि का रंग लिंक की स्थिति दर्शाता है: नीला=वर्तमान आइटम से जुड़ा; धूसर=अन्य आइटम से जुड़ा; सफेद=अजोड़",
     filterReset: "फ़िल्टर रीसेट करें",
     filters: "फ़िल्टर",
     secretary: "ग्राम सचिव",

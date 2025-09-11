@@ -1,0 +1,62 @@
+{
+  "groupId": "c0a840b9-98cb-1b54-8199-0f84ad41522c",
+  "documents": [
+    {
+      "docId": 1,
+      "type": "PDF",
+      "format": "FILE",
+      "pages": 1,
+      "name": "Agenda"
+    }
+  ],
+  "participants": [
+    {
+      "idValue": "9260939222",
+      "idType": 2,
+      "access": 1,
+      "signOrder": -1,
+      "participantTag": 1,
+      "assuranceLevel": "4",
+      "notifications": [{ "notification_type": 7, "enable": 1 }],
+      "cards": [
+        {
+          "totalPage": 1,
+          "cardX": 51.1279296875,
+          "cardY": 756.0516314449925,
+          "cardH": 17.045944993492856,
+          "cardW": 56.12890625,
+          "unit": "px",
+          "cardColor": "#f2d130",
+          "cardType": 2,
+          "cardPageNo": 1,
+          "cardOnPage": 1,
+          "cTag": 0
+        }
+      ]
+    },
+    {
+      "idValue": "7317070548",
+      "idType": 2,
+      "access": 1,
+      "signOrder": -1,
+      "participantTag": 2,
+      "assuranceLevel": "4",
+      "notifications": [{ "notification_type": 7, "enable": 1 }],
+      "cards": [
+        {
+          "totalPage": 1,
+          "cardX": 425.6416015625,
+          "cardY": 756.0516314449925,
+          "cardH": 17.045944993492856,
+          "cardW": 58.94140625,
+          "unit": "px",
+          "cardColor": "#f2d130",
+          "cardType": 2,
+          "cardPageNo": 1,
+          "cardOnPage": 1,
+          "cTag": 0
+        }
+      ]
+    }
+  ]
+}

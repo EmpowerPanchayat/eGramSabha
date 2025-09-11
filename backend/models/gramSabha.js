@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
-const MODEL_REFS = require('./modelRefs');
-const agendaItemSchema = require('./agendaItemSchema');
+const MODEL_REFS = require("./modelRefs");
+const agendaItemSchema = require("./agendaItemSchema");
 
 const gramSabhaSchema = new mongoose.Schema(
   {
@@ -20,7 +20,7 @@ const gramSabhaSchema = new mongoose.Schema(
     },
     agenda: {
       type: [agendaItemSchema],
-      default: []
+      default: [],
     },
     scheduledDurationHours: {
       type: Number,
@@ -66,6 +66,17 @@ const gramSabhaSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       required: false,
     },
+    agendaGroupId: { type: String },
+    agendaSigningStatus: { type: String },
+    agendaSignatories: {
+      type: mongoose.Schema.Types.Mixed,
+      required: false,
+    },
+    signedAgendaPDF: {
+      data: Buffer,
+      contentType: String,
+    },
+
     issues: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -163,4 +174,5 @@ const gramSabhaSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.models.GramSabha || mongoose.model("GramSabha", gramSabhaSchema);
+module.exports =
+  mongoose.models.GramSabha || mongoose.model("GramSabha", gramSabhaSchema);

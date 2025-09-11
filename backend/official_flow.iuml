@@ -1,0 +1,225 @@
+
+
+title Official Flow in eGramSabha
+
+
+participant Official
+participant Frontend
+participant Backend
+participant MongoDB
+participant CronJob
+participant HuggingFaceLLM
+participant JioTranslate
+participant JioSign
+participant JioMeet
+
+== 1. Official Login ==
+Official->Frontend: Enters username and password
+Frontend->Backend: POST /api/official-auth/login
+Backend->MongoDB: Find official by username
+MongoDB-->Backend: Returns official data GET api/panchayats/id:/stats
+alt Credentials Valid
+    Backend->MongoDB: Update lastLogin timestamp
+    MongoDB-->Backend: Confirms update
+    Backend-->Frontend: POST api/auth/official/login 200 OK (JWT Token, User Profile)
+    Frontend->Official: Displays dashboard
+else Invalid Credentials
+    Backend-->Frontend: POST api/auth/official/login 401 Unauthorized
+    Frontend->Official: Shows login error
+end
+
+== 2.Create Issue ==
+Official->Frontend: Navigates to Create Issues page
+Frontend->Backend: Returns gram sabha members -GET /api/users/panchayat/:id
+Official->Frontend: Fills the form with audio and attachments
+Frontend->Backend: -POST api/issues
+Backend->MongoDB: Store issue data
+MongoDB-->Backend:Returns issue id
+Frontend->Backend: -POST api/issues/upload-attachment
+Backend->MongoDB: Stores attachment data
+MongoDB-->Backend: Returns attachment id 
+
+
+== 3. agenda treanscript flow ==
+
+note over Official, VideoMoM: This flow shows the main backend delegating a complex AI task to a specialized microservice.
+
+MongoDB->CronJob: ChronJob listens for requests
+CronJob->Backend: POST /api/gramsabha/initiate-transcription/:id
+
+Backend->VideoMoM: POST /transcription/jio/Hindi 
+
+VideoMoM-->Backend: 202 Accepted (request_id, status_url) , 
+
+par Background Transcription [VideoMoM]
+    VideoMoM->VideoMoM: Extracts audio from video using FFmpeg
+    VideoMoM->Jio_STT: POST /stt (sends audio chunks in Hindi)
+    Jio_STT-->VideoMoM: Returns raw Hindi transcription for chunks
+    VideoMoM->VideoMoM: Stitches chunks into a single raw transcript
+    VideoMoM->MongoDB: Saves raw transcript for the request_id
+else Background Enhancement & Translation [VideoMoM]
+    VideoMoM->HuggingFace_LLM: POST /chat/completions (sends raw transcript + expert prompt)
+    note right of HuggingFace_LLM: The LLM corrects the text and provides English and Hindi versions in a single JSON response.
+    HuggingFace_LLM-->VideoMoM: Returns { corrected_transcription, english_translation, hindi_translation }
+    VideoMoM->MongoDB: Saves final, enhanced, multi-lingual results for the request_id
+end
+
+note over Official: This flow runs when official views issue/suggestion details
+
+Frontend->Backend: Polls /api/gramsabha/transcription-status/:id 
+Backend->VideoMoM: GET /request/:request_id/result (using stored request_id)
+VideoMoM-->Backend: Returns final JSON with all transcript versions
+Backend->MongoDB: Saves final transcript to the main GramSabha document
+Backend-->Frontend: 200 OK (final transcript object)
+Frontend->Official: Displays the complete, corrected, and translated transcript.
+
+
+== 4. Agenda Summary Flow ==
+
+CronJob->CronJob: Schedule fires (e.g., `0 * * * *`)
+
+CronJob->MongoDB: Find issues needing summarization
+MongoDB-->CronJob: Returns list of issues
+
+CronJob->Backend: initiateNewSummary(issues)
+
+Backend->VideoMoM: **POST /agenda/generate/{language}**(sends transcription data)
+VideoMoM-->Backend: 202 Accepted (returns `request_id`)
+
+Backend-->CronJob: Returns `request_id`
+
+CronJob->MongoDB: Create `SummaryRequest` document to track the job
+MongoDB-->CronJob: Confirms save
+
+
+CronJob->CronJob: Polling schedule fires (e.g., `*/5 * * * *`)
+
+CronJob->MongoDB: Find pending `SummaryRequest` documents
+MongoDB-->CronJob: Returns list of pending jobs
+
+loop for each pending job
+    CronJob->Backend: getSummaryResult(request.result_url)
+    Backend->VideoMoM: **GET /agenda/{request_id}/result**
+    VideoMoM->HuggingFaceLLM:gets summary
+    HuggingFaceLLM-->VideoMoM: returns summary
+    alt Result is Ready
+        VideoMoM-->Backend: 200 OK (returns final agenda JSON)
+        Backend-->CronJob: Returns final data
+        CronJob->MongoDB: Update `IssueSummary` and `Issues` collections with the result
+        MongoDB-->CronJob: Confirms updates
+    else Result is Not Ready
+        VideoMoM-->Backend: Returns `processing` status
+        Backend-->CronJob: No result yet
+    end
+end
+
+== 5. View Panchayat Issues ==
+Official->Frontend: Navigates to Issues page
+Frontend->Backend: GET /api/officials/:id/issues
+Backend->MongoDB: Find official's panchayatId
+MongoDB-->Backend: Returns panchayatId
+Backend->MongoDB: Find issues by panchayatId GET api/issues?page=1&limit=10&sortBy=createdAt&sort=desc&panchayatId=:id
+MongoDB-->Backend: Returns list of issues
+Backend-->Frontend: 200 OK(List of Issues)
+Frontend->Official: Displays issues list
+
+
+== 6. Manage Gram Sabha & JioMeet API Flow ==
+
+Official->Frontend: Fills out "Create Gram Sabha" form
+Frontend->Backend: POST /api/gramsabha (name, date, panchayatId)
+
+Backend->JioMeet: POST /schedule/meeting (sends meeting details)
+note right of JioMeet: JioMeet API generates the meeting and returns connection details.
+JioMeet-->Backend: 200 OK (jiomeetId, roomPIN, hostToken)
+Backend->MongoDB: Create new GramSabha document
+note right of MongoDB: Saves meeting details AND the `jioMeetData` received from the API. 
+MongoDB-->Backend: Confirms document creation
+Backend-->Frontend: 201 Created (Full GramSabha object with JioMeet data)
+
+== 7. View meeting Details ==
+Official->Frontend: Views meeting details
+Frontend->Backend: GET /api/gram-sabha/:id
+Backend->MongoDB: Fetch meeting details
+MongoDB-->Backend: Meeting details
+Backend-->Frontend: Meeting details
+Frontend->Backend: GET /api/gram-sabha/:id/rsvp-stats
+Backend->MongoDB: Fetch RSVP Stats
+MongoDB-->Backend: RSVP Stats
+Backend-->Frontend: RSVP Stats
+Frontend->Backend: GET /api/gram-sabha/:id/attendance GET /api/gram-sabha/:id/attendance-stats
+Backend->MongoDB: Fetch Attendance Stats
+MongoDB-->Backend: Attendance Stats
+Backend-->Frontend: Attendance Stats
+
+
+== 8. Join Meeting ==
+note right of Official: Joining a meeting is handled entirely on the client-side using the JioMeet SDK.
+Official->Frontend: Clicks "Join Meeting" button
+Frontend->Frontend: Initialize JioMeet SDK's `useJoin()` hook
+note right of Frontend: The SDK uses the `jiomeetId`, `roomPIN`, etc. from the saved GramSabha data to connect.
+Frontend->JioMeet: Connects to meeting via WebSockets (handled by SDK)
+JioMeet-->Frontend: Establishes video call session
+Frontend->Official: WebSDk User joins the live video meeting interface
+Official->Frontend: Joins meeting in another tab
+Frontend->Backend: WebSDK detects that official has joined the meeting
+Frontend->Backend: POST /api/gramsabha/start-recording
+Backend->JioMeet: calls startRecording API
+JioMeet-->Backend: 200 OK (Recording, historyId)
+note right of JioMeet: WebSDK user exits after official has joined the meeting
+Backend->MongoDB: Update `GramSabha` document with `historyId`
+Backend-->Frontend: 200 OK
+
+== 9. Download Recording ==
+Official->Frontend: Clicks "Download Recordings" for the past meeting
+Frontend->Backend: GET /api/gramsabha/recordings/:id
+Backend->JioMeet: **GET /recordings/list** (using `historyId`)
+JioMeet-->Backend: 200 OK (Returns list of recording files with download URLs)
+Backend-->Frontend: 200 OK (Sends list of recordings URL to frontend)
+Frontend->Frontend: Uses recording URLs with JioMeet creds to download recording in browser 
+Frontend->Official: Recordings saved in Official's filesystem
+
+
+== 10. Initiate Document Signing (e.g., Meeting Minutes) ==
+Official->Frontend: Clicks "Sign Document"
+Frontend->Backend: POST /api/jiosign/send-for-signing(Multipart Form: PDF, documentName, signers)
+note right of Backend: 1. Create Envelope
+Backend->JioSign: createDocumentEnvelope(documentName)
+JioSign-->Backend: Returns groupId
+note right of Backend: 2. Upload PDF & Participants
+Backend->JioSign: saveDocumentData(groupId, pdf, signers)
+JioSign-->Backend: Confirms data saved
+Backend-->Frontend: 200 OK{ success: true, groupId }
+Frontend->Official: Shows "Signing process initiated" message
+
+Official->Frontend: Clicks "Download" on a specific recording
+Frontend->Backend: GET /api/gramsabha/recordings/download (params: videoUrl)
+note right of Backend: Proxies the download from JioMeet's servers to the client.
+Backend->JioMeet: GET videoUrl (streams video file)
+JioMeet-->Backend: Returns video data stream
+Backend-->Frontend: 200 OK (returns video data as a blob)
+note right of Frontend: Creates a temporary link and triggers browser download.
+Frontend->Official: Browser prompts user to save the MP4 file.
+
+== 10. Document Signing (via JioSign Platform) ==
+note over Official, JioSign: The actual signing happens outside the app.An OTP is sent to the signer's mobile/email.
+
+Official->JioSign: Opens signing link from email/SMS
+JioSign->Official: Prompts for OTP and consent
+Official->JioSign: Enters OTP and signs
+JioSign-->JioSign: Embeds digital signature in document
+
+== 11. Check Signing Status ==
+Official->Frontend: Navigates to document status page
+Frontend->Backend: GET /api/jiosign/doc-status/:groupId
+Backend->JioSign: checkStatusAndDownload(groupId)
+JioSign-->Backend: Returns document status
+alt Status is 'COMPLETED'
+    JioSign->Backend: Downloads signed document
+    Backend->MongoDB: Saves signed document reference
+    Backend-->Frontend: 200 OK { status: 'COMPLETED' }
+else Status is 'PENDING'
+    Backend-->Frontend: 200 OK { status: 'PENDING' }
+end
+Frontend->Official: Displays current document status
+

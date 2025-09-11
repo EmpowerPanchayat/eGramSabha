@@ -61,7 +61,7 @@ axiosInstance.interceptors.response.use(
         const originalRequest = error.config;
 
         // Skip for refresh token or login requests to avoid loops
-        if (originalRequest.url === '/auth/refresh-token' || originalRequest.url === '/auth/login') {
+        if (originalRequest.url.includes('/login') || originalRequest.url.includes('/refresh-token')) {
             return Promise.reject(error);
         }
 

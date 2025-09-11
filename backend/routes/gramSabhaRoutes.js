@@ -6,6 +6,7 @@ const fs = require("fs");
 const GramSabha = require("../models/gramSabha");
 const RSVP = require("../models/rsvp");
 const auth = require("../middleware/auth");
+const Official = require("../models/Official");
 const { isPanchayatPresident } = require("../middleware/roleCheck");
 const Panchayat = require("../models/Panchayat");
 const IssueSummary = require("../models/IssueSummary");
@@ -304,7 +305,7 @@ router.post(
           const jioMeetToken = jwt.sign(payload, privateKey, {
             algorithm: "RS256",
           });
-
+          console.log(jioMeetToken, "MEEET");
           // Adding JioMeet API call
           const response = await axios.post(
             `${JIOMEET_API}/schedule/meeting`,
@@ -1130,14 +1131,14 @@ router.get("/panchayat/:panchayatId/active", async (req, res) => {
         // Today's meetings
         { dateTime: { $gte: today, $lt: tomorrow } },
         // Past meetings that are still in progress
-        { dateTime: { $lt: today }, status: "IN_PROGRESS" }
-      ]
+        { dateTime: { $lt: today }, status: "IN_PROGRESS" },
+      ],
     })
       .select("-attachments")
       .populate("scheduledById", "name")
       .sort({ dateTime: 1 })
       .lean();
-    
+
     // Get panchayat to check quorum criteria and total registered users
     const panchayat = await Panchayat.findById(panchayatId);
     if (!panchayat) {
@@ -1163,28 +1164,98 @@ router.get("/panchayat/:panchayatId/active", async (req, res) => {
       totalVoters * (panchayat.sabhaCriteria / 100 || 0.1)
     );
     const updatedGramSabhas = gramSabhas.map((gramSabha) => {
-    const presentCount = gramSabha.attendances.length;
+      const presentCount = gramSabha.attendances.length;
 
-    const gs = {
-      ...gramSabha,
-      attendanceStats: {
-        success: true,
-        totalRegistered,
-        totalVoters,
-        present: presentCount,
-        quorumRequired,
-        quorumMet: presentCount >= quorumRequired,
-      },
-    };
-    delete gs.attendances;
-    return gs;
-  });
+      const gs = {
+        ...gramSabha,
+        attendanceStats: {
+          success: true,
+          totalRegistered,
+          totalVoters,
+          present: presentCount,
+          quorumRequired,
+          quorumMet: presentCount >= quorumRequired,
+        },
+      };
+      delete gs.attendances;
+      return gs;
+    });
 
     res.json(updatedGramSabhas);
   } catch (error) {
     res
       .status(500)
       .json({ success: false, message: "Failed to fetch today's meetings" });
+  }
+});
+
+//Get official info for document signing
+router.get("/panchayat/:panchayatId/officials", async (req, res) => {
+  try {
+    const panchayatId = req.params.panchayatId;
+
+    // Validate panchayatId parameter
+    if (!panchayatId) {
+      return res.status(400).json({
+        success: false,
+        message: "Panchayat ID is required",
+      });
+    }
+
+    // Find officials with SECRETARY or PRESIDENT role in the specified panchayat
+    const officials = await Official.find({
+      panchayatId,
+      role: { $in: ["SECRETARY", "PRESIDENT"] },
+      isActive: true, // Only fetch active officials
+    })
+      .select("name email phone role") // Only select required fields
+      .sort({ role: 1, name: 1 }) // Sort by role first, then by name
+      .lean();
+
+    // Check if any officials found
+    if (!officials || officials.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No active officials found for this panchayat",
+        data: [],
+      });
+    }
+
+    // Optional: Verify panchayat exists
+    const panchayat = await Panchayat.findById(panchayatId);
+    if (!panchayat) {
+      return res.status(404).json({
+        success: false,
+        message: "Panchayat not found",
+      });
+    }
+
+    // Format response with additional metadata
+    const response = {
+      success: true,
+      message: "Officials retrieved successfully",
+      data: {
+        panchayatId,
+        officials: officials.map((official) => ({
+          id: official._id,
+          name: official.name,
+          email: official.email,
+          phone: official.phone,
+          role: official.role,
+        })),
+        totalCount: officials.length,
+        roles: [...new Set(officials.map((o) => o.role))], // Unique roles found
+      },
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error("Error fetching officials:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch officials",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 });
 

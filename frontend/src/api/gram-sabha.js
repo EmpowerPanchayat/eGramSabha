@@ -122,6 +122,23 @@ export const createGramSabhaMeeting = async (formData) => {
 };
 
 /**
+ * Fetches officials (SECRETARY and PRESIDENT) for a specific panchayat
+ * @param {string} panchayatId - The ID of the panchayat
+ * @returns {Promise} - API response containing officials data
+ */
+export const getSignatories = async (panchayatId) => {
+  try {
+    const response = await api.get(
+      `/gram-sabha/panchayat/${panchayatId}/officials`
+    );
+    return response.data;
+  } catch (error) {
+    console.error("API Error in getOfficials:", error);
+    throw error.response?.data || { message: "Failed to fetch officials" };
+  }
+};
+
+/**
  * Update an existing Gram Sabha meeting
  * @param {string} id - Gram Sabha meeting ID
  * @param {FormData} formData - Updated form data including files

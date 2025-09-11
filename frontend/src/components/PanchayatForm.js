@@ -21,6 +21,7 @@ import LocationOnIcon from "@mui/icons-material/LocationOn";
 import PublicIcon from "@mui/icons-material/Public";
 import GroupsIcon from "@mui/icons-material/Groups";
 import TagIcon from "@mui/icons-material/Tag";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import WardManager from "./WardManager";
 import CascadingLocationDropdowns from "./CascadingLocationDropdowns";
 
@@ -55,6 +56,7 @@ const PanchayatForm = ({
 
   const [formValues, setFormValues] = useState(initialFormState);
   const [locationValues, setLocationValues] = useState(initialLocationState);
+  const [letterhead, setLetterhead] = useState(null);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [wards, setWards] = useState([]);
@@ -86,6 +88,8 @@ const PanchayatForm = ({
           block: panchayat.block || "",
         });
 
+        setLetterhead(panchayat.letterhead || null);
+
         if (panchayat._id) {
           fetchPanchayatWards(panchayat._id);
         }
@@ -93,6 +97,7 @@ const PanchayatForm = ({
         // Creating new panchayat
         setFormValues(initialFormState);
         setLocationValues(initialLocationState);
+        setLetterhead(null);
         setWards([]);
       }
       // Clear any previous errors
@@ -170,6 +175,12 @@ const PanchayatForm = ({
     // Clear error for this field if it exists
     if (formErrors[name]) {
       setFormErrors({ ...formErrors, [name]: "" });
+    }
+  };
+
+  const handleLetterheadChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setLetterhead(e.target.files[0]);
     }
   };
 
@@ -271,29 +282,31 @@ const PanchayatForm = ({
     setIsSubmitting(true);
 
     try {
-      // Combine form values with location values
-      const formData = {
-        ...formValues,
-        state: locationValues.state,
-        district: locationValues.district,
-        block: locationValues.block,
-        // name is already in formValues
-        population: formValues.population
-          ? Number(formValues.population)
-          : undefined,
-        sabhaCriteria: formValues.sabhaCriteria
-          ? Number(formValues.sabhaCriteria)
-          : undefined,
-      };
+      // Since we have a file, we must use FormData
+      const formData = new FormData();
 
-      // Convert empty LGD code string to null so sparse index works
-      if (!formData.lgdCode) {
-        formData.lgdCode = null;
+      // Append form values
+      for (const key in formValues) {
+        if (formValues[key] !== null && formValues[key] !== undefined) {
+          formData.append(key, formValues[key]);
+        }
+      }
+
+      // Append location values
+      for (const key in locationValues) {
+        if (locationValues[key]) {
+          formData.append(key, locationValues[key]);
+        }
+      }
+
+      // Append letterhead file if it exists
+      if (letterhead && letterhead instanceof File) {
+        formData.append("letterhead", letterhead);
       }
 
       // Pass the panchayat ID if we're editing
       if (panchayat && panchayat._id) {
-        formData._id = panchayat._id;
+        formData.append("_id", panchayat._id);
       }
 
       // Submit the panchayat data
@@ -303,18 +316,12 @@ const PanchayatForm = ({
       if (result && result.panchayat && result.panchayat._id) {
         const panchayatId = result.panchayat._id;
 
-        // For each ward in the local state:
-        // - If it has a temporary ID, create it
-        // - If it exists on server but not in local state, delete it
-        // - If it exists in both, update it
-
         // Get existing wards from the server
         let existingWards = [];
         try {
           existingWards = await fetchWards(panchayatId);
         } catch (error) {
           console.error("Error fetching existing wards:", error);
-          // Continue with empty array if fetch fails
         }
 
         // Create or update wards
@@ -325,25 +332,19 @@ const PanchayatForm = ({
             population: ward.population,
           };
 
-          // Check if this is a new ward (with temporary ID)
           if (ward._id.toString().startsWith("temp-")) {
             await createWard(panchayatId, wardData);
           } else {
-            // Check if this ward exists in existingWards
             const existingWard = existingWards.find((w) => w._id === ward._id);
             if (existingWard) {
               await updateWard(panchayatId, ward._id, wardData);
-            } else {
-              // This should not happen, but create it just in case
-              await createWard(panchayatId, wardData);
             }
           }
         }
 
-        // Find wards that exist on server but not in local state (deleted)
+        // Find and delete wards that are on the server but not in the local state
         for (const existingWard of existingWards) {
-          const stillExists = wards.some((w) => w._id === existingWard._id);
-          if (!stillExists) {
+          if (!wards.some((w) => w._id === existingWard._id)) {
             await deleteWard(panchayatId, existingWard._id);
           }
         }
@@ -353,12 +354,11 @@ const PanchayatForm = ({
     } catch (error) {
       console.error("Error submitting form:", error);
 
-      // Handle specific error cases
-      if (error.message && error.message.includes("LGD Code already exists")) {
+      if (error.message?.includes("LGD Code already exists")) {
         setFormErrors({
           lgdCode: "This LGD Code is already in use by another panchayat",
         });
-      } else if (error.message && error.message.includes("already exists")) {
+      } else if (error.message?.includes("already exists")) {
         setFormErrors({
           submit:
             "A panchayat with this name already exists in the selected location",
@@ -515,6 +515,27 @@ const PanchayatForm = ({
                     ),
                   }}
                 />
+              </Grid>
+              <Grid item xs={12}>
+                <Button
+                  variant="outlined"
+                  component="label"
+                  fullWidth
+                  startIcon={<UploadFileIcon />}
+                >
+                  Upload letterhead
+                  <input
+                    type="file"
+                    hidden
+                    accept="image/*"
+                    onChange={handleLetterheadChange}
+                  />
+                </Button>
+                {letterhead && (
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    Selected: {typeof letterhead === 'string' ? letterhead.split('/').pop() : letterhead.name}
+                  </Typography>
+                )}
               </Grid>
             </Grid>
           </Box>

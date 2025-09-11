@@ -580,6 +580,28 @@
             "required": false,
             "properties": {}
           },
+          "agendaGroupId": {
+            "type": "string"
+          },
+          "agendaSigningStatus": {
+            "type": "string"
+          },
+          "agendaSignatories": {
+            "type": "object",
+            "required": false,
+            "properties": {}
+          },
+          "signedAgendaPDF": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "buffer"
+              },
+              "contentType": {
+                "type": "string"
+              }
+            }
+          },
           "issues": {
             "type": "array",
             "items": {
@@ -1522,7 +1544,31 @@
         }
       }
     },
-    "/api/gram-sabha/panchayat/{panchayatid}/today": {
+    "/api/gram-sabha/panchayat/{panchayatid}/active": {
+      "get": {
+        "tags": [
+          "Gram Sabhas"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/gram-sabha/panchayat/{panchayatid}/officials": {
       "get": {
         "tags": [
           "Gram Sabhas"
@@ -1570,7 +1616,7 @@
         }
       }
     },
-    "/api/gram-sabha/recordings/stop": {
+    "/api/gram-sabha/recordings/list": {
       "post": {
         "tags": [
           "Gram Sabhas"
@@ -1594,8 +1640,8 @@
         }
       }
     },
-    "/api/gram-sabha/recordings/list": {
-      "post": {
+    "/api/gram-sabha/recordings/download": {
+      "get": {
         "tags": [
           "Gram Sabhas"
         ],
@@ -1604,16 +1650,6 @@
         "responses": {
           "200": {
             "description": "Success"
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GramSabha"
-              }
-            }
           }
         }
       }
@@ -1865,6 +1901,30 @@
         }
       }
     },
+    "/api/issues/update-status": {
+      "post": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Issue"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/summaries/panchayat/{panchayatid}": {
       "get": {
         "tags": [
@@ -1904,6 +1964,68 @@
               "type": "string"
             },
             "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/jiosign/send-for-signing": {
+      "post": {
+        "tags": [
+          "Jio Signs"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/jiosign/doc-status/{groupid}": {
+      "get": {
+        "tags": [
+          "Jio Signs"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "groupid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: groupid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/jiosign/signed-file/{groupid}": {
+      "get": {
+        "tags": [
+          "Jio Signs"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "groupid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: groupid"
           }
         ],
         "responses": {

@@ -50,6 +50,7 @@ import {
   addAttachment,
   listJioMeetRecordings,
   downloadJioMeetMRecording,
+  getSignatories,
 } from "../../api/gram-sabha";
 import { fetchIssueSummary } from "../../api/summary";
 import { useAuth } from "../../utils/authContext";
@@ -59,6 +60,7 @@ import GramSabhaDetails from "./GramSabhaDetails";
 const GramSabhaManagement = ({ panchayatId }) => {
   const { strings, language } = useLanguage();
   const [gramSabhas, setGramSabhas] = useState([]);
+  const [signatories, setSignatories] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedGramSabha, setSelectedGramSabha] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -140,7 +142,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
               sabha?.jioMeetData?.historyId
             );
             if (res) {
-              recordingsList.push(...res);
+              recordingsList?.push(...res);
             }
           }
         }
@@ -153,6 +155,33 @@ const GramSabhaManagement = ({ panchayatId }) => {
 
     fetchData();
   }, [gramSabhas]);
+
+  useEffect(() => {
+    const fetchSignatories = async () => {
+      if (!panchayatId) return;
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Using the service function
+        const data = await getSignatories(panchayatId);
+
+        if (data.success) {
+          setSignatories(data.data.officials);
+        } else {
+          setError(data.message || "Failed to fetch officials");
+        }
+      } catch (err) {
+        setError(err.message || "An error occurred while fetching officials");
+        console.error("Error fetching officials:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSignatories();
+  }, [panchayatId, user, gramSabhas]);
 
   const loadGramSabhas = async () => {
     // Add this check
@@ -680,7 +709,11 @@ const GramSabhaManagement = ({ panchayatId }) => {
         <DialogTitle>{strings.gramSabhaDetails}</DialogTitle>
         <DialogContent>
           {selectedMeetingId && (
-            <GramSabhaDetails meetingId={selectedMeetingId} user={user} />
+            <GramSabhaDetails
+              meetingId={selectedMeetingId}
+              user={user}
+              signatories={signatories}
+            />
           )}
         </DialogContent>
         <DialogActions>
