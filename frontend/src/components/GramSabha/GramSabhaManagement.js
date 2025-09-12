@@ -61,6 +61,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
   const { strings, language } = useLanguage();
   const [gramSabhas, setGramSabhas] = useState([]);
   const [signatories, setSignatories] = useState([]);
+  const [letterhead, setLetterHead] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedGramSabha, setSelectedGramSabha] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -169,6 +170,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
 
         if (data.success) {
           setSignatories(data.data.officials);
+          setLetterHead(data.data.letterhead);
         } else {
           setError(data.message || "Failed to fetch officials");
         }
@@ -713,6 +715,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
               meetingId={selectedMeetingId}
               user={user}
               signatories={signatories}
+              letterhd={letterhead}
             />
           )}
         </DialogContent>
@@ -1053,7 +1056,7 @@ const GramSabhaManagement = ({ panchayatId }) => {
               loading ||
               !formData.date ||
               !formData.time ||
-              !formData.location||
+              !formData.location ||
               selectedAgendaItems.length === 0
             }
           >

@@ -67,10 +67,7 @@ export const createPanchayat = async (panchayatData) => {
   try {
     const response = await fetch(`${API_URL}/panchayats`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(panchayatData)
+      body: panchayatData
     });
 
     const data = await response.json();
@@ -96,10 +93,7 @@ export const updatePanchayat = async (id, panchayatData) => {
   try {
     const response = await fetch(`${API_URL}/panchayats/${id}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(panchayatData)
+      body: panchayatData
     });
 
     const data = await response.json();

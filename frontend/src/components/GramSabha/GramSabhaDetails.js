@@ -57,7 +57,7 @@ import {
 } from "../../api/jioSign";
 import { useLanguage } from "../../utils/LanguageContext";
 
-const GramSabhaDetails = ({ meetingId, user, signatories }) => {
+const GramSabhaDetails = ({ meetingId, user, signatories, letterhd }) => {
   const [meeting, setMeeting] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -594,11 +594,15 @@ const GramSabhaDetails = ({ meetingId, user, signatories }) => {
     return contactMethods[signatoryIndex] || "phone";
   };
 
-  // Generate agenda HTML for dialog display
   const viewAgendaHTML = () => {
     if (!meeting) return "";
 
     const panchayat = attendance?.panchayatId || {};
+    const letterhead = letterhd;
+    const letterheadUrl = letterhead
+      ? `data:${letterhead.mimetype};base64,${letterhead.content}`
+      : "";
+
     const agendaItemsHTML = Array.isArray(meeting.agenda)
       ? meeting.agenda
           .map((item, i) => {
@@ -609,7 +613,7 @@ const GramSabhaDetails = ({ meetingId, user, signatories }) => {
             const linkedIssues = item.linkedIssues?.length
               ? `
             <p><strong>${strings.linkedIssues}:</strong></p>
-            <table border="1" cellpadding="4" cellspacing="0" style="border-collapse: collapse; width: 100%; font-size: 11px; margin-bottom: 10px; table-layout: fixed;">
+            <table border="1" cellpadding="2" cellspacing="0" style="border-collapse: collapse; width: 100%; font-size: 11px; margin-bottom: 5px; table-layout: fixed;">
               <thead>
                 <tr style="page-break-inside: avoid;">
                   <th style="width: 10%;text-align: center;">${
@@ -658,67 +662,88 @@ const GramSabhaDetails = ({ meetingId, user, signatories }) => {
       : `<p>${strings.noAgenda}</p>`;
 
     return `
-    <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-size: 12px; line-height: 1.8;">
-      <div style="text-align: right; margin-bottom: 10px;">
-        <strong>${
-          strings.serialNo
-        } _____ </strong> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${
-      strings.date
-    } ${new Date().toLocaleDateString(language === "hi" ? "hi-IN" : "en-IN")}
-      </div>
+    <div style="
+      font-family: 'Noto Sans Devanagari', sans-serif;
+      font-size: 12px;
+      line-height: 1.8;
+      padding: 2px;
+      ${
+        letterheadUrl
+          ? `
+      background-image: url('${letterheadUrl}');
+      background-repeat: no-repeat;
+      background-position: center top;
+      background-size: 100% auto;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      `
+          : ""
+      }
+      min-height: 100vh;
+    ">
 
-      <h2 style="text-align: center;">${strings.gramSabhaAgendaNotice}</h2>
+      <!-- Add padding-top to ensure text doesn't overlap with letterhead -->
+      <div style="padding-top: 25%; max-width:90%; padding-left:10%;">
+        <div style="text-align: right; margin-bottom: 10%;"> ${
+          strings.date
+        } ${new Date().toLocaleDateString(
+      language === "hi" ? "hi-IN" : "en-IN"
+    )}
+        </div>
 
-      <p><strong>${strings.village}:</strong> ${panchayat.name || "-"}<br/>
-      <strong>${strings.date}:</strong> ${new Date(
+        <h2 style="text-align: center;">${strings.gramSabhaAgendaNotice}</h2>
+
+        <p><strong>${strings.village}:</strong> ${panchayat.name || "-"}<br/>
+        <strong>${strings.date}:</strong> ${new Date(
       meeting.dateTime
     ).toLocaleDateString(language === "hi" ? "hi-IN" : "en-IN")}<br/>
-      <strong>${strings.time}:</strong> ${new Date(
+        <strong>${strings.time}:</strong> ${new Date(
       meeting.dateTime
     ).toLocaleTimeString(language === "hi" ? "hi-IN" : "en-IN", {
       hour: "2-digit",
       minute: "2-digit",
       hour12: true,
     })}<br/>
-      <strong>${strings.location}:</strong> ${meeting.location || "-"}</p>
+        <strong>${strings.location}:</strong> ${meeting.location || "-"}</p>
 
-      <p>${strings.gramSabhaNoticeText}</p>
+        <p>${strings.gramSabhaNoticeText}</p>
 
-      <h3>${strings.newIssuesAndPlanHeading}:</h3>
+        <h3>${strings.newIssuesAndPlanHeading}:</h3>
 
-      <p>${strings.newIssuesAndPlanDescription}</p>
+        <p>${strings.newIssuesAndPlanDescription}</p>
 
-      ${agendaItemsHTML}
+        ${agendaItemsHTML}
 
-      <br/><br/>
-      <div style="display: flex; justify-content: space-between; margin-top: 40px;">
-        ${
-          signatories && signatories.length > 0
-            ? signatories
-                .map(
-                  (signatory, index) => `
+        <br/>
+        <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+          ${
+            signatories && signatories.length > 0
+              ? signatories
+                  .map(
+                    (signatory, index) => `
             <div style="page-break-inside: avoid;"><br/>
               <p>{{Signature-P${index + 1}}}</p>
               <small>(${signatory.name}, ${signatory.role}, ${
-                    strings.gramPanchayat
-                  } ${panchayat.name || ""})</small>
+                      strings.gramPanchayat
+                    } ${panchayat.name || ""})</small>
             </div>
           `
-                )
-                .join("")
-            : `
-          <div style="page-break-inside: avoid;"><br/>
-            <small>(${strings.secretary}, ${strings.gramPanchayat} ${
-                panchayat.name || ""
-              })</small>
-          </div>
-          <div style="page-break-inside: avoid;"><br/>
-            <small>(${strings.sarpanch}, ${strings.gramPanchayat} ${
-                panchayat.name || ""
-              })</small>
-          </div>
+                  )
+                  .join("")
+              : `
+            <div style="page-break-inside: avoid;"><br/>
+              <small>(${strings.secretary}, ${strings.gramPanchayat} ${
+                  panchayat.name || ""
+                })</small>
+            </div>
+            <div style="page-break-inside: avoid;"><br/>
+              <small>(${strings.sarpanch}, ${strings.gramPanchayat} ${
+                  panchayat.name || ""
+                })</small>
+            </div>
           `
-        }
+          }
+        </div>
       </div>
     </div>
   `;
@@ -745,138 +770,224 @@ const GramSabhaDetails = ({ meetingId, user, signatories }) => {
   };
 
   // Handle send agenda for signing (placeholder)
-
-  const generateSearchablePDF = (htmlContent) => {
+  const generateSearchablePDF = async (htmlContent) => {
     const doc = new jsPDF("p", "mm", "a4");
+    const letterhead = letterhd;
 
-    // Set styles
+    // Function to add letterhead watermark on a page
+    const addLetterhead = () => {
+      if (letterhead) {
+        try {
+          const letterheadUrl = `data:${letterhead.mimetype};base64,${letterhead.content}`;
+          doc.addImage(letterheadUrl, "PNG", 0, 0, 210, 297, "", "FAST"); // Full page watermark
+        } catch (error) {
+          console.warn("Could not add letterhead to PDF:", error);
+        }
+      }
+    };
+
+    // Initially add letterhead to first page
+    addLetterhead();
+
     doc.setFont("helvetica");
     doc.setFontSize(11);
     doc.setTextColor(0, 0, 0);
 
-    // Extract text content from HTML (simple approach)
     const textContent = extractTextFromHTML(htmlContent);
-
-    // Add text content to PDF
     const lines = doc.splitTextToSize(textContent, 180);
+
+    function extractTextFromHTML(html) {
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = html;
+      const styles = tempDiv.querySelectorAll("style, script");
+      styles.forEach((el) => el.remove());
+      return tempDiv.textContent || tempDiv.innerText || "";
+    }
+
     let yPosition = 20;
 
+    // Add content with pagination
     lines.forEach((line) => {
       if (yPosition > 270) {
         doc.addPage();
+        addLetterhead(); // Add watermark to new page
         yPosition = 20;
       }
       doc.text(line, 15, yPosition);
       yPosition += 6;
     });
 
-    // Add signature areas on a new page
-    const signatureAreaHeight = 40;
-    const spaceNeeded = signatureAreaHeight;
-    const spaceLeft = 297 - yPosition; // A4 height is 297mm
-
-    if (spaceLeft < spaceNeeded) {
-      // Not enough space, create a new page
+    // ✅ After all content is added, add signature placeholders only once at the end
+    if (yPosition > 240) {
       doc.addPage();
-      yPosition = 50;
+      addLetterhead();
+      yPosition = 20;
     } else {
-      // Enough space, position signatures with some margin from content
-      yPosition = 297 - signatureAreaHeight - 10;
+      yPosition = Math.max(yPosition + 20, 200);
     }
 
-    doc.setFontSize(14);
+    doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
 
-    const signatureCount = signatories?.length || 2;
-    for (let i = 0; i < signatureCount; i++) {
+    const signatureWidth = 80;
+
+    for (let i = 0; i < 2; i++) {
       const yPos = yPosition;
-      const xpos = 20 + i * 120;
+      const xpos = 40 + i * signatureWidth;
+
       doc.text(`{{Signature-P${i + 1}}}`, xpos, yPos);
 
-      // Add signatory info
-      doc.setFontSize(10);
+      doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
+
       const signatory = signatories?.[i];
-      doc.text(signatory?.name || "Signatory Name", xpos, yPos + 8);
-      doc.text(signatory?.role || "Role", xpos, yPos + 16);
-      doc.text("Gram Panchayat", xpos, yPos + 24);
+
+      if (signatory) {
+        doc.text(`(${signatory.name}, ${signatory.role},`, xpos, yPos + 30);
+        doc.text(
+          `${strings.gramPanchayat} ${attendance?.panchayatId?.name || ""})`,
+          xpos,
+          yPos + 35
+        );
+      } else {
+        const defaultText =
+          i === 0
+            ? `(${strings.secretary}, ${strings.gramPanchayat} ${
+                attendance?.panchayatId?.name || ""
+              })`
+            : `(${strings.sarpanch}, ${strings.gramPanchayat} ${
+                attendance?.panchayatId?.name || ""
+              })`;
+        doc.text(defaultText, xpos, yPos + 8);
+      }
     }
 
     return doc.output("blob");
   };
 
-  // Simple HTML to text converter
-  const extractTextFromHTML = (html) => {
-    const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = html;
-
-    // Remove style and script tags
-    const styles = tempDiv.querySelectorAll("style, script");
-    styles.forEach((el) => el.remove());
-
-    // Get clean text content
-    return tempDiv.textContent || tempDiv.innerText || "";
-  };
-
-  // Modified generateAgendaHTML to return clean text + signature tags
+  // Updated generateAgendaHTML to match viewAgendaHTML format
   const generateAgendaHTML = () => {
     if (!meeting) return "";
 
     const panchayat = attendance?.panchayatId || {};
+    const letterhead = letterhd;
+    const letterheadUrl = letterhead
+      ? `data:${letterhead.mimetype};base64,${letterhead.content}`
+      : "";
 
-    // Generate clean text content (no HTML tags)
-    let agendaText = `
-GRAM SABHA AGENDA NOTICE
+    const agendaItemsHTML = Array.isArray(meeting.agenda)
+      ? meeting.agenda
+          .map((item, i) => {
+            const title =
+              getMultilingualText(item, "title") ||
+              `${strings.agenda} ${i + 1}`;
+            const desc = getMultilingualText(item, "description") || "";
+            const linkedIssues = item.linkedIssues?.length
+              ? `
+          <p><strong>${strings.linkedIssues}:</strong></p>
+          <table border="1" cellpadding="2" cellspacing="0" style="border-collapse: collapse; width: 100%; font-size: 11px; margin-bottom: 5px; table-layout: fixed;">
+            <thead>
+              <tr style="page-break-inside: avoid;">
+                <th style="width: 10%;text-align: center;">${
+                  strings.serialNo
+                }</th>
+                <th style="width: 70%;">${strings.issueDescription}</th>
+                <th style="width: 20%; text-align: center; vertical-align: top;">${
+                  strings.issueOwner
+                }</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${item.linkedIssues
+                .map(
+                  (issue, idx) => `
+                <tr style="page-break-inside: avoid;">
+                  <td style="text-align: center;">${idx + 1}</td>
+                  <td>
+                    ${
+                      language === "hi"
+                        ? issue.transcription?.enhancedHindiTranscription
+                        : issue.transcription?.enhancedEnglishTranscription ||
+                          issue.transcription?.text ||
+                          "-"
+                    }
+                  </td>
+                  <td style="text-align: center;">${
+                    issue.createdForId?.name || "-"
+                  }</td>
+                </tr>
+              `
+                )
+                .join("")}
+            </tbody>
+          </table>
+        `
+              : "";
+            return `
+        <p><strong>${i + 1}. ${title}</strong></p>
+        <p>${desc}</p>
+        ${linkedIssues}
+        <br>
+      `;
+          })
+          .join("")
+      : `<p>${strings.noAgenda}</p>`;
 
-Village: ${panchayat.name || "-"}
-Date: ${new Date(meeting.dateTime).toLocaleDateString()}
-Time: ${new Date(meeting.dateTime).toLocaleTimeString()}
-Location: ${meeting.location || "-"}
+    // ✅ No placeholders here — remove signature block completely
 
-${strings.gramSabhaNoticeText}
-
-NEW ISSUES AND PLANS:
-${strings.newIssuesAndPlanDescription}
-
-AGENDA ITEMS:
-`;
-
-    // Add agenda items as text
-    if (Array.isArray(meeting.agenda)) {
-      meeting.agenda.forEach((item, i) => {
-        const title =
-          getMultilingualText(item, "title") || `${strings.agenda} ${i + 1}`;
-        const desc = getMultilingualText(item, "description") || "";
-
-        agendaText += `
-${i + 1}. ${title}
-${desc}
-
-`;
-
-        // Add linked issues if any
-        if (item.linkedIssues?.length) {
-          agendaText += `Linked Issues:\n`;
-          item.linkedIssues.forEach((issue, idx) => {
-            const issueText =
-              language === "hi"
-                ? issue.transcription?.enhancedHindiTranscription
-                : issue.transcription?.enhancedEnglishTranscription ||
-                  issue.transcription?.text ||
-                  "-";
-
-            agendaText += `${idx + 1}. ${issueText} (Owner: ${
-              issue.createdForId?.name || "-"
-            })\n`;
-          });
-          agendaText += "\n";
-        }
-      });
-    } else {
-      agendaText += `${strings.noAgenda}\n`;
+    return `
+  <div style="
+    font-family: 'Noto Sans Devanagari', sans-serif;
+    font-size: 12px;
+    line-height: 1.8;
+    padding: 2px;
+    ${
+      letterheadUrl
+        ? `
+    background-image: url('${letterheadUrl}');
+    background-repeat: no-repeat;
+    background-position: center top;
+    background-size: 100% auto;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    `
+        : ""
     }
+    min-height: 100vh;
+  ">
 
-    return agendaText;
+    <div style="padding-top: 25%; max-width:90%; padding-left:10%;">
+      <div style="text-align: right; margin-bottom: 10%;"> 
+      </div>
+
+      <h2 style="text-align: center;">${strings.gramSabhaAgendaNotice}</h2>
+
+      <p><strong>${strings.village}:</strong> ${panchayat.name || "-"}<br/>
+      <strong>${strings.date}:</strong> ${new Date(
+      meeting.dateTime
+    ).toLocaleDateString(language === "hi" ? "hi-IN" : "en-IN")}<br/>
+      <strong>${strings.time}:</strong> ${new Date(
+      meeting.dateTime
+    ).toLocaleTimeString(language === "hi" ? "hi-IN" : "en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    })}<br/>
+      <strong>${strings.location}:</strong> ${meeting.location || "-"}</p>
+
+      <p>${strings.gramSabhaNoticeText}</p>
+
+      <h3>${strings.newIssuesAndPlanHeading}:</h3>
+
+      <p>${strings.newIssuesAndPlanDescription}</p>
+
+      ${agendaItemsHTML}
+
+      <br/>
+      <!-- No signature placeholders here -->
+    </div>
+  </div>
+`;
   };
 
   // Updated handleSendAgendaForSigning
@@ -885,12 +996,16 @@ ${desc}
       setLoading(true);
       setError("");
 
-      // 1. Generate text content
-      const textContent = generateAgendaHTML();
+      // 1. Generate HTML content with letterhead (same as viewAgendaHTML)
+      const htmlContent = generateAgendaHTML();
 
-      // 2. Generate searchable PDF (text only)
-      const pdfBlob = generateSearchablePDF(textContent);
+      // 2. Generate PDF with letterhead background
+      const pdfBlob = await generateSearchablePDF(htmlContent);
+      console.log("PDf", pdfBlob);
+      const pdfUrl = URL.createObjectURL(pdfBlob);
 
+      // Open the PDF in a new tab
+      window.open(pdfUrl);
       // 3. Prepare signatures
       const signatures = signatories.map((signatory, index) => ({
         identifier: signatoryContacts[index],
@@ -1470,19 +1585,21 @@ ${desc}
               </Button>
             </Tooltip>
 
-            <Tooltip title="Download Signed Agenda">
-              <Button
-                variant="outlined"
-                color="success"
-                startIcon={<DownloadIcon />}
-                onClick={() =>
-                  handleDownladAgenda(meeting.agendaGroupId, meetingId)
-                }
-                disabled={loading}
-              >
-                Download Signed Document
-              </Button>
-            </Tooltip>
+            {meeting.agendaGroupId && (
+              <Tooltip title="Download Signed Agenda">
+                <Button
+                  variant="outlined"
+                  color="success"
+                  startIcon={<DownloadIcon />}
+                  onClick={() =>
+                    handleDownladAgenda(meeting.agendaGroupId, meetingId)
+                  }
+                  disabled={loading}
+                >
+                  Download Signed Document
+                </Button>
+              </Tooltip>
+            )}
           </Box>
 
           {/* Agenda Section */}
@@ -1544,138 +1661,150 @@ ${desc}
               )}
 
               {/* Signatories Section */}
-              {signatories && signatories.length > 0 && (
-                <Box sx={{ mt: 4 }}>
-                  <Typography variant="h6" sx={{ mb: 2 }}>
-                    {strings.signatories}
-                  </Typography>
+              {isPresident &&
+                meeting.status === "SCHEDULED" &&
+                signatories &&
+                signatories.length > 0 && (
+                  <Box sx={{ mt: 4 }}>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      {strings.signatories}
+                    </Typography>
 
-                  <TableContainer component={Paper} variant="outlined">
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>
-                            <strong>{strings.name}</strong>
-                          </TableCell>
-                          <TableCell>
-                            <strong>{strings.designation}</strong>
-                          </TableCell>
-                          <TableCell>
-                            <strong>{strings.contactMethod}</strong>
-                          </TableCell>
-                          <TableCell>
-                            <strong>{strings.contactValue}</strong>
-                          </TableCell>
-                          <TableCell>
-                            <strong>{strings.status}</strong>
-                          </TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {signatories.map((signatory, index) => (
-                          <TableRow key={signatory.id || index}>
-                            <TableCell>{signatory.name}</TableCell>
-                            <TableCell>{signatory.role}</TableCell>
+                    <TableContainer component={Paper} variant="outlined">
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
                             <TableCell>
-                              <FormControl size="small" sx={{ minWidth: 120 }}>
-                                <Select
-                                  value={getCurrentContactMethod(
-                                    index,
-                                    signatory
-                                  )}
-                                  onChange={(e) =>
-                                    handleContactMethodChange(
-                                      index,
-                                      e.target.value
-                                    )
-                                  }
-                                  displayEmpty
-                                >
-                                  <MenuItem value="phone">
-                                    {strings.phone}
-                                  </MenuItem>
-                                  <MenuItem value="email">
-                                    {strings.email}
-                                  </MenuItem>
-                                  <MenuItem value="custom">
-                                    {strings.custom}
-                                  </MenuItem>
-                                </Select>
-                              </FormControl>
+                              <strong>{strings.name}</strong>
                             </TableCell>
                             <TableCell>
-                              {getCurrentContactMethod(index, signatory) ===
-                              "custom" ? (
-                                <TextField
-                                  size="small"
-                                  placeholder={strings.enterCustomContact}
-                                  value={signatoryContacts[index] || ""}
-                                  onChange={(e) =>
-                                    handleCustomContactChange(
-                                      index,
-                                      e.target.value
-                                    )
-                                  }
-                                  sx={{ width: "200px" }}
-                                />
-                              ) : (
-                                <Typography variant="body2">
-                                  {signatoryContacts[index] ||
-                                    (getCurrentContactMethod(
-                                      index,
-                                      signatory
-                                    ) === "email"
-                                      ? signatory.email || strings.noEmail
-                                      : signatory.phone || strings.noPhone)}
-                                </Typography>
-                              )}
+                              <strong>{strings.designation}</strong>
                             </TableCell>
                             <TableCell>
-                              <Chip
-                                label={signingStatus?.label || "Unknown"}
-                                color={signingStatus?.color || "default"}
-                                size="small"
-                              />
+                              <strong>{strings.contactMethod}</strong>
+                            </TableCell>
+                            <TableCell>
+                              <strong>{strings.contactValue}</strong>
+                            </TableCell>
+                            <TableCell>
+                              <strong>{strings.status}</strong>
                             </TableCell>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                        </TableHead>
+                        <TableBody>
+                          {signatories.map((signatory, index) => (
+                            <TableRow key={signatory.id || index}>
+                              <TableCell>{signatory.name}</TableCell>
+                              <TableCell>{signatory.role}</TableCell>
+                              <TableCell>
+                                <FormControl
+                                  size="small"
+                                  sx={{ minWidth: 120 }}
+                                >
+                                  <Select
+                                    value={getCurrentContactMethod(
+                                      index,
+                                      signatory
+                                    )}
+                                    onChange={(e) =>
+                                      handleContactMethodChange(
+                                        index,
+                                        e.target.value
+                                      )
+                                    }
+                                    displayEmpty
+                                  >
+                                    <MenuItem value="phone">
+                                      {strings.phone}
+                                    </MenuItem>
+                                    <MenuItem value="email">
+                                      {strings.email}
+                                    </MenuItem>
+                                    <MenuItem value="custom">
+                                      {strings.custom}
+                                    </MenuItem>
+                                  </Select>
+                                </FormControl>
+                              </TableCell>
+                              <TableCell>
+                                {getCurrentContactMethod(index, signatory) ===
+                                "custom" ? (
+                                  <TextField
+                                    size="small"
+                                    placeholder={strings.enterCustomContact}
+                                    value={signatoryContacts[index] || ""}
+                                    onChange={(e) =>
+                                      handleCustomContactChange(
+                                        index,
+                                        e.target.value
+                                      )
+                                    }
+                                    sx={{ width: "200px" }}
+                                  />
+                                ) : (
+                                  <Typography variant="body2">
+                                    {signatoryContacts[index] ||
+                                      (getCurrentContactMethod(
+                                        index,
+                                        signatory
+                                      ) === "email"
+                                        ? signatory.email || strings.noEmail
+                                        : signatory.phone || strings.noPhone)}
+                                  </Typography>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={signingStatus?.label || "Unknown"}
+                                  color={signingStatus?.color || "default"}
+                                  size="small"
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
 
-                  <Box
-                    sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}
-                  >
                     <Box
                       sx={{
                         mt: 2,
                         display: "flex",
                         justifyContent: "flex-end",
-                        gap: 2,
                       }}
                     >
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<SendIcon />}
-                        onClick={handleSendAgendaForSigning}
-                        disabled={loading}
+                      <Box
+                        sx={{
+                          mt: 2,
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          gap: 2,
+                        }}
                       >
-                        {strings.sendAgendaForSigning}
-                      </Button>
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          startIcon={<SendIcon />}
+                          onClick={handleSendAgendaForSigning}
+                          disabled={loading}
+                        >
+                          {strings.sendAgendaForSigning}
+                        </Button>
 
-                      <Button
-                        variant="outlined"
-                        color="secondary"
-                        onClick={() => checkAgendaStatus(meeting.agendaGroupId)}
-                        disabled={loading}
-                      >
-                        Check status
-                      </Button>
+                        <Button
+                          variant="outlined"
+                          color="secondary"
+                          onClick={() =>
+                            checkAgendaStatus(meeting.agendaGroupId)
+                          }
+                          disabled={loading}
+                        >
+                          Check status
+                        </Button>
+                      </Box>
                     </Box>
                   </Box>
-                </Box>
-              )}
+                )}
             </Paper>
           </Box>
           {/* Agenda Document Dialog */}

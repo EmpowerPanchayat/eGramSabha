@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
-const MODEL_REFS = require('./modelRefs');
+const mongoose = require("mongoose");
+const MODEL_REFS = require("./modelRefs");
 
 const panchayatSchema = new mongoose.Schema({
   name: {
@@ -59,66 +59,10 @@ const panchayatSchema = new mongoose.Schema({
       },
       message: "LGD Code must be a numeric string with maximum 10 digits",
     },
-    state: {
-        type: String,
-        required: true,
-        maxlength: 100
-    },
-    district: {
-        type: String,
-        required: true,
-        maxlength: 100
-    },
-    villages: {
-        type: String
-    },
-    block: {
-        type: String,
-        maxlength: 100
-    },
-    geolocation: {
-        type: String
-    },
-    population: {
-        type: Number
-    },
-    language: {
-        type: String,
-        maxlength: 100
-    },
-    sabhaCriteria: {
-        type: Number
-    },
-    officialWhatsappNumber: {
-        type: String,
-        maxlength: 10
-    },
-    officials: {
-        type: [{
-            officialId: {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: MODEL_REFS.OFFICIAL
-            },
-            role: {
-                type: String,
-                enum: ['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY', 'GUEST']
-            },
-            wardId: {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: MODEL_REFS.WARD,
-                // Only required for WARD_MEMBER role
-            }
-        }],
-        default: []
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now
-    },
-    updatedAt: {
-        type: Date,
-        default: Date.now
-    }
+  },
+  letterhead: {
+    mimetype: String,
+    content: String,
   },
 });
 
@@ -145,7 +89,7 @@ panchayatSchema.index(
     },
     name: "location_text_index",
     default_language: "none", // disable stemming (safer for Indian languages)
-    language_override: "dummyLang" // point to a non-existent field, so it never conflicts
+    language_override: "dummyLang", // point to a non-existent field, so it never conflicts
   }
 );
 

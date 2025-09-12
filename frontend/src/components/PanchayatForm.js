@@ -187,7 +187,7 @@ const PanchayatForm = ({
   const validateForm = () => {
     const errors = {};
     const nameRegex = /^[a-zA-Z0-9\s\-_().&,']+$/; // Allow letters, numbers, spaces, and some special chars
-
+    console.log(locationValues, "...............");
     // Location validation (now handled by cascading dropdowns)
     if (!locationValues.state?.trim()) {
       errors.state = "State is required";
@@ -533,7 +533,10 @@ const PanchayatForm = ({
                 </Button>
                 {letterhead && (
                   <Typography variant="body2" sx={{ mt: 1 }}>
-                    Selected: {typeof letterhead === 'string' ? letterhead.split('/').pop() : letterhead.name}
+                    Selected:{" "}
+                    {typeof letterhead === "string"
+                      ? letterhead.split("/").pop()
+                      : letterhead.name}
                   </Typography>
                 )}
               </Grid>

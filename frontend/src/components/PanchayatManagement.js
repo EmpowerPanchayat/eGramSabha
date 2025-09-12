@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -20,41 +20,41 @@ import {
   useTheme,
   useMediaQuery,
   Fade,
-  Skeleton
-} from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import SearchIcon from '@mui/icons-material/Search';
+  Skeleton,
+} from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import SearchIcon from "@mui/icons-material/Search";
 import {
   fetchPanchayats,
   createPanchayat,
   updatePanchayat,
   deletePanchayat,
   fetchPanchayat,
-  fetchWards
-} from '../api';
+  fetchWards,
+} from "../api";
 
 // Import our improved components
-import PanchayatCard from './PanchayatCard';
-import PanchayatForm from './PanchayatForm';
+import PanchayatCard from "./PanchayatCard";
+import PanchayatForm from "./PanchayatForm";
 
 const PanchayatManagement = ({ onSelectPanchayat }) => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const isTablet = useMediaQuery(theme.breakpoints.down("md"));
 
   // States
   const [panchayats, setPanchayats] = useState([]);
   const [filteredPanchayats, setFilteredPanchayats] = useState([]);
   const [selectedPanchayat, setSelectedPanchayat] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [currentPanchayat, setCurrentPanchayat] = useState(null);
   const [snackbar, setSnackbar] = useState({
     open: false,
-    message: '',
-    severity: 'success'
+    message: "",
+    severity: "success",
   });
 
   // Pagination
@@ -77,7 +77,7 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
     } else {
       const lowercaseSearchTerm = searchTerm.toLowerCase();
       const filtered = panchayats.filter(
-        panchayat =>
+        (panchayat) =>
           panchayat.name?.toLowerCase().includes(lowercaseSearchTerm) ||
           panchayat.district?.toLowerCase().includes(lowercaseSearchTerm) ||
           panchayat.state?.toLowerCase().includes(lowercaseSearchTerm) ||
@@ -110,11 +110,11 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
       setFilteredPanchayats(data);
       setInitialLoad(false);
     } catch (error) {
-      console.error('Error loading panchayats:', error);
+      console.error("Error loading panchayats:", error);
       setSnackbar({
         open: true,
         message: `Error loading panchayats: ${error.message}`,
-        severity: 'error'
+        severity: "error",
       });
     } finally {
       setLoading(false);
@@ -125,7 +125,7 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
   const handlePageChange = (event, value) => {
     setPage(value);
     // Scroll to top of list
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   // Form dialog handlers
@@ -152,25 +152,28 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
 
   // Submit form handler
   const handleSubmitForm = async (formData) => {
+    console.log(formData, "Data");
     setLoading(true);
     try {
       let result;
 
-      if (formData._id) {
+      const panchayatId = formData.get('_id');
+
+      if (panchayatId) {
         // Update existing panchayat
-        result = await updatePanchayat(formData._id, formData);
+        result = await updatePanchayat(panchayatId, formData);
         setSnackbar({
           open: true,
-          message: 'Panchayat updated successfully',
-          severity: 'success'
+          message: "Panchayat updated successfully",
+          severity: "success",
         });
       } else {
         // Create new panchayat
         result = await createPanchayat(formData);
         setSnackbar({
           open: true,
-          message: 'Panchayat created successfully',
-          severity: 'success'
+          message: "Panchayat created successfully",
+          severity: "success",
         });
       }
 
@@ -178,11 +181,11 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
       await loadPanchayats();
       return result;
     } catch (error) {
-      console.error('Error saving panchayat:', error);
+      console.error("Error saving panchayat:", error);
       setSnackbar({
         open: true,
         message: `Error: ${error.message}`,
-        severity: 'error'
+        severity: "error",
       });
       throw error;
     } finally {
@@ -200,28 +203,31 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
 
       if (result.success) {
         // If deleted panchayat was selected, deselect it
-        if (selectedPanchayat && selectedPanchayat._id === currentPanchayat._id) {
+        if (
+          selectedPanchayat &&
+          selectedPanchayat._id === currentPanchayat._id
+        ) {
           setSelectedPanchayat(null);
         }
 
         setSnackbar({
           open: true,
-          message: 'Panchayat deleted successfully',
-          severity: 'success'
+          message: "Panchayat deleted successfully",
+          severity: "success",
         });
 
         // Refresh panchayat list
         await loadPanchayats();
         handleCloseDeleteDialog();
       } else {
-        throw new Error(result.message || 'Error deleting panchayat');
+        throw new Error(result.message || "Error deleting panchayat");
       }
     } catch (error) {
-      console.error('Error deleting panchayat:', error);
+      console.error("Error deleting panchayat:", error);
       setSnackbar({
         open: true,
         message: `Error: ${error.message}`,
-        severity: 'error'
+        severity: "error",
       });
     } finally {
       setLoading(false);
@@ -239,14 +245,14 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
       try {
         wardData = await fetchWards(panchayat._id);
       } catch (error) {
-        console.error('Error fetching wards for panchayat:', error);
+        console.error("Error fetching wards for panchayat:", error);
         // Continue even if ward fetch fails
       }
 
       // Create an enhanced panchayat object with wards
       const enhancedPanchayat = {
         ...panchayat,
-        wards: wardData || []
+        wards: wardData || [],
       };
 
       setSelectedPanchayat(enhancedPanchayat);
@@ -258,14 +264,14 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
       setSnackbar({
         open: true,
         message: `Selected ${panchayat.name} panchayat successfully`,
-        severity: 'success'
+        severity: "success",
       });
     } catch (error) {
-      console.error('Error selecting panchayat:', error);
+      console.error("Error selecting panchayat:", error);
       setSnackbar({
         open: true,
         message: `Error selecting panchayat: ${error.message}`,
-        severity: 'error'
+        severity: "error",
       });
     } finally {
       setLoading(false);
@@ -305,26 +311,32 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
           p: 3,
           mb: 4,
           borderRadius: 2,
-          background: 'linear-gradient(to right, #f5f7fa, #e4e8ef)'
+          background: "linear-gradient(to right, #f5f7fa, #e4e8ef)",
         }}
       >
-        <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 'medium' }}>
+        <Typography
+          variant="h4"
+          component="h1"
+          gutterBottom
+          sx={{ fontWeight: "medium" }}
+        >
           Panchayat Management
         </Typography>
         <Typography variant="body1" paragraph>
-          Manage Gram Panchayats in the system. Add, edit, or delete panchayats and select one to work with.
+          Manage Gram Panchayats in the system. Add, edit, or delete panchayats
+          and select one to work with.
         </Typography>
       </Paper>
 
       {/* Action Bar Section */}
       <Box
         sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexDirection: { xs: 'column', sm: 'row' },
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexDirection: { xs: "column", sm: "row" },
           mb: 4,
-          gap: 2
+          gap: 2,
         }}
       >
         <Typography variant="h5" component="h2">
@@ -333,10 +345,10 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
 
         <Box
           sx={{
-            display: 'flex',
+            display: "flex",
             gap: 2,
-            width: { xs: '100%', sm: 'auto' },
-            flexDirection: { xs: 'column', sm: 'row' }
+            width: { xs: "100%", sm: "auto" },
+            flexDirection: { xs: "column", sm: "row" },
           }}
         >
           <TextField
@@ -345,7 +357,7 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
             size="small"
             value={searchTerm}
             onChange={handleSearchChange}
-            sx={{ width: { xs: '100%', sm: 260 } }}
+            sx={{ width: { xs: "100%", sm: 260 } }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -361,7 +373,7 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
             startIcon={<AddIcon />}
             onClick={() => handleOpenFormDialog()}
             size={isMobile ? "medium" : "large"}
-            sx={{ whiteSpace: 'nowrap' }}
+            sx={{ whiteSpace: "nowrap" }}
           >
             Add Panchayat
           </Button>
@@ -373,8 +385,8 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
         <Alert severity="info" sx={{ mt: 2, mb: 4 }}>
           <AlertTitle>No panchayats found</AlertTitle>
           <Typography paragraph>
-            Your system needs at least one panchayat to function properly.
-            Click the "Add Panchayat" button above to create your first panchayat.
+            Your system needs at least one panchayat to function properly. Click
+            the "Add Panchayat" button above to create your first panchayat.
           </Typography>
           <Button
             variant="contained"
@@ -389,42 +401,46 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
       ) : null}
 
       {/* No Results State */}
-      {!initialLoad && panchayats.length > 0 && filteredPanchayats.length === 0 && (
-        <Alert severity="info" sx={{ mt: 2, mb: 4 }}>
-          <AlertTitle>No matching panchayats</AlertTitle>
-          <Typography>
-            No panchayats match your search criteria. Try a different search term or clear the search.
-          </Typography>
-        </Alert>
-      )}
+      {!initialLoad &&
+        panchayats.length > 0 &&
+        filteredPanchayats.length === 0 && (
+          <Alert severity="info" sx={{ mt: 2, mb: 4 }}>
+            <AlertTitle>No matching panchayats</AlertTitle>
+            <Typography>
+              No panchayats match your search criteria. Try a different search
+              term or clear the search.
+            </Typography>
+          </Alert>
+        )}
 
       {/* Panchayat Cards */}
       <Grid container spacing={3}>
-        {initialLoad ? (
-          renderSkeletons()
-        ) : (
-          paginatedPanchayats.map((panchayat) => (
-            <Grid item xs={12} sm={6} md={4} key={panchayat._id}>
-              <Fade in={true} timeout={300}>
-                <Box>
-                  <PanchayatCard
-                    panchayat={panchayat}
-                    onSelect={handleSelectPanchayat}
-                    onEdit={handleOpenFormDialog}
-                    onDelete={handleOpenDeleteDialog}
-                    isSelected={selectedPanchayat && selectedPanchayat._id === panchayat._id}
-                    loading={loading}
-                  />
-                </Box>
-              </Fade>
-            </Grid>
-          ))
-        )}
+        {initialLoad
+          ? renderSkeletons()
+          : paginatedPanchayats.map((panchayat) => (
+              <Grid item xs={12} sm={6} md={4} key={panchayat._id}>
+                <Fade in={true} timeout={300}>
+                  <Box>
+                    <PanchayatCard
+                      panchayat={panchayat}
+                      onSelect={handleSelectPanchayat}
+                      onEdit={handleOpenFormDialog}
+                      onDelete={handleOpenDeleteDialog}
+                      isSelected={
+                        selectedPanchayat &&
+                        selectedPanchayat._id === panchayat._id
+                      }
+                      loading={loading}
+                    />
+                  </Box>
+                </Fade>
+              </Grid>
+            ))}
       </Grid>
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
           <Pagination
             count={totalPages}
             page={page}
@@ -451,10 +467,10 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
         open={deleteDialogOpen}
         onClose={handleCloseDeleteDialog}
         PaperProps={{
-          sx: { borderRadius: 2 }
+          sx: { borderRadius: 2 },
         }}
       >
-        <DialogTitle sx={{ bgcolor: 'error.main', color: 'white' }}>
+        <DialogTitle sx={{ bgcolor: "error.main", color: "white" }}>
           Confirm Deletion
         </DialogTitle>
         <DialogContent sx={{ pt: 3 }}>
@@ -463,10 +479,12 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
               <AlertTitle>This action cannot be undone</AlertTitle>
             </Alert>
             <Typography>
-              Are you sure you want to delete the panchayat <strong>{currentPanchayat?.name}</strong>?
+              Are you sure you want to delete the panchayat{" "}
+              <strong>{currentPanchayat?.name}</strong>?
             </Typography>
             <Typography sx={{ mt: 2 }}>
-              This will also permanently remove all associated voter data and other related information.
+              This will also permanently remove all associated voter data and
+              other related information.
             </Typography>
           </DialogContentText>
         </DialogContent>
@@ -483,7 +501,9 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
             color="error"
             variant="contained"
             disabled={loading}
-            startIcon={loading ? <CircularProgress size={18} color="inherit" /> : null}
+            startIcon={
+              loading ? <CircularProgress size={18} color="inherit" /> : null
+            }
           >
             Delete
           </Button>
@@ -495,12 +515,12 @@ const PanchayatManagement = ({ onSelectPanchayat }) => {
         open={snackbar.open}
         autoHideDuration={6000}
         onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
         <Alert
           onClose={handleCloseSnackbar}
           severity={snackbar.severity}
-          sx={{ width: '100%' }}
+          sx={{ width: "100%" }}
           elevation={6}
           variant="filled"
         >

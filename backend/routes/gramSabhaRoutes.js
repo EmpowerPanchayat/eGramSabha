@@ -390,7 +390,7 @@ router.get("/:id", async (req, res) => {
   try {
     const gramSabha = await GramSabha.findById(req.params.id)
       .populate("scheduledById", "name")
-      .populate("panchayatId", "name")
+      .populate("panchayatId", "name letterhead")
       .lean(); // Convert to plain JS object
 
     if (!gramSabha) {
@@ -1245,6 +1245,7 @@ router.get("/panchayat/:panchayatId/officials", async (req, res) => {
         })),
         totalCount: officials.length,
         roles: [...new Set(officials.map((o) => o.role))], // Unique roles found
+        letterhead: panchayat.letterhead || null, // <-- ADDED LETTERHEAD
       },
     };
 

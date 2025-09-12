@@ -547,6 +547,31 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// NEW: Generic file serving endpoint from GridFS
+app.get("/api/files/:id", async (req, res) => {
+  try {
+    const fileId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(fileId)) {
+      return res.status(400).json({ success: false, message: "Invalid file ID" });
+    }
+
+    const fileInfo = await storageService.getFileInfo(fileId);
+    if (!fileInfo) {
+      return res.status(404).json({ success: false, message: "File not found" });
+    }
+
+    res.setHeader('Content-Type', fileInfo.contentType);
+    res.setHeader('Content-Disposition', `inline; filename="${fileInfo.filename}"`);
+
+    const downloadStream = await storageService.getImageStream(fileId);
+    downloadStream.pipe(res);
+
+  } catch (error) {
+    console.error("Error serving file:", error);
+    res.status(500).json({ success: false, message: "Error serving file" });
+  }
+});
+
 // Create default roles
 createDefaultRoles().catch(console.error);
 

@@ -1,10 +1,15 @@
-// File: backend/routes/panchayatRoutes.js (Enhanced with LGD and location lookup)
 const express = require("express");
 const router = express.Router();
 const Panchayat = require("../models/Panchayat");
 const User = require("../models/User");
 const Ward = require("../models/Ward");
 const Issue = require("../models/Issue");
+const multer = require("multer");
+const storageService = require("../storage/storageService");
+const { v4: uuidv4 } = require("uuid");
+
+// Configure multer for memory storage
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Get all panchayats
 router.get("/", async (req, res) => {
@@ -226,7 +231,7 @@ router.get("/search-login", async (req, res) => {
 });
 
 // Add a new ward to a panchayat
-router.post('/:id/wards', async (req, res) => {
+router.post("/:id/wards", async (req, res) => {
   try {
     const panchayatId = req.params.id;
 
@@ -235,33 +240,33 @@ router.post('/:id/wards', async (req, res) => {
     if (!panchayat) {
       return res.status(404).json({
         success: false,
-        message: 'Panchayat not found'
+        message: "Panchayat not found",
       });
     }
 
     // Create new ward with panchayatId
     const ward = new Ward({
       ...req.body,
-      panchayatId
+      panchayatId,
     });
 
     await ward.save();
 
     res.status(201).json({
       success: true,
-      ward
+      ward,
     });
   } catch (error) {
-    console.error('Error creating ward:', error);
+    console.error("Error creating ward:", error);
     res.status(500).json({
       success: false,
-      message: 'Error creating ward: ' + error.message
+      message: "Error creating ward: " + error.message,
     });
   }
 });
 
 // Get all wards for a panchayat
-router.get('/:id/wards', async (req, res) => {
+router.get("/:id/wards", async (req, res) => {
   try {
     const panchayatId = req.params.id;
 
@@ -270,7 +275,7 @@ router.get('/:id/wards', async (req, res) => {
     if (!panchayat) {
       return res.status(404).json({
         success: false,
-        message: 'Panchayat not found'
+        message: "Panchayat not found",
       });
     }
 
@@ -279,19 +284,19 @@ router.get('/:id/wards', async (req, res) => {
 
     res.json({
       success: true,
-      wards
+      wards,
     });
   } catch (error) {
-    console.error('Error fetching wards:', error);
+    console.error("Error fetching wards:", error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching wards: ' + error.message
+      message: "Error fetching wards: " + error.message,
     });
   }
 });
 
 // Update a ward
-router.put('/:panchayatId/wards/:wardId', async (req, res) => {
+router.put("/:panchayatId/wards/:wardId", async (req, res) => {
   try {
     const { panchayatId, wardId } = req.params;
 
@@ -300,7 +305,7 @@ router.put('/:panchayatId/wards/:wardId', async (req, res) => {
     if (!panchayat) {
       return res.status(404).json({
         success: false,
-        message: 'Panchayat not found'
+        message: "Panchayat not found",
       });
     }
 
@@ -314,25 +319,25 @@ router.put('/:panchayatId/wards/:wardId', async (req, res) => {
     if (!ward) {
       return res.status(404).json({
         success: false,
-        message: 'Ward not found or does not belong to this panchayat'
+        message: "Ward not found or does not belong to this panchayat",
       });
     }
 
     res.json({
       success: true,
-      ward
+      ward,
     });
   } catch (error) {
-    console.error('Error updating ward:', error);
+    console.error("Error updating ward:", error);
     res.status(500).json({
       success: false,
-      message: 'Error updating ward: ' + error.message
+      message: "Error updating ward: " + error.message,
     });
   }
 });
 
 // Delete a ward
-router.delete('/:panchayatId/wards/:wardId', async (req, res) => {
+router.delete("/:panchayatId/wards/:wardId", async (req, res) => {
   try {
     const { panchayatId, wardId } = req.params;
 
@@ -341,7 +346,7 @@ router.delete('/:panchayatId/wards/:wardId', async (req, res) => {
     if (!panchayat) {
       return res.status(404).json({
         success: false,
-        message: 'Panchayat not found'
+        message: "Panchayat not found",
       });
     }
 
@@ -351,73 +356,93 @@ router.delete('/:panchayatId/wards/:wardId', async (req, res) => {
     if (!ward) {
       return res.status(404).json({
         success: false,
-        message: 'Ward not found or does not belong to this panchayat'
+        message: "Ward not found or does not belong to this panchayat",
       });
     }
 
     res.json({
       success: true,
-      message: 'Ward deleted successfully'
+      message: "Ward deleted successfully",
     });
   } catch (error) {
-    console.error('Error deleting ward:', error);
+    console.error("Error deleting ward:", error);
     res.status(500).json({
       success: false,
-      message: 'Error deleting ward: ' + error.message
+      message: "Error deleting ward: " + error.message,
     });
   }
 });
 
-
 // Get a specific panchayat
-router.get('/:id', async (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
     const panchayat = await Panchayat.findById(req.params.id);
     if (!panchayat) {
-      return res.status(404).json({ success: false, message: 'Panchayat not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Panchayat not found" });
     }
     res.json({ success: true, panchayat });
   } catch (error) {
-    console.error('Error fetching panchayat:', error);
-    res.status(500).json({ success: false, message: 'Error fetching panchayat' });
+    console.error("Error fetching panchayat:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Error fetching panchayat" });
   }
 });
 
 // Create a new panchayat
-router.post('/', async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const panchayat = new Panchayat(req.body);
     await panchayat.save();
     res.status(201).json({ success: true, panchayat });
   } catch (error) {
-    console.error('Error creating panchayat:', error);
-    res.status(500).json({ success: false, message: 'Error creating panchayat: ' + error.message });
+    console.error("Error creating panchayat:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error creating panchayat: " + error.message,
+    });
   }
 });
 
 // Update a panchayat
-router.put('/:id', async (req, res) => {
+router.put("/:id", upload.single("letterhead"), async (req, res) => {
   try {
     const updates = { ...req.body, updatedAt: new Date() };
+
+    // Handle file upload and store as Base64
+    if (req.file) {
+      updates.letterhead = {
+        mimetype: req.file.mimetype,
+        content: req.file.buffer.toString("base64"),
+      };
+    }
+
     const panchayat = await Panchayat.findByIdAndUpdate(
       req.params.id,
       updates,
-      { new: true }
+      { new: true, runValidators: true }
     );
 
     if (!panchayat) {
-      return res.status(404).json({ success: false, message: 'Panchayat not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Panchayat not found" });
     }
 
     res.json({ success: true, panchayat });
   } catch (error) {
-    console.error('Error updating panchayat:', error);
-    res.status(500).json({ success: false, message: 'Error updating panchayat' });
+    console.error("Error updating panchayat:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error updating panchayat: " + error.message,
+    });
   }
 });
 
 // Delete a panchayat
-router.delete('/:id', async (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
     const panchayatId = req.params.id;
 
@@ -426,7 +451,7 @@ router.delete('/:id', async (req, res) => {
     if (!panchayat) {
       return res.status(404).json({
         success: false,
-        message: 'Panchayat not found'
+        message: "Panchayat not found",
       });
     }
 
@@ -436,7 +461,7 @@ router.delete('/:id', async (req, res) => {
       Ward.deleteMany({ panchayatId }),
       Issue.deleteMany({ panchayatId }),
       // Add other related collections here
-      Panchayat.findByIdAndDelete(panchayatId)
+      Panchayat.findByIdAndDelete(panchayatId),
     ];
 
     // Execute all delete operations
@@ -444,40 +469,44 @@ router.delete('/:id', async (req, res) => {
 
     // Check if panchayat was deleted
     if (!results[results.length - 1]) {
-      throw new Error('Failed to delete panchayat');
+      throw new Error("Failed to delete panchayat");
     }
 
     res.json({
       success: true,
-      message: 'Panchayat and related data deleted successfully',
+      message: "Panchayat and related data deleted successfully",
       deletedUsers: results[0].deletedCount,
       deletedIssues: results[1].deletedCount,
-      deletedWards: results[2].deletedCount
+      deletedWards: results[2].deletedCount,
     });
-
   } catch (error) {
-    console.error('Error deleting panchayat:', error);
+    console.error("Error deleting panchayat:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to delete panchayat and related data',
-      error: error.message
+      message: "Failed to delete panchayat and related data",
+      error: error.message,
     });
   }
 });
 
 // Get statistics for a specific panchayat
-router.get('/:id/stats', async (req, res) => {
+router.get("/:id/stats", async (req, res) => {
   try {
     const panchayatId = req.params.id;
 
     // First verify that the panchayat exists
     const panchayat = await Panchayat.findById(panchayatId);
     if (!panchayat) {
-      return res.status(404).json({ success: false, message: 'Panchayat not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Panchayat not found" });
     }
 
     const totalUsers = await User.countDocuments({ panchayatId });
-    const registeredUsers = await User.countDocuments({ panchayatId, isRegistered: true });
+    const registeredUsers = await User.countDocuments({
+      panchayatId,
+      isRegistered: true,
+    });
     const wardCount = await Ward.countDocuments({ panchayatId });
 
     res.json({
@@ -486,16 +515,18 @@ router.get('/:id/stats', async (req, res) => {
       totalUsers,
       registeredUsers,
       pendingUsers: totalUsers - registeredUsers,
-      wardCount
+      wardCount,
     });
   } catch (error) {
-    console.error('Error fetching panchayat stats:', error);
-    res.status(500).json({ success: false, message: 'Error fetching panchayat stats' });
+    console.error("Error fetching panchayat stats:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Error fetching panchayat stats" });
   }
 });
 
 // Get overall statistics
-router.get('/stats', async (req, res) => {
+router.get("/stats", async (req, res) => {
   try {
     const { panchayatId } = req.query;
 
@@ -505,7 +536,10 @@ router.get('/stats', async (req, res) => {
     }
 
     const totalUsers = await User.countDocuments(query);
-    const registeredUsers = await User.countDocuments({ ...query, isRegistered: true });
+    const registeredUsers = await User.countDocuments({
+      ...query,
+      isRegistered: true,
+    });
     const pendingUsers = totalUsers - registeredUsers;
     const wardCount = await Ward.countDocuments(query);
 
@@ -515,12 +549,14 @@ router.get('/stats', async (req, res) => {
         totalUsers,
         registeredUsers,
         pendingUsers,
-        wardCount
-      }
+        wardCount,
+      },
     });
   } catch (error) {
-    console.error('Error fetching overall stats:', error);
-    res.status(500).json({ success: false, message: 'Error fetching overall stats' });
+    console.error("Error fetching overall stats:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Error fetching overall stats" });
   }
 });
 

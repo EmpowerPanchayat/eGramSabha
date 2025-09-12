@@ -74,13 +74,14 @@ router.post("/send-for-signing", upload.single("pdf"), async (req, res) => {
     }
 
     gramSabha.agendaGroupId = groupId;
-    gramSabha.agendaSigningStatus = "PENDING";
-    gramSabha.agendaSignatories = parsedSignatures.map((s) => ({
-      identifier: s.identifier,
-      name: s.name,
+    gramSabha.agendaSigningStatus = 'PENDING';
+    gramSabha.agendaSignatories = parsedSignatures.map(s => ({ 
+      identifier: s.identifier, 
+      name: s.name, 
       role: s.role,
-      status: "PENDING",
+      status: 'PENDING'
     }));
+    gramSabha.isAgendaFinalized = true; // Finalize the agenda
 
     await gramSabha.save();
 
