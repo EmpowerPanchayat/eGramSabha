@@ -74,12 +74,12 @@ router.post("/send-for-signing", upload.single("pdf"), async (req, res) => {
     }
 
     gramSabha.agendaGroupId = groupId;
-    gramSabha.agendaSigningStatus = 'PENDING';
-    gramSabha.agendaSignatories = parsedSignatures.map(s => ({ 
-      identifier: s.identifier, 
-      name: s.name, 
+    gramSabha.agendaSigningStatus = "PENDING";
+    gramSabha.agendaSignatories = parsedSignatures.map((s) => ({
+      identifier: s.identifier,
+      name: s.name,
       role: s.role,
-      status: 'PENDING'
+      status: "PENDING",
     }));
     gramSabha.isAgendaFinalized = true; // Finalize the agenda
 
@@ -153,7 +153,6 @@ router.get("/signed-file/:groupId", async (req, res) => {
       return res.send(gramSabha.signedAgendaPDF.data.buffer); // ⚡ note .buffer if using Mixed
     }
 
-    // ❌ Not saved → download fresh
     const pdfBuffer = await jioSign.downloadSignedDocument(groupId);
 
     // Save in Mongo

@@ -1466,3 +1466,30 @@ router.get("/recordings/download", async (req, res) => {
   }
 });
 module.exports = router;
+
+// NEW: Finalize Agenda Route
+router.patch("/:id/finalize-agenda", auth.isOfficial, async (req, res) => {
+  try {
+    const { agenda } = req.body;
+    const gramSabha = await GramSabha.findById(req.params.id);
+
+    if (!gramSabha) {
+      return res.status(404).json({ success: false, message: "Meeting not found" });
+    }
+
+    if (gramSabha.isAgendaFinalized) {
+        return res.status(400).json({ success: false, message: "Agenda is already finalized and cannot be changed." });
+    }
+
+    // Optional: Add role check to ensure only authorized officials can finalize
+
+    gramSabha.agenda = agenda;
+    gramSabha.isAgendaFinalized = true;
+    await gramSabha.save();
+
+    res.json({ success: true, data: gramSabha });
+  } catch (error) {
+    console.error("Error finalizing agenda:", error);
+    res.status(500).json({ success: false, message: "Error finalizing agenda: " + error.message });
+  }
+});

@@ -66,6 +66,10 @@ const gramSabhaSchema = new mongoose.Schema(
     type: Boolean,
     default: false,
   },
+  isAgendaFinalized: {
+    type: Boolean,
+    default: false,
+  },
     jioMeetData: {
       type: mongoose.Schema.Types.Mixed,
       required: false,

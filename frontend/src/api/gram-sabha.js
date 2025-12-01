@@ -469,3 +469,13 @@ export const startJioMeetRecording = async (jiomeetId, roomPIN) => {
     throw error.response?.data || { message: "Failed to start recording" };
   }
 };
+
+export const finalizeAgenda = async (meetingId, agenda) => {
+  try {
+    const response = await api.patch(`/gram-sabha/${meetingId}/finalize-agenda`, { agenda });
+    return response.data;
+  } catch (error) {
+    console.error("API Error in finalizeAgenda:", error);
+    throw error.response?.data || { message: "Failed to finalize agenda" };
+  }
+};

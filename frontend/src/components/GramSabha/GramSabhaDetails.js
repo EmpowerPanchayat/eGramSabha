@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Box,
   Card,
@@ -42,6 +42,7 @@ import html2pdf from "html2pdf.js";
 import jsPDF from "jspdf";
 import "../../fonts/NotoSansDevanagari-Regular-normal";
 import {
+  finalizeAgenda,
   fetchGramSabhaMeeting,
   addAttachment,
   submitRSVP,
@@ -56,11 +57,13 @@ import {
   handleDownloadSignedAgenda,
 } from "../../api/jioSign";
 import { useLanguage } from "../../utils/LanguageContext";
+import AgendaSelectionModal from "./AgendaSelectionModal"; // Import the new modal
 
 const GramSabhaDetails = ({ meetingId, user, signatories, letterhd }) => {
   const [meeting, setMeeting] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isAgendaModalOpen, setAgendaModalOpen] = useState(false); // State for the new modal
   const [rsvpStatus, setRsvpStatus] = useState(null);
   const [rsvpLoading, setRsvpLoading] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
@@ -87,6 +90,19 @@ const GramSabhaDetails = ({ meetingId, user, signatories, letterhd }) => {
     user?.role === "PRESIDENT" || user?.role === "PRESIDENT_PANCHAYAT";
   const canRSVP =
     !isPresident && meeting && new Date(meeting.dateTime) > new Date();
+
+  const fetchData = useCallback(async () => {
+    if (!meetingId) return;
+    setLoading(true);
+    try {
+      const meetingData = await fetchGramSabhaMeeting(meetingId);
+      setMeeting(meetingData);
+    } catch (err) {
+      setError(err.message || "Failed to refetch meeting data");
+    } finally {
+      setLoading(false);
+    }
+  }, [meetingId]);
 
   const handleDownloadOption = (type) => {
     handleMenuClose();
@@ -178,6 +194,23 @@ const GramSabhaDetails = ({ meetingId, user, signatories, letterhd }) => {
       setContactMethods(initialMethods);
     }
   }, [signatories]);
+
+  const handleFinalizeAgenda = async (finalAgenda) => {
+    if (!meetingId) return;
+
+    setLoading(true);
+    try {
+      const result = await finalizeAgenda(meetingId, finalAgenda);
+      if (result.success) {
+        alert("Agenda has been finalized and can no longer be edited.");
+        fetchData(); // Refetch the meeting data to get the updated state
+      }
+    } catch (err) {
+      setError(err.message || "Failed to finalize agenda");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleRSVP = async (status) => {
     if (!user?.id) {
@@ -811,7 +844,7 @@ const GramSabhaDetails = ({ meetingId, user, signatories, letterhd }) => {
       if (yPosition > 270) {
         doc.addPage();
         addLetterhead(); // Add watermark to new page
-        yPosition = 20;
+        yPosition = 80;
       }
       doc.text(line, 15, yPosition);
       yPosition += 6;
@@ -1001,11 +1034,6 @@ const GramSabhaDetails = ({ meetingId, user, signatories, letterhd }) => {
 
       // 2. Generate PDF with letterhead background
       const pdfBlob = await generateSearchablePDF(htmlContent);
-      console.log("PDf", pdfBlob);
-      const pdfUrl = URL.createObjectURL(pdfBlob);
-
-      // Open the PDF in a new tab
-      window.open(pdfUrl);
       // 3. Prepare signatures
       const signatures = signatories.map((signatory, index) => ({
         identifier: signatoryContacts[index],
@@ -1573,33 +1601,46 @@ const GramSabhaDetails = ({ meetingId, user, signatories, letterhd }) => {
           >
             <Typography variant="h6">{strings.agenda}</Typography>
 
-            <Tooltip title={strings.viewAgendaDocument}>
-              <Button
-                variant="outlined"
-                color="primary"
-                startIcon={<ViewIcon />}
-                onClick={() => setShowAgendaDialog(true)}
-                disabled={loading}
-              >
-                {strings.viewAgendaDocument}
-              </Button>
-            </Tooltip>
+            <Box sx={{ display: "flex", gap: 2 }}>
+              {isPresident &&
+                meeting.status === "SCHEDULED" &&
+                !meeting.isAgendaFinalized && (
+                  <Button
+                    variant="contained"
+                    onClick={() => setAgendaModalOpen(true)}
+                  >
+                    Edit & Finalize Agenda
+                  </Button>
+                )}
 
-            {meeting.agendaGroupId && (
-              <Tooltip title="Download Signed Agenda">
+              <Tooltip title={strings.viewAgendaDocument}>
                 <Button
                   variant="outlined"
-                  color="success"
-                  startIcon={<DownloadIcon />}
-                  onClick={() =>
-                    handleDownladAgenda(meeting.agendaGroupId, meetingId)
-                  }
+                  color="primary"
+                  startIcon={<ViewIcon />}
+                  onClick={() => setShowAgendaDialog(true)}
                   disabled={loading}
                 >
-                  Download Signed Document
+                  {strings.viewAgendaDocument}
                 </Button>
               </Tooltip>
-            )}
+
+              {meeting.agendaGroupId && (
+                <Tooltip title="Download Signed Agenda">
+                  <Button
+                    variant="outlined"
+                    color="success"
+                    startIcon={<DownloadIcon />}
+                    onClick={() =>
+                      handleDownladAgenda(meeting.agendaGroupId, meetingId)
+                    }
+                    disabled={loading}
+                  >
+                    Download Signed Document
+                  </Button>
+                </Tooltip>
+              )}
+            </Box>
           </Box>
 
           {/* Agenda Section */}
@@ -1660,9 +1701,9 @@ const GramSabhaDetails = ({ meetingId, user, signatories, letterhd }) => {
                 </Typography>
               )}
 
-              {/* Signatories Section */}
+              {/* Signatories Section - Visible only after agenda is finalized */}
               {isPresident &&
-                meeting.status === "SCHEDULED" &&
+                meeting.isAgendaFinalized &&
                 signatories &&
                 signatories.length > 0 && (
                   <Box sx={{ mt: 4 }}>
@@ -1807,6 +1848,16 @@ const GramSabhaDetails = ({ meetingId, user, signatories, letterhd }) => {
                 )}
             </Paper>
           </Box>
+
+          {/* Agenda Selection Modal */}
+          <AgendaSelectionModal
+            open={isAgendaModalOpen}
+            onClose={() => setAgendaModalOpen(false)}
+            currentAgenda={meeting.agenda}
+            panchayatId={meeting.panchayatId?._id}
+            onFinalize={handleFinalizeAgenda}
+          />
+
           {/* Agenda Document Dialog */}
           <Dialog
             open={showAgendaDialog}

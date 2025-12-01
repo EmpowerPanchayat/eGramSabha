@@ -243,6 +243,8 @@ async function saveDocumentData(groupId, pdfBuffer, signatures, opts = {}) {
       notifications: buildNotifications(isMobile, false),
       cards: [
         {
+          cardW: 250,
+          cardH: 80,
           cardType: 2, // Signature card
           cardPageNo: 1, // Not used when cTag=1
           cardColor: "#f2d130",
