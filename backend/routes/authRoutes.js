@@ -373,8 +373,8 @@ router.post('/change-password', isAuthenticated, async (req, res) => {
             });
         }
 
-        // Find official by id
-        const official = await Official.findById(req.official.id);
+        // Find official by id (from isAuthenticated middleware which sets req.user)
+        const official = await Official.findById(req.user.id);
 
         if (!official) {
             return res.status(404).json({

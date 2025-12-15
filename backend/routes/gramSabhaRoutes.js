@@ -14,9 +14,22 @@ const multer = require("multer");
 const mongoose = require("mongoose");
 const User = require("../models/User");
 
-const { JIOMEET_APP_ID, JIOMEET_API, BACKEND_URL } = process.env;
-const privateKey = process.env.PRIVATE_KEY.replace(/\\n/g, "\n");
-const publicKey = process.env.PUBLIC_KEY.replace(/\\n/g, "\n");
+const { JIOMEET_APP_ID, JIOMEET_API, BACKEND_URL, PRIVATE_KEY_PATH, PUBLIC_KEY_PATH } = process.env;
+
+// Load keys from file paths
+let privateKey = null;
+let publicKey = null;
+
+try {
+  if (PRIVATE_KEY_PATH) {
+    privateKey = fs.readFileSync(PRIVATE_KEY_PATH, 'utf8');
+  }
+  if (PUBLIC_KEY_PATH) {
+    publicKey = fs.readFileSync(PUBLIC_KEY_PATH, 'utf8');
+  }
+} catch (error) {
+  console.warn('Warning: Could not load RSA keys from file paths', error.message);
+}
 
 // Configure multer for memory storage
 const storage = multer.memoryStorage();

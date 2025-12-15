@@ -142,7 +142,7 @@ const ProfileView = () => {
         setError('');
 
         try {
-            await changePassword(currentPassword, newPassword);
+            await changePassword({ currentPassword, newPassword });
 
             setSnackbar({
                 open: true,

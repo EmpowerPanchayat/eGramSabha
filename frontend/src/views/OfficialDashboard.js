@@ -182,7 +182,7 @@ const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha }) =
         setPasswordChangeError('');
 
         try {
-            await changePassword(currentPassword, newPassword);
+            await changePassword({ currentPassword, newPassword });
             setPasswordDialogOpen(false);
             return true;
         } catch (error) {

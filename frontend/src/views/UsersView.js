@@ -37,7 +37,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useLanguage } from '../utils/LanguageContext';
 
-const UsersView = ({ users, loggedInUser, setSelectedUser, selectedPanchayat, setShowAllCitizen }) => {
+const UsersView = ({ users, loggedInUser = {}, setSelectedUser, selectedPanchayat, setShowAllCitizen }) => {
   const { strings } = useLanguage();
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -193,7 +193,7 @@ const UsersView = ({ users, loggedInUser, setSelectedUser, selectedPanchayat, se
 
   return (
     <Box>
-      {loggedInUser.userType === 'ADMIN'&& (
+      {loggedInUser?.userType === 'ADMIN' && (
         <Paper elevation={1} sx={{ p: 3, mb: 4 }}>
           <Typography variant="h2" component="h1" gutterBottom>
             Members
@@ -203,7 +203,7 @@ const UsersView = ({ users, loggedInUser, setSelectedUser, selectedPanchayat, se
           </Typography>
         </Paper>
       )}
-      {loggedInUser.userType === 'OFFICIAL'&& (
+      {loggedInUser?.userType === 'OFFICIAL' && (
         <Box
           sx={{
               p: 3,
