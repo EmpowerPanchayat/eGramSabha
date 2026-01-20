@@ -39,6 +39,7 @@ import {
   getAttendanceStats,
   fetchGramSabhaMeetingAttendanceData
 } from '../../api/gram-sabha';
+import { fetchLetterheadBase64 } from '../../api';
 import { useLanguage } from '../../utils/LanguageContext';
 
 const GramSabhaDetails = ({ meetingId, user }) => {
@@ -472,8 +473,24 @@ const GramSabhaDetails = ({ meetingId, user }) => {
     return textObj || '';
   };
 
-  const handleDownloadAgendaPDF = () => {
+  const handleDownloadAgendaPDF = async () => {
     if (!meeting) return;
+
+    // Fetch letterhead if available
+    let letterheadData = null;
+    try {
+      // meeting.panchayatId might be a populated object or just an ObjectId string
+      const panchayatId = attendance?.panchayatId?._id || meeting.panchayatId?._id || meeting.panchayatId;
+      console.log('PDF Debug - panchayatId:', panchayatId, 'meeting.panchayatId:', meeting.panchayatId);
+      if (panchayatId) {
+        letterheadData = await fetchLetterheadBase64(panchayatId);
+        console.log('PDF Debug - letterheadData:', letterheadData);
+        console.log('PDF Debug - margins:', letterheadData?.margins);
+        console.log('PDF Debug - imageTransform:', letterheadData?.imageTransform);
+      }
+    } catch (e) {
+      console.warn('Letterhead not available, continuing without:', e);
+    }
 
     const panchayat = attendance?.panchayatId || {};
     const agendaItemsHTML = Array.isArray(meeting.agenda)
@@ -518,55 +535,160 @@ const GramSabhaDetails = ({ meetingId, user }) => {
         }).join("")
       : `<p>${strings.noAgenda}</p>`;
 
-    const container = document.createElement("div");
+    // Build the agenda content (common between letterhead and non-letterhead versions)
+    const agendaContent = `
+      <div style="text-align: right; margin-bottom: 10px;">
+        <strong>${strings.serialNo} _____ </strong> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${strings.date} ${new Date().toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN')}
+      </div>
 
-    container.innerHTML = `
-      <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-size: 12px; line-height: 1.8; padding: 30px;">
-        <div style="text-align: right; margin-bottom: 10px;">
-          <strong>${strings.serialNo} _____ </strong> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${strings.date} ${new Date().toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN')}
+      <h2 style="text-align: center;">${strings.gramSabhaAgendaNotice}</h2>
+
+      <p><strong>${strings.village}:</strong> ${panchayat.name || "-"}<br/>
+      <strong>${strings.date}:</strong> ${new Date(meeting.dateTime).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN')}<br/>
+      <strong>${strings.time}:</strong> ${new Date(meeting.dateTime).toLocaleTimeString(language === 'hi' ? 'hi-IN' : 'en-IN', {
+        hour: '2-digit', minute: '2-digit', hour12: true
+      })}<br/>
+      <strong>${strings.location}:</strong> ${meeting.location || "-"}</p>
+
+      <p>${strings.gramSabhaNoticeText}</p>
+
+      <h3>${strings.newIssuesAndPlanHeading}:</h3>
+
+      <p>${strings.newIssuesAndPlanDescription}</p>
+
+      ${agendaItemsHTML}
+
+      <br/><br/>
+      <div style="display: flex; justify-content: space-between; margin-top: 40px;">
+        <div><br/>
+          <small>(${strings.secretary}, ${strings.gramPanchayat} ${panchayat.name || ""})</small>
         </div>
-
-        <h2 style="text-align: center;">${strings.gramSabhaAgendaNotice}</h2>
-
-        <p><strong>${strings.village}:</strong> ${panchayat.name || "-"}<br/>
-        <strong>${strings.date}:</strong> ${new Date(meeting.dateTime).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN')}<br/>
-        <strong>${strings.time}:</strong> ${new Date(meeting.dateTime).toLocaleTimeString(language === 'hi' ? 'hi-IN' : 'en-IN', {
-          hour: '2-digit', minute: '2-digit', hour12: true
-        })}<br/>
-        <strong>${strings.location}:</strong> ${meeting.location || "-"}</p>
-
-        <p>${strings.gramSabhaNoticeText}</p>
-
-        <h3>${strings.newIssuesAndPlanHeading}:</h3>
-
-        <p>${strings.newIssuesAndPlanDescription}</p>
-
-        ${agendaItemsHTML}
-
-        <br/><br/>
-        <div style="display: flex; justify-content: space-between; margin-top: 40px;">
-          <div><br/>
-            <small>(${strings.secretary}, ${strings.gramPanchayat} ${panchayat.name || ""})</small>
-          </div>
-          <div><br/>
-            <small>(${strings.sarpanch}, ${strings.gramPanchayat} ${panchayat.name || ""})</small>
-          </div>
+        <div><br/>
+          <small>(${strings.sarpanch}, ${strings.gramPanchayat} ${panchayat.name || ""})</small>
         </div>
       </div>
     `;
 
-    document.body.appendChild(container);
+    const container = document.createElement("div");
 
-    html2pdf()
-      .from(container)
-      .set({
-        margin: 0.5,
-        filename: `agenda_${Date.now()}.pdf`,
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: "in", format: "a4", orientation: "portrait" }
-      })
-      .save()
-      .then(() => document.body.removeChild(container));
+    // Default margins when no letterhead (in inches)
+    const defaultMargins = { top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 };
+
+    // Apply letterhead if available
+    console.log('PDF Debug - Applying letterhead?', !!letterheadData?.base64);
+    if (letterheadData?.base64) {
+      console.log('PDF Debug - ENTERING letterhead branch, type:', letterheadData.letterheadType);
+      const { base64, letterheadType, margins, imageTransform } = letterheadData;
+      const transform = imageTransform || { scale: 1, x: 0, y: 0 };
+
+      // Calculate image transform styles
+      const imgScale = transform.scale || 1;
+      const imgX = transform.x || 0;
+      const imgY = transform.y || 0;
+
+      if (letterheadType === 'header') {
+        // Header mode: letterhead at top, content below with side/bottom margins only
+        // Using background-image instead of img tag for better html2canvas compatibility
+
+        // The preview component uses 480x679 pixels to represent 8.27x11.69 inches (A4)
+        // We need to convert pixel offsets to inches for proper scaling in the PDF
+        const previewWidth = 480;
+        const previewHeight = 679;
+        const pxPerInchX = previewWidth / 8.27;
+        const pxPerInchY = previewHeight / 11.69;
+
+        // Convert pixel offsets to inches
+        const xInches = imgX / pxPerInchX;
+        const yInches = imgY / pxPerInchY;
+
+        container.innerHTML = `
+          <div style="font-family: 'Noto Sans Devanagari', sans-serif;">
+            <div style="
+              width: 100%;
+              height: ${margins.top}in;
+              background-image: url('${base64}');
+              background-size: ${100 * imgScale}% auto;
+              background-position: ${xInches}in ${yInches}in;
+              background-repeat: no-repeat;
+            "></div>
+            <div style="padding: 0.2in ${margins.right}in ${margins.bottom}in ${margins.left}in; font-size: 12px; line-height: 1.6;">
+              ${agendaContent}
+            </div>
+          </div>
+        `;
+      } else {
+        // Full background mode: letterhead as background with content overlaid
+        // The preview component uses 480x679 pixels to represent 8.27x11.69 inches (A4)
+        const previewWidth = 480;
+        const previewHeight = 679;
+        const pxPerInchX = previewWidth / 8.27;
+        const pxPerInchY = previewHeight / 11.69;
+
+        // Convert pixel offsets to inches
+        const xInches = imgX / pxPerInchX;
+        const yInches = imgY / pxPerInchY;
+
+        const bgSize = `${100 * imgScale}% ${100 * imgScale}%`;
+
+        container.innerHTML = `
+          <div style="
+            font-family: 'Noto Sans Devanagari', sans-serif;
+            background-image: url('${base64}');
+            background-size: ${bgSize};
+            background-position: ${xInches}in ${yInches}in;
+            background-repeat: no-repeat;
+            min-height: 10.5in;
+          ">
+            <div style="padding: ${margins.top}in ${margins.right}in ${margins.bottom}in ${margins.left}in; font-size: 12px; line-height: 1.6;">
+              ${agendaContent}
+            </div>
+          </div>
+        `;
+      }
+    } else {
+      // Fallback: No letterhead - apply default margins via CSS padding
+      container.innerHTML = `
+        <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-size: 12px; line-height: 1.6; padding: ${defaultMargins.top}in ${defaultMargins.right}in ${defaultMargins.bottom}in ${defaultMargins.left}in;">
+          ${agendaContent}
+        </div>
+      `;
+    }
+
+    document.body.appendChild(container);
+    console.log('PDF Debug - Container HTML (first 500 chars):', container.innerHTML.substring(0, 500));
+
+    // Helper function to generate PDF
+    const generatePDF = () => {
+      html2pdf()
+        .from(container)
+        .set({
+          margin: 0,
+          filename: `agenda_${Date.now()}.pdf`,
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            logging: true,  // Enable logging to debug image issues
+            allowTaint: true,
+            imageTimeout: 15000,  // Wait longer for images
+            removeContainer: false  // Keep container for debugging
+          },
+          jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        })
+        .save()
+        .then(() => document.body.removeChild(container))
+        .catch(err => {
+          console.error('PDF generation error:', err);
+          document.body.removeChild(container);
+        });
+    };
+
+    // Wait a short moment for the DOM to render, then generate PDF
+    // This ensures any images (including base64) are properly rendered
+    setTimeout(() => {
+      console.log('PDF Debug - Generating PDF after timeout');
+      generatePDF();
+    }, 100);
   };
 
   if (loading && !meeting) {

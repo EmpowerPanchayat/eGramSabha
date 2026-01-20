@@ -154,6 +154,79 @@
           "officialWhatsappNumber": {
             "type": "string"
           },
+          "supportEmail": {
+            "type": "string"
+          },
+          "supportPhoneNumber": {
+            "type": "string"
+          },
+          "supportContactPersonName": {
+            "type": "string"
+          },
+          "letterheadConfig": {
+            "type": "object",
+            "properties": {
+              "letterheadImageId": {
+                "type": "schemaobjectid"
+              },
+              "letterheadType": {
+                "type": "string",
+                "enum": [
+                  "header",
+                  "background"
+                ]
+              },
+              "margins": {
+                "type": "object",
+                "properties": {
+                  "top": {
+                    "type": "number"
+                  },
+                  "bottom": {
+                    "type": "number"
+                  },
+                  "left": {
+                    "type": "number"
+                  },
+                  "right": {
+                    "type": "number"
+                  }
+                }
+              },
+              "imageTransform": {
+                "type": "object",
+                "properties": {
+                  "scale": {
+                    "type": "number"
+                  },
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  }
+                }
+              },
+              "originalFilename": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string",
+                "enum": [
+                  "image/png",
+                  "image/jpeg",
+                  null
+                ]
+              },
+              "uploadedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "uploadedBy": {
+                "type": "schemaobjectid"
+              }
+            }
+          },
           "lgdCode": {
             "type": "string"
           },
@@ -2880,6 +2953,188 @@
         }
       }
     },
+    "/api/panchayats/{panchayatid}/letterhead": {
+      "post": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Panchayat"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/panchayats/{panchayatid}/letterhead/config": {
+      "get": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Panchayat"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/panchayats/{panchayatid}/letterhead/base64": {
+      "get": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/panchayats/{panchayatid}/overview": {
+      "get": {
+        "tags": [
+          "Panchayats"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
     "/api/platform-configurations": {
       "get": {
         "tags": [
@@ -2955,6 +3210,142 @@
             "description": "Path parameter: key"
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/support-tickets": {
+      "post": {
+        "tags": [
+          "Support Tickets"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Support Tickets"
+        ],
+        "summary": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/support-tickets/contacts/{panchayatid}?": {
+      "get": {
+        "tags": [
+          "Support Tickets"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "panchayatid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: panchayatid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/support-tickets/{ticketid}": {
+      "get": {
+        "tags": [
+          "Support Tickets"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "ticketid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: ticketid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/support-tickets/{ticketid}/status": {
+      "patch": {
+        "tags": [
+          "Support Tickets"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "ticketid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: ticketid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/support-tickets/{ticketid}/transcription": {
+      "get": {
+        "tags": [
+          "Support Tickets"
+        ],
+        "summary": "",
+        "parameters": [
+          {
+            "name": "ticketid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: ticketid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/support-tickets/categories/list": {
+      "get": {
+        "tags": [
+          "Support Tickets"
+        ],
+        "summary": "",
+        "parameters": [],
         "responses": {
           "200": {
             "description": "Success"

@@ -25,6 +25,8 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
+    Tooltip,
+    Divider
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
@@ -40,6 +42,11 @@ import GroupIcon from '@mui/icons-material/Group';
 import LockIcon from '@mui/icons-material/Lock';
 import MeetingRoomIcon from '@mui/icons-material/MeetingRoom';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import SettingsIcon from '@mui/icons-material/Settings';
+import ImageIcon from '@mui/icons-material/Image';
+import ContactPhoneIcon from '@mui/icons-material/ContactPhone';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import InfoIcon from '@mui/icons-material/Info';
 import { useLanguage } from '../utils/LanguageContext';
 import { fetchPanchayatStats } from '../api/officials';
 import PasswordChangeForm from './PasswordChangeForm';
@@ -52,7 +59,7 @@ import { RegistrationView, UsersView } from '.';
 import FaceRegistration from '../components/FaceRegistration';
 import * as faceapi from 'face-api.js';
 
-const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha }) => {
+const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha, onPanchayatSettings }) => {
     const { strings } = useLanguage();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -359,8 +366,30 @@ const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha }) =
 
                     {/* Main Content - Action Cards */}
                     <Grid item xs={12} sx={{ width: '100%' }}>
+                        {/* Section Header - Quick Actions */}
+                        <Box sx={{ mb: 3 }}>
+                            <Typography
+                                variant="subtitle1"
+                                fontWeight="bold"
+                                sx={{
+                                    mb: 2,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    color: 'text.secondary',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: 0.5,
+                                    fontSize: '0.8rem'
+                                }}
+                            >
+                                <DashboardIcon sx={{ mr: 1, fontSize: 18 }} />
+                                {strings.quickActions || 'Quick Actions'}
+                                <Tooltip title={strings.quickActionsTooltip || "Common tasks you can perform from this dashboard"}>
+                                    <InfoIcon sx={{ ml: 0.5, fontSize: 16, color: 'text.disabled', cursor: 'help' }} />
+                                </Tooltip>
+                            </Typography>
+                        </Box>
                         {/* Action Cards - Horizontal layout with equal widths */}
-                        <Grid container spacing={3} sx={{ mb: 3 }}>
+                        <Grid container spacing={3}>
                             <Grid item xs={12} md={4}>
                                 <Card
                                     elevation={2}
@@ -561,8 +590,107 @@ const OfficialDashboard = ({ onCreateIssue, onViewIssues, onManageGramSabha }) =
                                     </CardContent>
                                 </Card>
                             </Grid>
+
                         </Grid>
                     </Grid>
+
+                    {/* Panchayat Settings Card - Only for President/Secretary */}
+                    {['PRESIDENT', 'SECRETARY'].includes(user?.role) && (
+                        <Grid item xs={12} sx={{ width: '100%' }}>
+                            {/* Administration Section Header */}
+                            <Box sx={{ mb: 2 }}>
+                                <Divider sx={{ mb: 2 }} />
+                                <Typography
+                                    variant="subtitle1"
+                                    fontWeight="bold"
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        color: 'text.secondary',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: 0.5,
+                                        fontSize: '0.8rem'
+                                    }}
+                                >
+                                    <SettingsIcon sx={{ mr: 1, fontSize: 18 }} />
+                                    {strings.administration || 'Administration'}
+                                    <Tooltip title={strings.administrationTooltip || "Administrative functions available to President and Secretary only"}>
+                                        <InfoIcon sx={{ ml: 0.5, fontSize: 16, color: 'text.disabled', cursor: 'help' }} />
+                                    </Tooltip>
+                                </Typography>
+                            </Box>
+
+                            {/* Administration Cards */}
+                            <Grid container spacing={3}>
+                                <Grid item xs={12} sm={6} md={4}>
+                                    <Card
+                                        elevation={2}
+                                        sx={{
+                                            borderRadius: 1,
+                                            height: '100%',
+                                            transition: 'transform 0.2s ease',
+                                            '&:hover': {
+                                                transform: 'translateY(-4px)'
+                                            }
+                                        }}
+                                    >
+                                        <CardContent sx={{ p: 2 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                                <Avatar
+                                                    sx={{
+                                                        bgcolor: 'rgba(156, 39, 176, 0.1)',
+                                                        color: 'secondary.main',
+                                                        mr: 2
+                                                    }}
+                                                >
+                                                    <SettingsIcon />
+                                                </Avatar>
+                                                <Box>
+                                                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                                                        {strings.panchayatSettings || 'Panchayat Settings'}
+                                                    </Typography>
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        {strings.panchayatSettingsDesc || 'Manage letterhead and contact info'}
+                                                    </Typography>
+                                                </Box>
+                                            </Box>
+
+                                            <List dense disablePadding sx={{ ml: 1, mb: 2 }}>
+                                                <ListItem disableGutters>
+                                                    <ListItemIcon sx={{ minWidth: 24 }}>
+                                                        <ImageIcon sx={{ color: 'secondary.main', fontSize: 16 }} />
+                                                    </ListItemIcon>
+                                                    <ListItemText primary={strings.manageLetterhead || 'Manage Letterhead'} />
+                                                </ListItem>
+                                                <ListItem disableGutters>
+                                                    <ListItemIcon sx={{ minWidth: 24 }}>
+                                                        <ContactPhoneIcon sx={{ color: 'secondary.main', fontSize: 16 }} />
+                                                    </ListItemIcon>
+                                                    <ListItemText primary={strings.contactInformation || 'Contact Information'} />
+                                                </ListItem>
+                                                <ListItem disableGutters>
+                                                    <ListItemIcon sx={{ minWidth: 24 }}>
+                                                        <PeopleIcon sx={{ color: 'secondary.main', fontSize: 16 }} />
+                                                    </ListItemIcon>
+                                                    <ListItemText primary={strings.officialsList || 'Officials'} />
+                                                </ListItem>
+                                            </List>
+
+                                            <Button
+                                                fullWidth
+                                                variant="outlined"
+                                                color="secondary"
+                                                onClick={onPanchayatSettings}
+                                                endIcon={<SettingsIcon />}
+                                            >
+                                                {strings.openSettings || 'Open Settings'}
+                                            </Button>
+                                        </CardContent>
+                                    </Card>
+                                </Grid>
+                            </Grid>
+                        </Grid>
+                    )}
                 </Grid>
             )}
 

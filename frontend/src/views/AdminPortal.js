@@ -31,6 +31,9 @@ import FaceRegistration from '../components/FaceRegistration';
 import LoadingOverlay from '../components/LoadingOverlay';
 import PanchayatSelector from '../components/PanchayatSelector';
 import OfficialManagementView from './OfficialManagementView';
+import SupportTicketsView from './SupportTicketsView';
+import HelpButton from '../components/HelpButton';
+import SupportAgentIcon from '@mui/icons-material/SupportAgent';
 
 // TabPanel component for view switching
 function TabPanel(props) {
@@ -335,7 +338,8 @@ const AdminPortal = () => {
         { label: 'Members', icon: <PeopleIcon /> },
         { label: 'Import', icon: <UploadFileIcon /> },
         { label: 'Panchayats', icon: <AccountBalanceIcon /> },
-        { label: 'Officials', icon: <AdminPanelSettingsIcon /> }
+        { label: 'Officials', icon: <AdminPanelSettingsIcon /> },
+        { label: 'Support', icon: <SupportAgentIcon /> }
     ];
 
     if (authLoading) {
@@ -440,6 +444,14 @@ const AdminPortal = () => {
                         selectedPanchayat={selectedPanchayat}
                     />
                 </TabPanel>
+
+                {/* Support Tickets View */}
+                <TabPanel value={activeView} index={6}>
+                    <SupportTicketsView
+                        user={user}
+                        selectedPanchayat={selectedPanchayat}
+                    />
+                </TabPanel>
             </Container>
 
             {/* Loading indicator overlay */}
@@ -458,6 +470,13 @@ const AdminPortal = () => {
                     &copy; 2025 Empower Panchayat
                 </Typography>
             </Box>
+
+            {/* Help Button */}
+            <HelpButton
+                user={user}
+                panchayatId={selectedPanchayat?._id}
+                sourcePortal="ADMIN"
+            />
         </Box>
     );
 };

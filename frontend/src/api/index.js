@@ -1043,3 +1043,171 @@ export const ERROR_MESSAGES = {
 export const getErrorMessage = (errorCode) => {
   return ERROR_MESSAGES[errorCode] || errorCode || 'An unexpected error occurred';
 };
+
+// ==================== LETTERHEAD MANAGEMENT API ====================
+
+/**
+ * Upload letterhead image for a panchayat
+ * @param {string} panchayatId - The panchayat ID
+ * @param {FormData} formData - FormData containing file, letterheadType, and margins
+ * @returns {Promise<Object>} Upload response with letterhead config
+ */
+export const uploadLetterhead = async (panchayatId, formData) => {
+  try {
+    const token = getAnyToken();
+    const response = await fetch(`${API_URL}/panchayats/${panchayatId}/letterhead`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: formData
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to upload letterhead');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error uploading letterhead:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch letterhead as base64 data URL for PDF generation
+ * @param {string} panchayatId - The panchayat ID
+ * @returns {Promise<Object>} Letterhead data with base64, type, and margins
+ */
+export const fetchLetterheadBase64 = async (panchayatId) => {
+  try {
+    const token = getAnyToken();
+    const response = await fetch(`${API_URL}/panchayats/${panchayatId}/letterhead/base64`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      // Don't throw error for 404 (no letterhead configured)
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(data.message || 'Failed to fetch letterhead');
+    }
+
+    return data.data; // { base64, letterheadType, margins }
+  } catch (error) {
+    console.error('Error fetching letterhead base64:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch letterhead configuration
+ * @param {string} panchayatId - The panchayat ID
+ * @returns {Promise<Object>} Letterhead configuration
+ */
+export const fetchLetterheadConfig = async (panchayatId) => {
+  try {
+    const token = getAnyToken();
+    const response = await fetch(`${API_URL}/panchayats/${panchayatId}/letterhead/config`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to fetch letterhead config');
+    }
+
+    return data.data; // { letterheadConfig, hasLetterhead }
+  } catch (error) {
+    console.error('Error fetching letterhead config:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update letterhead configuration (margins/type) without re-uploading
+ * @param {string} panchayatId - The panchayat ID
+ * @param {Object} config - Configuration with letterheadType and margins
+ * @returns {Promise<Object>} Updated letterhead config
+ */
+export const updateLetterheadConfig = async (panchayatId, config) => {
+  try {
+    const token = getAnyToken();
+    const response = await fetch(`${API_URL}/panchayats/${panchayatId}/letterhead/config`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(config)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to update letterhead config');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error updating letterhead config:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete letterhead from a panchayat
+ * @param {string} panchayatId - The panchayat ID
+ * @returns {Promise<Object>} Delete response
+ */
+export const deleteLetterhead = async (panchayatId) => {
+  try {
+    const token = getAnyToken();
+    const response = await fetch(`${API_URL}/panchayats/${panchayatId}/letterhead`, {
+      method: 'DELETE',
+      headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to delete letterhead');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error deleting letterhead:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch panchayat overview data for settings page
+ * @param {string} panchayatId - The panchayat ID
+ * @returns {Promise<Object>} Overview data with panchayat, officials, and stats
+ */
+export const fetchPanchayatOverview = async (panchayatId) => {
+  try {
+    const token = getAnyToken();
+    const response = await fetch(`${API_URL}/panchayats/${panchayatId}/overview`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to fetch panchayat overview');
+    }
+
+    return data.data;
+  } catch (error) {
+    console.error('Error fetching panchayat overview:', error);
+    throw error;
+  }
+};

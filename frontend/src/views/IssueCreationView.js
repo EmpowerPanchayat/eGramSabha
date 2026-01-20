@@ -18,13 +18,23 @@ import {
     Card,
     CardContent,
     Divider,
-    useTheme
+    useTheme,
+    Breadcrumbs,
+    Link,
+    Tooltip,
+    Stepper,
+    Step,
+    StepLabel
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SendIcon from '@mui/icons-material/Send';
 import CancelIcon from '@mui/icons-material/Cancel';
 import MicIcon from '@mui/icons-material/Mic';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import InfoIcon from '@mui/icons-material/Info';
 
 import AudioRecorder from '../components/AudioRecorder';
 import FileUploader from '../components/FileUploader';
@@ -292,31 +302,51 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
 
     return (
         <Container maxWidth="md" sx={{ py: 4 }}>
+            {/* Breadcrumb Navigation */}
+            <Breadcrumbs
+                separator={<NavigateNextIcon fontSize="small" />}
+                sx={{ mb: 2 }}
+                aria-label="navigation"
+            >
+                <Link
+                    component="button"
+                    variant="body2"
+                    onClick={onBack}
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        textDecoration: 'none',
+                        color: 'text.secondary',
+                        '&:hover': { color: 'primary.main' }
+                    }}
+                >
+                    <DashboardIcon sx={{ mr: 0.5, fontSize: 18 }} />
+                    {strings.dashboard || 'Dashboard'}
+                </Link>
+                <Typography
+                    color="text.primary"
+                    sx={{ display: 'flex', alignItems: 'center' }}
+                >
+                    <AddCircleOutlineIcon sx={{ mr: 0.5, fontSize: 18 }} />
+                    {strings.reportNewIssue || 'Report New Issue'}
+                </Typography>
+            </Breadcrumbs>
+
             <Card elevation={3} sx={{ borderRadius: 2, overflow: 'hidden' }}>
                 {/* Header */}
                 <Box
                     sx={{
                         backgroundColor: 'primary.main',
                         color: 'white',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        p: 2
+                        p: 2.5
                     }}
                 >
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <IconButton
-                            onClick={onBack}
-                            sx={{ mr: 1, color: 'white' }}
-                            size="small"
-                        >
-                            <ArrowBackIcon />
-                        </IconButton>
-                        <Typography variant="h6">
-                            {strings.reportNewIssue}
-                        </Typography>
-                    </Box>
-                    <LanguageSwitcher />
+                    <Typography variant="h5" fontWeight="bold">
+                        {strings.reportNewIssue || 'Report New Issue'}
+                    </Typography>
+                    <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
+                        {strings.reportIssueDescription || 'Submit your issue or suggestion to the Gram Panchayat. Record your voice message and add any supporting documents.'}
+                    </Typography>
                 </Box>
 
                 <CardContent sx={{ p: 3 }}>
@@ -330,8 +360,11 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
                         <Stack spacing={3}>
                             {/* Category */}
                             <Box>
-                                <Typography variant="subtitle1" gutterBottom fontWeight="500">
-                                    {strings.issueCategory}<span style={{ color: 'red' }}>*</span>
+                                <Typography variant="subtitle1" gutterBottom fontWeight="500" sx={{ display: 'flex', alignItems: 'center' }}>
+                                    {strings.issueCategory || 'Category'}<span style={{ color: 'red' }}>*</span>
+                                    <Tooltip title={strings.issueCategoryTooltip || "Select the category that best describes your issue"}>
+                                        <InfoIcon sx={{ ml: 0.5, fontSize: 16, color: 'text.disabled', cursor: 'help' }} />
+                                    </Tooltip>
                                 </Typography>
                                 <FormControl fullWidth error={!!errors.category}>
                                     <Select
@@ -415,9 +448,12 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
 
                             {/* Audio Recording */}
                             <Box>
-                                <Typography variant="subtitle1" gutterBottom fontWeight="500">
-                                    <MicIcon fontSize="small" sx={{ verticalAlign: 'middle', mr: 1 }} />
-                                    {strings.audioRecording}<span style={{ color: 'red' }}>*</span>
+                                <Typography variant="subtitle1" gutterBottom fontWeight="500" sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <MicIcon fontSize="small" sx={{ mr: 1 }} />
+                                    {strings.audioRecording || 'Voice Recording'}<span style={{ color: 'red' }}>*</span>
+                                    <Tooltip title={strings.audioRecordingTooltip || "Record your voice message describing the issue. This is required and helps officials understand your concern better."}>
+                                        <InfoIcon sx={{ ml: 0.5, fontSize: 16, color: 'text.disabled', cursor: 'help' }} />
+                                    </Tooltip>
                                 </Typography>
                                 <AudioRecorder
                                     onAudioRecorded={handleAudioRecorded}
@@ -432,9 +468,12 @@ const IssueCreationView = ({ user, onBack, onIssueCreated }) => {
 
                             {/* Attachments */}
                             <Box>
-                                <Typography variant="subtitle1" gutterBottom fontWeight="500">
-                                    <UploadFileIcon fontSize="small" sx={{ verticalAlign: 'middle', mr: 1 }} />
-                                    {strings.fileAttachments}
+                                <Typography variant="subtitle1" gutterBottom fontWeight="500" sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <UploadFileIcon fontSize="small" sx={{ mr: 1 }} />
+                                    {strings.fileAttachments || 'Attachments'} ({strings.optional || 'Optional'})
+                                    <Tooltip title={strings.attachmentsTooltip || "Upload photos or documents related to your issue. Images and PDFs are accepted."}>
+                                        <InfoIcon sx={{ ml: 0.5, fontSize: 16, color: 'text.disabled', cursor: 'help' }} />
+                                    </Tooltip>
                                 </Typography>
                                 <FileUploader
                                     onFilesSelected={handleFilesSelected}

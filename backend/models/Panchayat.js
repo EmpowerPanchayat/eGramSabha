@@ -46,6 +46,44 @@ const panchayatSchema = new mongoose.Schema({
     type: String,
     maxlength: 10,
   },
+  supportEmail: {
+    type: String,
+    maxlength: 255,
+  },
+  supportPhoneNumber: {
+    type: String,
+    maxlength: 15,
+  },
+  supportContactPersonName: {
+    type: String,
+    maxlength: 255,
+  },
+  letterheadConfig: {
+    letterheadImageId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null
+    },
+    letterheadType: {
+      type: String,
+      enum: ['header', 'background'],
+      default: 'header'
+    },
+    margins: {
+      top: { type: Number, default: 1.5 },    // inches
+      bottom: { type: Number, default: 0.5 },
+      left: { type: Number, default: 0.5 },
+      right: { type: Number, default: 0.5 }
+    },
+    imageTransform: {
+      scale: { type: Number, default: 1 },
+      x: { type: Number, default: 0 },
+      y: { type: Number, default: 0 }
+    },
+    originalFilename: { type: String, default: null },
+    mimeType: { type: String, enum: ['image/png', 'image/jpeg', null], default: null },
+    uploadedAt: { type: Date, default: null },
+    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Official', default: null }
+  },
   lgdCode: {
     type: String,
     unique: true,

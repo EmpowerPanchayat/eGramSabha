@@ -20,6 +20,7 @@ import IssueListView from "./IssueListView";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import tokenManager from "../utils/tokenManager";
 import { getCitizenProfile } from "../api/profile";
+import HelpButton from "../components/HelpButton";
 
 // View states
 const VIEWS = {
@@ -329,6 +330,13 @@ const CitizenPortalContent = () => {
           {notification.message}
         </Alert>
       </Snackbar>
+
+      {/* Help Button */}
+      <HelpButton
+        user={user}
+        panchayatId={user?.panchayatId}
+        sourcePortal="CITIZEN"
+      />
     </Box>
   );
 };

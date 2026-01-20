@@ -17,7 +17,8 @@ import {
     Stack,
     IconButton,
     useTheme,
-    useMediaQuery
+    useMediaQuery,
+    Tooltip
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
@@ -34,6 +35,8 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import FlagIcon from '@mui/icons-material/Flag';
+import InfoIcon from '@mui/icons-material/Info';
+import DashboardIcon from '@mui/icons-material/Dashboard';
 import { useLanguage } from '../utils/LanguageContext';
 import UpcomingMeetingsBanner from '../components/GramSabha/UpcomingMeetingsBanner';
 import PastMeetingsList from '../components/GramSabha/PastMeetingsList';
@@ -284,7 +287,29 @@ const CitizenDashboard = ({ user, onCreateIssue, onViewIssues, onLogout }) => {
                         <Stack spacing={3}>
                             {/* Upcoming Meetings Banner */}
                             <UpcomingMeetingsBanner panchayatId={panchayatInfo?.id} user={user} />
-                            
+
+                            {/* Section Header - Quick Actions */}
+                            <Box sx={{ mb: 2, mt: 1 }}>
+                                <Typography
+                                    variant="subtitle1"
+                                    fontWeight="bold"
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        color: 'text.secondary',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: 0.5,
+                                        fontSize: '0.8rem'
+                                    }}
+                                >
+                                    <DashboardIcon sx={{ mr: 1, fontSize: 18 }} />
+                                    {strings.quickActions || 'Quick Actions'}
+                                    <Tooltip title={strings.quickActionsTooltip || "Report new issues or view your existing issues"}>
+                                        <InfoIcon sx={{ ml: 0.5, fontSize: 16, color: 'text.disabled', cursor: 'help' }} />
+                                    </Tooltip>
+                                </Typography>
+                            </Box>
+
                             <Grid container spacing={3}>
                                 <Grid item xs={12} md={6}>
                                     <Card

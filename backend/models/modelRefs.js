@@ -6,6 +6,7 @@ const MODEL_REFS = {
   WARD: 'Ward',
   OFFICIAL: 'Official',
   ISSUE_SUMMARY: 'IssueSummary',
+  SUPPORT_TICKET: 'SupportTicket',
   // add more model names here as needed
 };
 

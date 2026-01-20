@@ -33,12 +33,19 @@ import {
     useMediaQuery,
     FormControl,
     Select,
-    MenuItem
+    MenuItem,
+    Breadcrumbs,
+    Link,
+    Tooltip
 } from '@mui/material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SearchIcon from '@mui/icons-material/Search';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
+import InfoIcon from '@mui/icons-material/Info';
 import CategoryIcon from '@mui/icons-material/Category';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import FolderIcon from '@mui/icons-material/Folder';
@@ -492,36 +499,52 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
 
     return (
         <Container maxWidth="lg" sx={{ py: 4 }}>
+            {/* Breadcrumb Navigation */}
+            <Breadcrumbs
+                separator={<NavigateNextIcon fontSize="small" />}
+                sx={{ mb: 2 }}
+                aria-label="navigation"
+            >
+                <Link
+                    component="button"
+                    variant="body2"
+                    onClick={onBack}
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        textDecoration: 'none',
+                        color: 'text.secondary',
+                        '&:hover': { color: 'primary.main' }
+                    }}
+                >
+                    <DashboardIcon sx={{ mr: 0.5, fontSize: 18 }} />
+                    {strings.dashboard || 'Dashboard'}
+                </Link>
+                <Typography
+                    color="text.primary"
+                    sx={{ display: 'flex', alignItems: 'center' }}
+                >
+                    <FormatListBulletedIcon sx={{ mr: 0.5, fontSize: 18 }} />
+                    {strings.issuesList || 'Issues & Suggestions'}
+                </Typography>
+            </Breadcrumbs>
+
             <Card elevation={3}>
                 <Box
                     sx={{
-                        p: 3,
+                        p: 2.5,
                         backgroundColor: 'primary.main',
                         color: 'white',
                         borderTopLeftRadius: 8,
-                        borderTopRightRadius: 8,
-                        position: 'relative',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
+                        borderTopRightRadius: 8
                     }}
                 >
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <IconButton
-                            onClick={onBack}
-                            sx={{ mr: 1, color: 'white' }}
-                            size="small"
-                        >
-                            <ArrowBackIcon />
-                        </IconButton>
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <PlaylistAddCheckIcon sx={{ mr: 1 }} />
-                            <Typography variant="h5" component="h1">
-                                {(titles[user.userType] || titles.DEFAULT)[tabValue]}
-                            </Typography>
-                        </Box>
-                    </Box>
-                    <LanguageSwitcher />
+                    <Typography variant="h5" fontWeight="bold">
+                        {(titles[user.userType] || titles.DEFAULT)[tabValue]}
+                    </Typography>
+                    <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
+                        {strings.issuesListDescription || 'View, filter, and manage all issues and suggestions submitted to the Gram Panchayat.'}
+                    </Typography>
                 </Box>
 
                 <CardContent sx={{ p: 0 }}>

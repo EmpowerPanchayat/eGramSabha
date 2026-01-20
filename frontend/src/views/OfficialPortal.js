@@ -19,14 +19,20 @@ import OfficialDashboard from './OfficialDashboard';
 import IssueCreationView from './IssueCreationView';
 import IssueListView from './IssueListView';
 import GramSabhaView from './GramSabhaView';
+import SupportTicketsView from './SupportTicketsView';
+import PanchayatSettingsView from './PanchayatSettingsView';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import SupportAgentIcon from '@mui/icons-material/SupportAgent';
+import HelpButton from '../components/HelpButton';
 
 // View states
 const VIEWS = {
     DASHBOARD: 'dashboard',
     CREATE_ISSUE: 'create_issue',
     LIST_ISSUES: 'list_issues',
-    GRAM_SABHA: 'gram_sabha'
+    GRAM_SABHA: 'gram_sabha',
+    SUPPORT_TICKETS: 'support_tickets',
+    PANCHAYAT_SETTINGS: 'panchayat_settings'
 };
 
 // Create a separate header component to properly use the language context
@@ -40,7 +46,7 @@ const PortalHeader = ({ currentView, handleBackToDashboard, user }) => {
                 <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
                     {strings.officialPortal} - {user.name}
                 </Typography>
-                {currentView !== VIEWS.DASHBOARD && (
+                {currentView !== VIEWS.DASHBOARD && currentView !== VIEWS.PANCHAYAT_SETTINGS && (
                     <Button
                         color="inherit"
                         onClick={handleBackToDashboard}
@@ -83,6 +89,14 @@ const OfficialPortal = () => {
         setCurrentView(VIEWS.GRAM_SABHA);
     };
 
+    const handleViewSupportTickets = () => {
+        setCurrentView(VIEWS.SUPPORT_TICKETS);
+    };
+
+    const handlePanchayatSettings = () => {
+        setCurrentView(VIEWS.PANCHAYAT_SETTINGS);
+    };
+
     const handleBackToDashboard = () => {
         setCurrentView(VIEWS.DASHBOARD);
         setSelectedIssue(null);
@@ -114,7 +128,7 @@ const OfficialPortal = () => {
             />
 
             {/* Main Content */}
-            <Container maxWidth="lg" sx={{ py: 4, flex: 1 }}>
+            <Container maxWidth="xl" sx={{ py: 4, flex: 1 }}>
                 {loading ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
                         <CircularProgress size={60} />
@@ -126,6 +140,7 @@ const OfficialPortal = () => {
                                 onCreateIssue={handleCreateIssue}
                                 onViewIssues={handleViewIssues}
                                 onManageGramSabha={handleManageGramSabha}
+                                onPanchayatSettings={handlePanchayatSettings}
                                 user={user}
                             />
                         )}
@@ -155,6 +170,20 @@ const OfficialPortal = () => {
                                 onBack={handleBackToDashboard}
                             />
                         )}
+
+                        {currentView === VIEWS.SUPPORT_TICKETS && (
+                            <SupportTicketsView
+                                user={user}
+                            />
+                        )}
+
+                        {currentView === VIEWS.PANCHAYAT_SETTINGS && (
+                            <PanchayatSettingsView
+                                user={user}
+                                panchayatId={user?.panchayatId}
+                                onBack={handleBackToDashboard}
+                            />
+                        )}
                     </>
                 )}
             </Container>
@@ -181,6 +210,13 @@ const OfficialPortal = () => {
                     {error}
                 </Alert>
             </Snackbar>
+
+            {/* Help Button */}
+            <HelpButton
+                user={user}
+                panchayatId={user?.panchayatId}
+                sourcePortal="OFFICIAL"
+            />
         </Box>
     );
 };
