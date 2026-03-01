@@ -7,6 +7,7 @@ from app.services.audio_extractor import AudioExtractor
 from app.services.stt_transcriber import STTTranscriber
 from app.services.jio_only_stt_transcriber import jio_only_stt_transcriber
 from app.services.request_tracker import RequestTracker
+from app.core.config import settings
 from app.services.file_storage import file_storage
 from app.services.llm_service import llm_service
 from app.core.database import get_database, RequestStatus, RequestType
@@ -241,24 +242,34 @@ async def process_transcription_async(request_id: str, tracker: RequestTracker):
     )
 
 async def process_jio_transcription_async(request_id: str, tracker: RequestTracker):
-    """Background processing for Jio transcription with language support"""
+    """Background processing for transcription using the configured STT provider"""
     try:
         # Get request data to extract language
         request_data = await tracker.get_request_data(request_id)
         language = request_data.get("language", "Hindi")  # Default to Hindi if not specified
-        
-        logger.info(f"Processing Jio transcription for request {request_id} with language: {language}")
-        
+
+        # Select transcription function based on STT_PROVIDER config
+        provider = settings.STT_PROVIDER.lower()
+        if provider == "whisper":
+            logger.info(f"Processing transcription for request {request_id} with language: {language}, provider: Whisper")
+            transcribe_func = stt_transcriber.transcribe_audio
+            provider_name = "whisper"
+            provider_display = f"HuggingFace Whisper ({language})"
+        else:
+            logger.info(f"Processing transcription for request {request_id} with language: {language}, provider: Jio")
+            transcribe_func = lambda audio_path: jio_only_stt_transcriber.transcribe_audio(audio_path, language)
+            provider_name = "jio_translate"
+            provider_display = f"Jio Translate API ({language})"
+
         await _process_transcription_common(
-            request_id, tracker, 
-            lambda audio_path: jio_only_stt_transcriber.transcribe_audio(audio_path, language),
-            "jio_translate", f"Jio Translate API ({language})"
+            request_id, tracker, transcribe_func,
+            provider_name, provider_display
         )
     except Exception as e:
-        logger.error(f"Error in Jio transcription processing: {e}")
+        logger.error(f"Error in transcription processing: {e}")
         await tracker.update_request_status(
-            request_id, RequestStatus.FAILED, 
-            f"Jio transcription processing failed: {str(e)}"
+            request_id, RequestStatus.FAILED,
+            f"Transcription processing failed: {str(e)}"
         )
 
 async def _process_transcription_common(
@@ -660,20 +671,16 @@ async def get_translation_result(request_id: str, tracker: RequestTracker = Depe
 @router.get("/health/services")
 async def health_check_services():
     """Check all service endpoints health"""
-    from app.core.config import settings
-    
     return {
-        "overall_status": "independent_provider_integration",
+        "overall_status": "configurable_provider_integration",
+        "active_providers": {
+            "stt": settings.STT_PROVIDER,
+        },
         "services": {
-            "stt_whisper": {
-                "provider": "HuggingFace Whisper",
-                "status": "configured" if settings.stt_model_endpoint else "not_configured",
-                "mode": "independent"
-            },
-            "stt_jio": {
-                "provider": "Jio Translate",
-                "status": "configured" if jio_only_stt_transcriber.jio_transcriber.api_key else "not_configured",
-                "mode": "independent"
+            "stt_active": {
+                "provider": settings.STT_PROVIDER,
+                "status": "active",
+                "mode": "factory"
             },
             "llm_service": {
                 "provider": "HuggingFace",
@@ -682,7 +689,7 @@ async def health_check_services():
         },
         "available_endpoints": {
             "transcription_whisper": "/transcription/ (HuggingFace Whisper only)",
-            "transcription_jio": "/transcription/jio (Jio Translate only)",
+            "transcription_jio": f"/transcription/jio (Active provider: {settings.STT_PROVIDER})",
             "mom_generation": "/mom/generate/{language}",
             "agenda_generation": "/agenda/generate/{language} (from issues with IDs)",
             "agenda_update": "/agenda/update/{language} (with new issues)",

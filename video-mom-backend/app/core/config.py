@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     MONGODB_URL: str
     DATABASE_NAME: str
 
+    # --- AI Provider Selection ---
+    STT_PROVIDER: str = "jio"  # "jio" | "whisper"
+
     class Config:
         # This tells pydantic to load variables from a .env file
         env_file = ".env"
