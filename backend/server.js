@@ -49,6 +49,7 @@ const gramSabhaRoutes = require('./routes/gramSabhaRoutes');
 const platformConfigRoutes = require('./routes/platformConfigRoutes');
 const issueSummaryRoutes = require('./routes/issueSummaryRoutes');
 const locationRoutes = require("./routes/locationRoutes");
+const supportTicketRoutes = require('./routes/supportTicketRoutes');
 
 // Import models
 const User = require("./models/User");
@@ -534,6 +535,7 @@ app.use('/api/gram-sabha', gramSabhaRoutes);
 app.use('/api/platform-configurations', platformConfigRoutes);
 app.use('/api/summaries', issueSummaryRoutes);
 app.use("/api/locations", locationRoutes);
+app.use('/api/support-tickets', supportTicketRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {

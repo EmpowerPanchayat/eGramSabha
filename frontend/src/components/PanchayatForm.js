@@ -21,8 +21,10 @@ import LocationOnIcon from "@mui/icons-material/LocationOn";
 import PublicIcon from "@mui/icons-material/Public";
 import GroupsIcon from "@mui/icons-material/Groups";
 import TagIcon from "@mui/icons-material/Tag";
+import ImageIcon from "@mui/icons-material/Image";
 import WardManager from "./WardManager";
 import CascadingLocationDropdowns from "./CascadingLocationDropdowns";
+import LetterheadUploader from "./LetterheadUploader";
 
 import { fetchWards, createWard, updateWard, deleteWard } from "../api";
 
@@ -661,6 +663,43 @@ const PanchayatForm = ({
             readOnly={false}
             error={wardsError}
           />
+
+          {/* Letterhead Management Section - Only for editing existing panchayat */}
+          {panchayat && panchayat._id && (
+            <>
+              <Divider sx={{ my: 3 }} />
+              <Box sx={{ mb: 4 }}>
+                <Typography
+                  variant="subtitle1"
+                  sx={{
+                    color: "primary.main",
+                    fontWeight: 600,
+                    mb: 2,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                  }}
+                >
+                  <ImageIcon fontSize="small" />
+                  Letterhead Management
+                </Typography>
+                <LetterheadUploader
+                  panchayatId={panchayat._id}
+                  initialConfig={panchayat.letterheadConfig}
+                  onUploadComplete={(config) => {
+                    console.log("Letterhead uploaded:", config);
+                  }}
+                  onConfigChange={(config) => {
+                    console.log("Letterhead config updated:", config);
+                  }}
+                  onDelete={() => {
+                    console.log("Letterhead deleted");
+                  }}
+                  disabled={false}
+                />
+              </Box>
+            </>
+          )}
         </Box>
       </DialogContent>
 

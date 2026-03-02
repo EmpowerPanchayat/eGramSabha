@@ -300,13 +300,22 @@ const OfficialManagementView = ({ selectedPanchayat }) => {
 
     return (
         <Box>
-            <Paper elevation={1} sx={{ p: 3, mb: 4 }}>
-                <Typography variant="h2" component="h1" gutterBottom>
-                    Official Management
-                </Typography>
-                <Typography variant="body1" paragraph>
-                    Manage officials who can access the administrative portal for {selectedPanchayat?.name}.
-                </Typography>
+            <Paper elevation={1} sx={{ mb: 4, overflow: 'hidden' }}>
+                <Box
+                    sx={{
+                        p: 2.5,
+                        backgroundColor: 'primary.main',
+                        color: 'white'
+                    }}
+                >
+                    <Typography variant="h5" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center' }}>
+                        <AdminPanelSettingsIcon sx={{ mr: 1 }} />
+                        Official Management
+                    </Typography>
+                    <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
+                        Manage officials who can access the administrative portal for {selectedPanchayat?.name || 'the Panchayat'}. Add, edit, or remove official accounts and their access permissions.
+                    </Typography>
+                </Box>
             </Paper>
 
             {/* Success and Error Alerts */}

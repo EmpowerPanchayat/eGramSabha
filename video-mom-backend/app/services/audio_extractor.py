@@ -79,7 +79,7 @@ class AudioExtractor:
                 # Unknown file type, try to process it anyway
                 logger.warning(f"Unknown file extension {file_ext}, attempting to process as media file")
                 self._convert_with_ffmpeg(input_file_path, audio_file_path)
-                
+
         except ffmpeg.Error as e:
             error_message = e.stderr.decode('utf-8') if e.stderr else str(e)
             logger.error(f"FFmpeg error processing {input_file_path}: {error_message}")
@@ -87,7 +87,7 @@ class AudioExtractor:
         except Exception as e:
             logger.exception(f"Audio processing failed for {input_file_path}")
             raise
-            
+
         return audio_file_path
 
     def is_audio_file(self, file_path: str) -> bool:
