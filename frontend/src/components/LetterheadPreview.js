@@ -245,6 +245,7 @@ const LetterheadPreview = ({
           sx={handleStyle}
           onMouseDown={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             if (containerRef.current) {
               setContainerRect(containerRef.current.getBoundingClientRect());
             }

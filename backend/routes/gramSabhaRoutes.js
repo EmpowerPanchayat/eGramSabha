@@ -16,6 +16,12 @@ const User = require("../models/User");
 
 const { JIOMEET_APP_ID, JIOMEET_API, BACKEND_URL, PRIVATE_KEY_PATH, PUBLIC_KEY_PATH } = process.env;
 
+// Log JioMeet configuration status at startup
+console.log('[JioMeet Config] JIOMEET_APP_ID:', JIOMEET_APP_ID ? 'SET' : 'NOT SET');
+console.log('[JioMeet Config] JIOMEET_API:', JIOMEET_API ? JIOMEET_API : 'NOT SET');
+console.log('[JioMeet Config] PRIVATE_KEY_PATH:', PRIVATE_KEY_PATH || 'NOT SET');
+console.log('[JioMeet Config] PUBLIC_KEY_PATH:', PUBLIC_KEY_PATH || 'NOT SET');
+
 // Load keys from file paths
 let privateKey = null;
 let publicKey = null;
@@ -23,12 +29,18 @@ let publicKey = null;
 try {
   if (PRIVATE_KEY_PATH) {
     privateKey = fs.readFileSync(PRIVATE_KEY_PATH, 'utf8');
+    console.log('[JioMeet Config] Private key loaded successfully, length:', privateKey.length);
+  } else {
+    console.warn('[JioMeet Config] PRIVATE_KEY_PATH not set - JioMeet JWT signing will fail');
   }
   if (PUBLIC_KEY_PATH) {
     publicKey = fs.readFileSync(PUBLIC_KEY_PATH, 'utf8');
+    console.log('[JioMeet Config] Public key loaded successfully, length:', publicKey.length);
+  } else {
+    console.warn('[JioMeet Config] PUBLIC_KEY_PATH not set');
   }
 } catch (error) {
-  console.warn('Warning: Could not load RSA keys from file paths', error.message);
+  console.error('[JioMeet Config] ERROR: Could not load RSA keys from file paths:', error.message);
 }
 
 // Configure multer for memory storage
@@ -305,6 +317,7 @@ router.post(
       let meetingLink = null;
 
       // Try to create JioMeet meeting if configuration is available
+      console.log('[JioMeet Create] Checking JioMeet config - APP_ID:', !!JIOMEET_APP_ID, ', API:', !!JIOMEET_API, ', privateKey:', !!privateKey);
       if (JIOMEET_APP_ID && JIOMEET_API) {
         try {
           const jioMeetRequestBody = {
@@ -313,14 +326,25 @@ router.post(
             endTime: endTime.toISOString(),
             isAutoRecordingEnabled: true,
           };
+          console.log('[JioMeet Create] Request body:', JSON.stringify(jioMeetRequestBody));
+
+          if (!privateKey) {
+            console.error('[JioMeet Create] ERROR: privateKey is null - cannot sign JWT. Check PRIVATE_KEY_PATH and key file.');
+          }
+
           const payload = { app: JIOMEET_APP_ID, timestamp: Date.now() };
+          console.log('[JioMeet Create] JWT payload:', JSON.stringify(payload));
           const jioMeetToken = jwt.sign(payload, privateKey, {
             algorithm: "RS256",
           });
+          console.log('[JioMeet Create] JWT token generated successfully, length:', jioMeetToken.length);
+
+          const apiUrl = `${JIOMEET_API}/schedule/meeting`;
+          console.log('[JioMeet Create] Calling JioMeet API:', apiUrl);
 
           // Adding JioMeet API call
           const response = await axios.post(
-            `${JIOMEET_API}/schedule/meeting`,
+            apiUrl,
             jioMeetRequestBody,
             {
               headers: {
@@ -330,12 +354,34 @@ router.post(
             }
           );
 
+          console.log('[JioMeet Create] API response status:', response.status);
+          console.log('[JioMeet Create] API response data:', JSON.stringify(response.data));
+
           jioMeetData = response.data;
           meetingLink = response.data.hostUrl;
+
+          console.log('[JioMeet Create] Meeting created successfully - meetingLink:', meetingLink);
+          if (!meetingLink) {
+            console.warn('[JioMeet Create] WARNING: hostUrl is missing from response data. Available keys:', Object.keys(response.data));
+          }
         } catch (jioMeetError) {
+          console.error('[JioMeet Create] ERROR creating JioMeet meeting:', jioMeetError.message);
+          if (jioMeetError.response) {
+            console.error('[JioMeet Create] API error status:', jioMeetError.response.status);
+            console.error('[JioMeet Create] API error data:', JSON.stringify(jioMeetError.response.data));
+            console.error('[JioMeet Create] API error headers:', JSON.stringify(jioMeetError.response.headers));
+          } else if (jioMeetError.request) {
+            console.error('[JioMeet Create] No response received - network/timeout error');
+          } else {
+            console.error('[JioMeet Create] Error details:', jioMeetError.stack);
+          }
           // Continue without JioMeet - meeting will be created without video link
         }
+      } else {
+        console.warn('[JioMeet Create] SKIPPED - JioMeet not configured. JIOMEET_APP_ID:', !!JIOMEET_APP_ID, ', JIOMEET_API:', !!JIOMEET_API);
       }
+
+      console.log('[GramSabha Create] Saving with jioMeetData:', jioMeetData ? 'PRESENT' : 'NULL', ', meetingLink:', meetingLink || 'NULL');
 
       const gramSabha = new GramSabha({
         panchayatId,
@@ -352,6 +398,7 @@ router.post(
       });
 
       await gramSabha.save();
+      console.log('[GramSabha Create] Saved successfully, id:', gramSabha._id, ', meetingLink:', gramSabha.meetingLink || 'NULL');
 
       // Update issue summary and linked issues if selected agenda items are provided
       if (parsedSelectedItems.length > 0) {
@@ -560,12 +607,15 @@ router.patch(
       }
 
       // Handle JioMeet updates if configuration is available
+      const hasJioMeetRelevantUpdates = updates.includes("title") ||
+        updates.includes("dateTime") ||
+        updates.includes("date") ||
+        updates.includes("time") ||
+        updates.includes("scheduledDurationHours");
+      console.log('[JioMeet Update] Relevant fields changed:', hasJioMeetRelevantUpdates, ', APP_ID:', !!JIOMEET_APP_ID, ', API:', !!JIOMEET_API, ', privateKey:', !!privateKey);
+
       if (
-        (updates.includes("title") ||
-          updates.includes("dateTime") ||
-          updates.includes("date") ||
-          updates.includes("time") ||
-          updates.includes("scheduledDurationHours")) &&
+        hasJioMeetRelevantUpdates &&
         JIOMEET_APP_ID &&
         JIOMEET_API
       ) {
@@ -584,15 +634,24 @@ router.patch(
             endTime: endTime.toISOString(),
             isAutoRecordingEnabled: true,
           };
+          console.log('[JioMeet Update] Request body:', JSON.stringify(jioMeetRequestBody));
+
+          if (!privateKey) {
+            console.error('[JioMeet Update] ERROR: privateKey is null - cannot sign JWT');
+          }
 
           const payload = { app: JIOMEET_APP_ID, timestamp: Date.now() };
           const jioMeetToken = jwt.sign(payload, privateKey, {
             algorithm: "RS256",
           });
+          console.log('[JioMeet Update] JWT token generated successfully');
+
+          const apiUrl = `${JIOMEET_API}/schedule/meeting`;
+          console.log('[JioMeet Update] Calling JioMeet API:', apiUrl);
 
           // Update the meeting in JioMeet
           const response = await axios.post(
-            `${JIOMEET_API}/schedule/meeting`,
+            apiUrl,
             jioMeetRequestBody,
             {
               headers: {
@@ -602,13 +661,34 @@ router.patch(
             }
           );
 
+          console.log('[JioMeet Update] API response status:', response.status);
+          console.log('[JioMeet Update] API response data:', JSON.stringify(response.data));
+
           // Update JioMeet data in the database
           gramSabha.jioMeetData = response.data;
           gramSabha.meetingLink = response.data.hostUrl;
           gramSabha.meetingId = response.data.meetingId;
-        } catch (error) {
+
+          console.log('[JioMeet Update] Meeting updated successfully - meetingLink:', gramSabha.meetingLink);
+          if (!gramSabha.meetingLink) {
+            console.warn('[JioMeet Update] WARNING: hostUrl is missing from response data. Available keys:', Object.keys(response.data));
+          }
+        } catch (jioMeetError) {
+          console.error('[JioMeet Update] ERROR updating JioMeet meeting:', jioMeetError.message);
+          if (jioMeetError.response) {
+            console.error('[JioMeet Update] API error status:', jioMeetError.response.status);
+            console.error('[JioMeet Update] API error data:', JSON.stringify(jioMeetError.response.data));
+          } else if (jioMeetError.request) {
+            console.error('[JioMeet Update] No response received - network/timeout error');
+          } else {
+            console.error('[JioMeet Update] Error details:', jioMeetError.stack);
+          }
           // Continue without JioMeet - it's optional
         }
+      } else if (!hasJioMeetRelevantUpdates) {
+        console.log('[JioMeet Update] SKIPPED - no relevant fields changed in this update');
+      } else {
+        console.warn('[JioMeet Update] SKIPPED - JioMeet not configured. JIOMEET_APP_ID:', !!JIOMEET_APP_ID, ', JIOMEET_API:', !!JIOMEET_API);
       }
 
       // Save the updated gram sabha
