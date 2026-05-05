@@ -390,13 +390,15 @@ export const updateGramSabhaStatus = async (id, status) => {
  * List jioMeet recordings
  */
 
-export const listJioMeetRecordings = async ({
+export const listMeetingRecordings = async ({
+  gramSabhaId,
   jiomeetId,
   roomPIN,
   historyId,
 }) => {
   try {
     const response = await api.post("/gram-sabha/recordings/list", {
+      gramSabhaId,
       jiomeetId,
       roomPIN,
       historyId,
@@ -408,15 +410,24 @@ export const listJioMeetRecordings = async ({
   }
 };
 
+// Backward-compatible alias
+export const listJioMeetRecordings = listMeetingRecordings;
+
 /**
  * Download JioMeet Recording
  */
-export const downloadJioMeetMRecording = async (videoUrl, filename) => {
+export const downloadMeetingRecording = async (
+  videoUrl,
+  filename,
+  options = {}
+) => {
   try {
     const response = await api.get("/gram-sabha/recordings/download", {
       params: {
         videoUrl,
         filename,
+        gramSabhaId: options.gramSabhaId,
+        platform: options.platform,
       },
       responseType: "blob", // to handle binary data
     });
@@ -437,14 +448,22 @@ export const downloadJioMeetMRecording = async (videoUrl, filename) => {
   }
 };
 
+// Backward-compatible alias
+export const downloadJioMeetMRecording = downloadMeetingRecording;
+
 /**
  * Use JioMeet API to start recording and get historyId in order to retreive recordings later
  */
-export const startJioMeetRecording = async (jiomeetId, roomPIN) => {
+export const startMeetingRecording = async ({
+  jiomeetId,
+  roomPIN,
+  gramSabhaId,
+}) => {
   try {
     const response = await api.post("/gram-sabha/recording/start", {
       jiomeetId,
       roomPIN,
+      gramSabhaId,
     });
     return response.data;
   } catch (error) {
@@ -452,3 +471,7 @@ export const startJioMeetRecording = async (jiomeetId, roomPIN) => {
     throw error.response?.data || { message: "Failed to start recording" };
   }
 };
+
+// Backward-compatible alias
+export const startJioMeetRecording = (jiomeetId, roomPIN, gramSabhaId) =>
+  startMeetingRecording({ jiomeetId, roomPIN, gramSabhaId });

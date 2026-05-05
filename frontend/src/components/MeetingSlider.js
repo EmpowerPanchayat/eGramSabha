@@ -170,6 +170,7 @@ export default function MeetingSlider({
                                     startIcon={<VideocamIcon />}
                                     disabled={!attendanceStats[meetingItem._id]?.quorumMet}
                                     onClick={() => onShowMeetingDetails(meetingItem._id,
+                                        meetingItem.meetingPlatform,
                                         meetingItem.jioMeetData?.jiomeetId,
                                         meetingItem.meetingLink,
                                         meetingItem.jioMeetData?.roomPIN,

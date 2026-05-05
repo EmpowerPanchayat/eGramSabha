@@ -53,7 +53,7 @@ import StopIcon from "@mui/icons-material/Stop";
 import {
   fetchActiveMeetings,
   updateGramSabhaStatus,
-  startJioMeetRecording,
+  startMeetingRecording,
 } from "../../api/gram-sabha";
 import { useLanguage } from "../../utils/LanguageContext";
 import GramSabhaDetails from "./GramSabhaDetails";
@@ -686,7 +686,14 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
   );
 
   const handleStartRecording = useCallback(
-    async (gramSabhaId, jiomeetId, meetingLink, roomPIN, hostToken) => {
+    async (
+      gramSabhaId,
+      meetingPlatform,
+      jiomeetId,
+      meetingLink,
+      roomPIN,
+      hostToken
+    ) => {
       try {
         await updateGramSabhaStatus(gramSabhaId, "IN_PROGRESS");
         await loadTodaysMeetings();
@@ -696,6 +703,7 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
         return;
       }
       setMeetingDetails({
+        meetingPlatform,
         jiomeetId,
         meetingLink,
         roomPIN,
@@ -917,10 +925,11 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
       );
     }
     window.open(meetingDetails.meetingLink, "_blank");
-    const result = await startJioMeetRecording(
-      meetingDetails.jiomeetId,
-      meetingDetails.roomPIN
-    );
+    const result = await startMeetingRecording({
+      jiomeetId: meetingDetails.jiomeetId,
+      roomPIN: meetingDetails.roomPIN,
+      gramSabhaId: meetingDetails.gramSabhaId,
+    });
     if (!result.success) {
       throw new Error(result.message || "Recording start failed");
     }
@@ -1137,7 +1146,8 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
           </DialogTitle>
           <DialogContent>
             <DialogContentText>
-              {INFRA && INFRA.toUpperCase() === infra.jio && (
+              {(meetingDetails?.meetingPlatform || "").toLowerCase() ===
+                infra.jio.toLowerCase() && (
               <>
                 <Typography variant="body1">
                   <strong>Meeting ID:</strong> {meetingDetails.jiomeetId}
@@ -1158,7 +1168,8 @@ const TodaysMeetingsBanner = ({ panchayatId, user }) => {
               End Meeting
             </Button>
               {meetingDetails?.meetingLink && (
-                INFRA.toUpperCase() === infra.jio ? (
+                (meetingDetails?.meetingPlatform || "").toLowerCase() ===
+                infra.jio.toLowerCase() ? (
                   <Button
                     variant="contained"
                     color="primary"

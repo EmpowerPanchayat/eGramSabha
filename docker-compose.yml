@@ -33,6 +33,11 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3001}
       - BACKEND_URL=${BACKEND_URL:-http://localhost:5000}
       - VIDEO_MOM_BACKEND_URL=${VIDEO_MOM_BACKEND_URL:-http://localhost:8000}
+      - MEETING_PLATFORM=${MEETING_PLATFORM:-google}
+      - GOOGLE_SERVICE_ACCOUNT_KEY_PATH=${GOOGLE_SERVICE_ACCOUNT_KEY_PATH}
+      - GOOGLE_SERVICE_ACCOUNT_JSON=${GOOGLE_SERVICE_ACCOUNT_JSON}
+      - GOOGLE_SERVICE_ACCOUNT_SUBJECT=${GOOGLE_SERVICE_ACCOUNT_SUBJECT}
+      - GOOGLE_CALENDAR_ID=${GOOGLE_CALENDAR_ID}
     # depends_on:
     #   - mongodb
     volumes:
@@ -55,7 +60,8 @@ services:
       - HF_LLM=${HF_LLM}
       - MONGODB_URL=${MONGODB_URL:-mongodb://mongodb:27017}
       - DATABASE_NAME=${VIDEO_MOM_DATABASE_NAME:-video_mom_db}
-      - STT_PROVIDER=${STT_PROVIDER:-jio}
+      - STT_PROVIDER=${STT_PROVIDER:-google}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
     depends_on:
       - mongodb
     volumes:

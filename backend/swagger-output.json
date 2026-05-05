@@ -547,6 +547,9 @@
           "meetingLink": {
             "type": "string"
           },
+          "meetingId": {
+            "type": "string"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -577,6 +580,19 @@
             "type": "string"
           },
           "jioMeetData": {
+            "type": "object",
+            "required": false,
+            "properties": {}
+          },
+          "meetingPlatform": {
+            "type": "string",
+            "enum": [
+              "jio",
+              "google",
+              "manual"
+            ]
+          },
+          "meetingProviderData": {
             "type": "object",
             "required": false,
             "properties": {}
