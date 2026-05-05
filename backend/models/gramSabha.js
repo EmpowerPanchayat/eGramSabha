@@ -30,6 +30,10 @@ const gramSabhaSchema = new mongoose.Schema(
       type: String,
       maxLength: 255,
     },
+    meetingId: {
+      type: String,
+      maxLength: 255,
+    },
     status: {
       type: String,
       enum: [
@@ -63,6 +67,15 @@ const gramSabhaSchema = new mongoose.Schema(
       type: String,
     },
     jioMeetData: {
+      type: mongoose.Schema.Types.Mixed,
+      required: false,
+    },
+    meetingPlatform: {
+      type: String,
+      enum: ["jio", "google", "manual"],
+      default: "jio",
+    },
+    meetingProviderData: {
       type: mongoose.Schema.Types.Mixed,
       required: false,
     },

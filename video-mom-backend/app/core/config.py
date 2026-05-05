@@ -6,8 +6,8 @@ class Settings(BaseSettings):
     # The type hint `str` makes these required settings.
     # Pydantic will raise an error on startup if they are not found.
     
-    # Jio STT Service
-    JIO_API_KEY: str
+    # Jio STT Service (required only when STT_PROVIDER=jio)
+    JIO_API_KEY: Optional[str] = None
 
     # Hugging Face Services
     HF_TOKEN: str
@@ -20,8 +20,9 @@ class Settings(BaseSettings):
     DATABASE_NAME: str
 
     # --- AI Provider Selection ---
-    STT_PROVIDER: str = "jio"  # "jio" | "whisper"
-
+    STT_PROVIDER: str = "google"  # "jio" | "whisper" | "google"
+    GOOGLE_STT_DEFAULT_LANGUAGE_CODE: str = "hi-IN"
+    GOOGLE_APPLICATION_CREDENTIALS: str = "/Users/chandrakantchaturvedi/Desktop/service-account.json"
     class Config:
         # This tells pydantic to load variables from a .env file
         env_file = ".env"

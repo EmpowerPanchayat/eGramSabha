@@ -6,6 +6,7 @@ from typing import Dict, Any, List
 from app.services.audio_extractor import AudioExtractor
 from app.services.stt_transcriber import STTTranscriber
 from app.services.jio_only_stt_transcriber import jio_only_stt_transcriber
+from app.services.google_stt_transcriber import google_stt_transcriber
 from app.services.request_tracker import RequestTracker
 from app.core.config import settings
 from app.services.file_storage import file_storage
@@ -255,6 +256,11 @@ async def process_jio_transcription_async(request_id: str, tracker: RequestTrack
             transcribe_func = stt_transcriber.transcribe_audio
             provider_name = "whisper"
             provider_display = f"HuggingFace Whisper ({language})"
+        elif provider == "google":
+            logger.info(f"Processing transcription for request {request_id} with language: {language}, provider: Google")
+            transcribe_func = lambda audio_path: google_stt_transcriber.transcribe_audio(audio_path, language)
+            provider_name = "google_speech"
+            provider_display = f"Google Speech-to-Text ({language})"
         else:
             logger.info(f"Processing transcription for request {request_id} with language: {language}, provider: Jio")
             transcribe_func = lambda audio_path: jio_only_stt_transcriber.transcribe_audio(audio_path, language)

@@ -16,4 +16,7 @@ module.exports = {
       attendance: 5,
     },
   },
+  meeting: {
+    platform: "google",
+  },
 };

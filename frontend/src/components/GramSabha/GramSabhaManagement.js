@@ -48,8 +48,8 @@ import {
   updateGramSabhaMeeting,
   deleteGramSabhaMeeting,
   addAttachment,
-  listJioMeetRecordings,
-  downloadJioMeetMRecording,
+  listMeetingRecordings,
+  downloadMeetingRecording,
 } from "../../api/gram-sabha";
 import { fetchIssueSummary } from "../../api/summary";
 import { useAuth } from "../../utils/authContext";
@@ -133,11 +133,16 @@ const GramSabhaManagement = ({ panchayatId }) => {
         const recordingsList = [];
 
         for (const sabha of gramSabhas) {
-          if (sabha?.jioMeetData?.historyId) {
+          const historyId =
+            sabha?.jioMeetData?.historyId ||
+            sabha?.meetingProviderData?.historyId ||
+            sabha?.meetingProviderData?.eventId;
+          if (historyId) {
             const res = await fetchRecordingList(
+              sabha?._id,
               sabha?.jioMeetData?.jiomeetId,
               sabha?.jioMeetData?.roomPIN,
-              sabha?.jioMeetData?.historyId
+              historyId
             );
             if (res) {
               recordingsList.push(...res);
@@ -201,11 +206,17 @@ const GramSabhaManagement = ({ panchayatId }) => {
     }
   };
 
-  async function fetchRecordingList(jiomeetId, roomPIN, historyId) {
-    console.log("Fetching recordings for:", { jiomeetId, roomPIN, historyId });
+  async function fetchRecordingList(gramSabhaId, jiomeetId, roomPIN, historyId) {
+    console.log("Fetching recordings for:", {
+      gramSabhaId,
+      jiomeetId,
+      roomPIN,
+      historyId,
+    });
 
     try {
-      const result = await listJioMeetRecordings({
+      const result = await listMeetingRecordings({
+        gramSabhaId,
         jiomeetId,
         roomPIN,
         historyId,
@@ -514,7 +525,9 @@ const GramSabhaManagement = ({ panchayatId }) => {
   };
 
   const handleDownloadRecording = async (gramSabha) => {
-    const recordings = gramSabha?.jioMeetData?.recordings;
+    const recordings =
+      gramSabha?.jioMeetData?.recordings ||
+      gramSabha?.meetingProviderData?.recordings;
     if (!Array.isArray(recordings) || recordings.length === 0) {
       console.warn(" No recordings found.");
       return;
@@ -524,9 +537,13 @@ const GramSabhaManagement = ({ panchayatId }) => {
       if (!rec?.url) continue;
 
       try {
-        await downloadJioMeetMRecording(
+        await downloadMeetingRecording(
           rec.url,
-          `${rec.customName || "recording"}.mp4`
+          `${rec.customName || "recording"}.mp4`,
+          {
+            gramSabhaId: gramSabha?._id,
+            platform: gramSabha?.meetingPlatform,
+          }
         );
       } catch (err) {
         console.error("❌ Download failed:", err.message || err);
@@ -652,7 +669,8 @@ const GramSabhaManagement = ({ panchayatId }) => {
                         <EditIcon />
                       </IconButton>
                       {/* recording button*/}
-                      {gramSabha?.jioMeetData?.recordings && (
+                      {(gramSabha?.jioMeetData?.recordings ||
+                        gramSabha?.meetingProviderData?.recordings) && (
                         <IconButton
                           onClick={() => handleDownloadRecording(gramSabha)}
                           disabled={loading}
