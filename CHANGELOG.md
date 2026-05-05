@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-05-05
+
 ### Added
 
 - Edit user details feature for official and no need to link citizen in case of guest user or Panchayat Secretaries on admin.([#139](https://github.com/EmpowerPanchayat/eGramSabha/issues/139))
@@ -16,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Citizen Portal issue list view.([#149](https://github.com/EmpowerPanchayat/eGramSabha/issues/149))
 - Save button when mandatory field location is not entered.([#144](https://github.com/EmpowerPanchayat/eGramSabha/issues/144))
+- Replaced JIO services with Google services
 
 ## [1.1.0] - 2025-08-20
 
@@ -126,8 +129,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/EmpowerPanchayat/eGramSabha/compare/1.1.0...HEAD
-[1.0.1]: https://github.com/EmpowerPanchayat/eGramSabha/compare/1.0.1...1.1.0
+[Unreleased]: https://github.com/EmpowerPanchayat/eGramSabha/compare/1.2.0...HEAD
+[1.2.0]: https://github.com/EmpowerPanchayat/eGramSabha/compare/1.1.0...1.2.0
+[1.1.0]: https://github.com/EmpowerPanchayat/eGramSabha/compare/1.0.1...1.1.0
 [1.0.1]: https://github.com/EmpowerPanchayat/eGramSabha/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.2.0...1.0.0
 [0.2.0]: https://github.com/EmpowerPanchayat/eGramSabha/compare/0.1.0...0.2.0
