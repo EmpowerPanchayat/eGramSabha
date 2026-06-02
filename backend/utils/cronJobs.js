@@ -5,8 +5,8 @@ const transcriptionService = require('../services/transcriptionService');
 const { initiateSummaryGeneration, fetchSummaryResults, retryFailedSummaryRequests } = require('./summaryCronJobs');
 const { agendaTranslationCron } = require('./agendaTranslationCron');
 
-// Check transcription status every 5 minutes
-const checkTranscriptionStatus = cron.schedule('*/1 * * * *', async () => {
+// Check transcription status once a day at midnight
+const checkTranscriptionStatus = cron.schedule('0 0 * * *', async () => {
     try {
         // Find all issues with processing transcription
         const processingIssues = await Issue.find({
@@ -49,8 +49,8 @@ const checkTranscriptionStatus = cron.schedule('*/1 * * * *', async () => {
     }
 });
 
-// Retry failed transcriptions every 15 minutes
-const retryFailedTranscriptions = cron.schedule('*/1 * * * *', async () => {
+// Retry failed transcriptions once a day at 1 AM
+const retryFailedTranscriptions = cron.schedule('0 1 * * *', async () => {
     try {
         // Find all issues with failed transcription and retry count < 3
         const failedIssues = await Issue.find({
@@ -100,8 +100,8 @@ const retryFailedTranscriptions = cron.schedule('*/1 * * * *', async () => {
     }
 });
 
-// Retry transcription initiation for issues that failed to get requestId
-const retryTranscriptionInitiation = cron.schedule('*/1 * * * *', async () => {
+// Retry transcription initiation once a day at 2 AM
+const retryTranscriptionInitiation = cron.schedule('0 2 * * *', async () => {
     try {
         // Find all issues with audio attachments but no transcription.requestId (failed initial attempts)
         const issuesWithAudio = await Issue.find({
