@@ -1,4 +1,13 @@
 // backend/server.js (Enhanced with security and authentication)
+// Node removed the deprecated `buffer.SlowBuffer` export; `buffer-equal-constant-time`
+// (pulled in transitively by jsonwebtoken and googleapis via jwa/jws, with no fixed
+// upstream release) reads `SlowBuffer.prototype` at require-time and crashes without it.
+// Must run before anything that could require that dependency.
+const bufferModule = require("buffer");
+if (!bufferModule.SlowBuffer) {
+    bufferModule.SlowBuffer = bufferModule.Buffer;
+}
+
 const express = require("express");
 const multer = require("multer");
 const csv = require("csv-parser");

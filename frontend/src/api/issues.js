@@ -169,6 +169,47 @@ export const getTranscriptionStatus = async (issueId) => {
 };
 
 /**
+ * Force-check transcription status for all pending issues in a panchayat,
+ * instead of waiting for the periodic cron job to pick them up.
+ * @param {string} panchayatId - The panchayat ID
+ * @returns {Promise<Object>} { success, checked, completed, failed }
+ */
+export const refreshPendingTranscriptions = async (panchayatId) => {
+    try {
+        const response = await fetch(`${API_URL}/issues/panchayat/${panchayatId}/transcription/refresh`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders(),
+            },
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                const json = await response.json();
+                if (json?.expired) {
+                    const refreshed = await handleTokenRefresh();
+                    if (!refreshed) throw new Error('Session expired. Please login again.');
+                    return { retry: true };
+                }
+            }
+            throw new Error('Failed to refresh transcription status');
+        }
+
+        const data = await response.json();
+
+        return data;
+    } catch (error) {
+        console.error(`Error refreshing transcription status:`, {
+            panchayatId,
+            error: error.message,
+            stack: error.stack
+        });
+        throw error;
+    }
+};
+
+/**
  * Retry failed transcription for an issue
  * @param {string} issueId - The issue ID
  * @returns {Promise<Object>} Retry response
