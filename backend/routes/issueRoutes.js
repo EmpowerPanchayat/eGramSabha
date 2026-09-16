@@ -5,8 +5,9 @@ const mongoose = require('mongoose');
 const Issue = require('../models/Issue');
 const User = require('../models/User');
 const Panchayat = require('../models/Panchayat');
-const { anyAuthenticated } = require('../middleware/auth');
+const { anyAuthenticated, isOfficial } = require('../middleware/auth');
 const transcriptionService = require('../services/transcriptionService');
+const { checkTranscriptionStatusForIssues } = require('../utils/cronJobs');
 
 // Create a new issue
 router.post('/', anyAuthenticated, async (req, res) => {
@@ -859,6 +860,38 @@ router.post('/:issueId/transcription/retry', anyAuthenticated, async (req, res) 
         res.status(500).json({
             success: false,
             message: 'Error retrying transcription: ' + error.message
+        });
+    }
+});
+
+// Force-check transcription status for all pending (PROCESSING) issues in a panchayat.
+// Lets officials pull fresh agenda-point candidates on demand instead of waiting for the cron cycle.
+router.post('/panchayat/:panchayatId/transcription/refresh', isOfficial, async (req, res) => {
+    try {
+        const { panchayatId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(panchayatId)) {
+            return res.status(400).json({ success: false, message: 'Invalid panchayatId' });
+        }
+
+        const processingIssues = await Issue.find({
+            panchayatId,
+            'transcription.status': 'PROCESSING',
+            'transcription.requestId': { $exists: true, $ne: null }
+        });
+
+        const result = await checkTranscriptionStatusForIssues(processingIssues);
+
+        res.json({ success: true, ...result });
+    } catch (error) {
+        console.error(`[IssueRoutes] Error refreshing transcription status for panchayat:`, {
+            panchayatId: req.params.panchayatId,
+            error: error.message,
+            stack: error.stack
+        });
+        res.status(500).json({
+            success: false,
+            message: 'Error refreshing transcription status: ' + error.message
         });
     }
 });

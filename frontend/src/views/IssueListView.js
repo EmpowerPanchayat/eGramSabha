@@ -55,7 +55,7 @@ import IssueStatusDropdown from '../components/IssueStatusDropdown';
 import CategorySubcategorySelector from '../components/IssueCategorySubcategorySelector';
 import { getCategoryIcon } from '../utils/issues';
 import { getLabelKeyFromValue } from '../utils/categoryUtils';
-import { fetchAllIssues, getTranscriptionStatus, retryTranscription } from '../api/issues';
+import { fetchAllIssues, getTranscriptionStatus, retryTranscription, refreshPendingTranscriptions } from '../api/issues';
 import { fetchIssueSummary } from '../api/summary';
 import tokenManager from '../utils/tokenManager';
 import formatDate from '../utils/formatDate';
@@ -92,6 +92,8 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     const [selectedIssues, setSelectedIssues] = useState([]);
     const [summaryLoading, setSummaryLoading] = useState(false);
     const [summaryError, setSummaryError] = useState('');
+    const [refreshingTranscriptions, setRefreshingTranscriptions] = useState(false);
+    const [refreshMessage, setRefreshMessage] = useState('');
     const [creatorId, setCreatedById] = useState('');
     const [createdForId, setCreatedForId] = useState('');
     const [users, setUsers] = useState([]);
@@ -206,6 +208,33 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
             setSummaryLoading(false);
         }
     }, [tabValue, user.panchayatId]);
+
+    // Force-checks pending transcriptions instead of waiting for the periodic cron,
+    // then re-fetches the summary. New agenda points still only appear once the next
+    // hourly agenda-generation cron picks up any issues completed by this refresh.
+    const handleRefreshTranscriptions = async () => {
+        setRefreshingTranscriptions(true);
+        setRefreshMessage('');
+        try {
+            const result = await refreshPendingTranscriptions(user.panchayatId);
+            const { checked = 0, completed = 0 } = result || {};
+            if (checked === 0) {
+                setRefreshMessage(strings.noPendingTranscriptions || 'No pending voice notes to check.');
+            } else {
+                setRefreshMessage(
+                    (strings.transcriptionsRefreshed || 'Checked {checked} pending voice note(s), {completed} newly ready.')
+                        .replace('{checked}', checked)
+                        .replace('{completed}', completed)
+                );
+            }
+            await fetchSummary();
+        } catch (error) {
+            setRefreshMessage(error.message || 'Failed to refresh transcription status');
+        } finally {
+            setRefreshingTranscriptions(false);
+            setTimeout(() => setRefreshMessage(''), 5000);
+        }
+    };
 
     // Helper to get Authorization header for issues endpoints
     const getAuthHeaders = () => {
@@ -879,16 +908,28 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                     <>
                     {user.role && ['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY'].includes(user.role) && (
                     <Box sx={{ px: 3, mt: 4, mb: 4 }}>
+                        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
                         {!showAddForm && (
                         <Button
                             variant="contained"
                             color="primary"
                             onClick={() => setShowAddForm(true)}
-                            sx={{ mb: 2 }}
                         >
                             {strings.addAgendaItem}
                         </Button>
                         )}
+                        <Button
+                            variant="outlined"
+                            startIcon={refreshingTranscriptions ? <CircularProgress size={16} /> : <RefreshIcon />}
+                            onClick={handleRefreshTranscriptions}
+                            disabled={refreshingTranscriptions}
+                        >
+                            {strings.refreshPendingVoiceNotes || 'Check Pending Voice Notes'}
+                        </Button>
+                        {refreshMessage && (
+                            <Typography variant="body2" color="text.secondary">{refreshMessage}</Typography>
+                        )}
+                        </Stack>
 
                         {showAddForm && (
                         <Paper elevation={3} sx={{ mb: 3, p: 2 }}>
