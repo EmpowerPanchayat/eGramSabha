@@ -55,6 +55,14 @@ const GramSabhaDetails = ({ meetingId, user }) => {
   const dataFetched = useRef(false);
   const isMenuOpen = Boolean(anchorEl);
 
+  // PDFs are rasterized from real browser-rendered HTML (html2pdf.js), so
+  // the font-family here must be a font that's actually loaded (see the
+  // Google Fonts <link> in public/index.html) and match the script of the
+  // current display language, not just Devanagari for everything.
+  const pdfFontFamily = language === 'gu'
+    ? "'Noto Sans Gujarati', sans-serif"
+    : "'Noto Sans Devanagari', sans-serif";
+
   const isPresident = user?.role === 'PRESIDENT' || user?.role === 'PRESIDENT_PANCHAYAT';
   const canRSVP = !isPresident && meeting && new Date(meeting.dateTime) > new Date();
 
@@ -272,7 +280,7 @@ const GramSabhaDetails = ({ meetingId, user }) => {
 
   const container = document.createElement('div');
   container.innerHTML = `
-    <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-size: 12px; padding: 20px; line-height: 1.6;">
+    <div style="font-family: ${pdfFontFamily}; font-size: 12px; padding: 20px; line-height: 1.6;">
       <h2 style="text-align: center;">${strings.attendanceReportTitle}</h2>
 
       <h3>${strings.panchayatDetails}</h3>
@@ -521,9 +529,9 @@ const GramSabhaDetails = ({ meetingId, user }) => {
     const container = document.createElement("div");
 
     container.innerHTML = `
-      <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-size: 12px; line-height: 1.8; padding: 30px;">
+      <div style="font-family: ${pdfFontFamily}; font-size: 12px; line-height: 1.8; padding: 30px;">
         <div style="text-align: right; margin-bottom: 10px;">
-          <strong>${strings.serialNo} _____ </strong> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${strings.date} ${new Date().toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN')}
+          <strong>${strings.serialNo} _____ </strong> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${strings.date} ${new Date().toLocaleDateString(language === 'hi' ? 'hi-IN' : language === 'gu' ? 'gu-IN' : 'en-IN')}
         </div>
 
         <h2 style="text-align: center;">${strings.gramSabhaAgendaNotice}</h2>

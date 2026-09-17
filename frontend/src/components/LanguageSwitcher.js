@@ -11,7 +11,8 @@ const LanguageSwitcher = ({ sx = {} }) => {
 
     const languages = [
         { code: 'en', label: 'English', shortLabel: 'EN' },
-        { code: 'hi', label: 'हिंदी', shortLabel: 'हिं' }
+        { code: 'hi', label: 'हिंदी', shortLabel: 'हिं' },
+        { code: 'gu', label: 'ગુજરાતી', shortLabel: 'ગુ' }
     ];
 
     return (

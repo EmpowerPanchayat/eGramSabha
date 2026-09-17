@@ -211,8 +211,12 @@ const CitizenPortalContent = () => {
     if (!user) {
       return (
         <>
-          {/* Add admin button to login screen */}
-          <Box sx={{ position: "absolute", top: 16, right: 16, zIndex: 10 }}>
+          {/* Add admin button to login screen. Pinned top-LEFT deliberately —
+              CitizenLoginView's own header pins its LanguageSwitcher to the
+              top-right of a centered card, and on narrower viewports (common
+              for citizens on mobile) that corner can reach the true page edge
+              where this button also lives, overlapping it. */}
+          <Box sx={{ position: "absolute", top: 16, left: 16, zIndex: 10 }}>
             <Button
               variant="outlined"
               color="primary"

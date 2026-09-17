@@ -16,6 +16,18 @@
     -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <!--
+      Explicitly load Indic-script fonts for MOM/agenda PDF rendering
+      (html2pdf.js rasterizes real browser-rendered HTML, so the actual
+      script rendering quality depends on a font being genuinely loaded
+      here, not just referenced by name and hoping the OS has a fallback).
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700&family=Noto+Sans+Gujarati:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <!--
       Notice the use of %PUBLIC_URL% in the tags above.
       It will be replaced with the URL of the `public` folder during the build.
       Only files inside the `public` folder can be referenced from the HTML.
