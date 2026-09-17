@@ -13,6 +13,80 @@ const INITIATE_SUMMARY_CRON = process.env.INITIATE_SUMMARY_CRON || '0 * * * *';
 const FETCH_SUMMARY_RESULTS_CRON = process.env.FETCH_SUMMARY_RESULTS_CRON || '0 * * * *';
 const RETRY_FAILED_SUMMARY_CRON = process.env.RETRY_FAILED_SUMMARY_CRON || '*/15 * * * *';
 
+/**
+ * Initiates (or updates) summary generation for a single panchayat, if it has
+ * unsummarized issues with a completed transcription and no request already
+ * in flight. Shared by the hourly cron and the on-demand "Generate Agenda Now"
+ * endpoint so the two can never drift apart.
+ * @param {Object} panchayat - Panchayat document
+ * @returns {Promise<{created: boolean, reason: string, requestType?: string}>}
+ */
+const initiateSummaryForPanchayat = async (panchayat) => {
+    // Check if a summary request is already being processed for this panchayat
+    const existingRequest = await SummaryRequest.findOne({
+        panchayatId: panchayat._id,
+        status: 'PROCESSING'
+    });
+
+    if (existingRequest) {
+        return { created: false, reason: 'ALREADY_PROCESSING' };
+    }
+
+    const unsummarizedIssues = await Issue.find({
+        panchayatId: panchayat._id,
+        isSummarized: { $ne: true },
+        'transcription.status': 'COMPLETED'
+    });
+
+    if (unsummarizedIssues.length === 0) {
+        return { created: false, reason: 'NO_ELIGIBLE_ISSUES' };
+    }
+
+    const existingSummary = await IssueSummary.findOne({ panchayatId: panchayat._id });
+    let response;
+    let requestType;
+    const language = (panchayat?.language || 'Hindi').toLowerCase();
+
+    // Filter out only system-created agenda items
+    const systemAgendaItems = existingSummary?.agendaItems?.filter(item => item.createdByType !== 'USER') || [];
+
+    if (systemAgendaItems.length > 0) {
+        requestType = 'UPDATE';
+
+        const currentAgenda = systemAgendaItems.map(item => {
+            const title = item.title instanceof Map ? item.title.get('en') : item.title?.en || '';
+            const description = item.description instanceof Map ? item.description.get('en') : item.description?.en || '';
+            return {
+                title,
+                description,
+                linked_issues: Array.isArray(item.linkedIssues)
+                    ? item.linkedIssues.map(id => id.toString())
+                    : []
+            };
+        });
+
+        response = await agendaService.initiateUpdateSummary(
+            currentAgenda,
+            unsummarizedIssues,
+            language
+        );
+    } else {
+        requestType = 'CREATE';
+        response = await agendaService.initiateNewSummary(unsummarizedIssues, language);
+    }
+
+    await new SummaryRequest({
+        requestId: response.request_id,
+        panchayatId: panchayat._id,
+        requestType: requestType,
+        status: 'PROCESSING',
+        status_url: response.status_url,
+        result_url: response.result_url
+    }).save();
+
+    return { created: true, reason: 'CREATED', requestType };
+};
+
 // Cron job to initiate issue summary generation
 const initiateSummaryGeneration = cron.schedule(INITIATE_SUMMARY_CRON, async () => {
     try {
@@ -21,67 +95,7 @@ const initiateSummaryGeneration = cron.schedule(INITIATE_SUMMARY_CRON, async () 
             // One panchayat's failure must never block every panchayat after it in this list —
             // each iteration gets its own try/catch (see fetchSummaryResults for the same fix).
             try {
-                // Check if a summary request is already being processed for this panchayat
-                const existingRequest = await SummaryRequest.findOne({
-                    panchayatId: panchayat._id,
-                    status: 'PROCESSING'
-                });
-
-                if (existingRequest) {
-                    continue;
-                }
-
-                const unsummarizedIssues = await Issue.find({
-                    panchayatId: panchayat._id,
-                    isSummarized: { $ne: true },
-                    'transcription.status': 'COMPLETED'
-                });
-
-                if (unsummarizedIssues.length === 0) {
-                    continue;
-                }
-
-                const existingSummary = await IssueSummary.findOne({ panchayatId: panchayat._id });
-                let response;
-                let requestType;
-                const language = (panchayat?.language || 'Hindi').toLowerCase();
-
-                // Filter out only system-created agenda items
-                const systemAgendaItems = existingSummary?.agendaItems?.filter(item => item.createdByType !== 'USER') || [];
-
-                if (systemAgendaItems.length > 0) {
-                    requestType = 'UPDATE';
-
-                    const currentAgenda = systemAgendaItems.map(item => {
-                        const title = item.title instanceof Map ? item.title.get('en') : item.title?.en || '';
-                        const description = item.description instanceof Map ? item.description.get('en') : item.description?.en || '';
-                        return {
-                            title,
-                            description,
-                            linked_issues: Array.isArray(item.linkedIssues)
-                                ? item.linkedIssues.map(id => id.toString())
-                                : []
-                        };
-                    });
-
-                    response = await agendaService.initiateUpdateSummary(
-                        currentAgenda,
-                        unsummarizedIssues,
-                        language
-                    );
-                } else {
-                    requestType = 'CREATE';
-                    response = await agendaService.initiateNewSummary(unsummarizedIssues, language);
-                }
-
-                await new SummaryRequest({
-                    requestId: response.request_id,
-                    panchayatId: panchayat._id,
-                    requestType: requestType,
-                    status: 'PROCESSING',
-                    status_url: response.status_url,
-                    result_url: response.result_url
-                }).save();
+                await initiateSummaryForPanchayat(panchayat);
             } catch (panchayatError) {
                 console.error(`[CronJobs] Error in initiateSummaryGeneration for panchayat:`, {
                     panchayatId: panchayat._id,
@@ -99,6 +113,170 @@ const initiateSummaryGeneration = cron.schedule(INITIATE_SUMMARY_CRON, async () 
 });
 
 
+/**
+ * Fetches and applies the result of a single PROCESSING summary request, if the
+ * LLM has finished. Shared by the 5-minute cron and the on-demand "Check Agenda
+ * Status" endpoint.
+ * @param {Object} request - SummaryRequest document (status === 'PROCESSING')
+ * @returns {Promise<{status: 'completed'|'processing'|'failed'}>}
+ */
+const fetchSummaryResultForRequest = async (request) => {
+    const status = await agendaService.checkSummaryStatus(request.requestId);
+
+    if (status.status !== 'completed') {
+        if (status.status === 'failed') {
+            request.status = 'FAILED';
+            request.error = status.error || 'Unknown error from LLM';
+            await request.save();
+            return { status: 'failed' };
+        }
+        return { status: 'processing' };
+    }
+
+    const result = await agendaService.getSummaryResult(request.result_url);
+    if (!result || result.llm_status !== 'success') {
+        request.status = 'FAILED';
+        request.error = `LLM failed with status: ${result?.llm_status || 'N/A'}`;
+        await request.save();
+        return { status: 'failed' };
+    }
+
+    // Normalize and parse agenda result
+    const safeParseJSON = (input) => {
+        try { return typeof input === 'string' ? JSON.parse(input) : input; }
+        catch { return []; }
+    };
+
+    const lang = (result.primary_language || 'en').toLowerCase();
+    const langs = ['english', 'hindi', lang];
+
+    langs.forEach(key => {
+        result[`${key}_agenda`] = safeParseJSON(result[`${key}_agenda`]);
+    });
+
+    const agendaByLang = {
+        en: result.english_agenda || [],
+        hi: result.hindi_agenda || [],
+        [lang]: result[`${lang}_agenda`] || []
+    };
+
+    const issueDescriptions = {};
+
+    const extractDescriptions = (agenda, langKey) => {
+        agenda.forEach(item => {
+        const agendaDescription = typeof item.description === 'object' ? item.description.en || '' : item.description;
+        if (item.issue_ids && typeof item.issue_ids === 'object') {
+            for (const [issueId, shortLabel] of Object.entries(item.issue_ids)) {
+                if (!mongoose.Types.ObjectId.isValid(issueId)) continue;
+                    issueDescriptions[issueId] = issueDescriptions[issueId] || {};
+                    issueDescriptions[issueId][langKey] = shortLabel;
+                }
+        } else if (Array.isArray(item.linked_issues)) {
+            // Fallback: use full description
+            item.linked_issues.forEach(issueId => {
+                if (!mongoose.Types.ObjectId.isValid(issueId)) return;
+                    issueDescriptions[issueId] = issueDescriptions[issueId] || {};
+                    issueDescriptions[issueId][langKey] = agendaDescription;
+                });
+            }
+        });
+    };
+
+    extractDescriptions(agendaByLang.en, 'en');
+    extractDescriptions(agendaByLang.hi, 'hi');
+    if (!['en', 'hi'].includes(lang)) extractDescriptions(agendaByLang[lang], lang);
+
+    const descriptionOps = Object.entries(issueDescriptions).map(([issueId, langs]) => {
+        const $set = {};
+        for (const l in langs) {
+            $set[`transcription.description.${l}`] = langs[l];
+        }
+        return {
+            updateOne: {
+                filter: { _id: issueId },
+                update: { $set }
+            }
+        };
+    });
+
+    if (descriptionOps.length > 0) {
+        await Issue.bulkWrite(descriptionOps);
+    }
+
+    const flattenLangField = (obj) => {
+        const out = {};
+        for (const l in obj) {
+            const val = obj[l];
+            out[l] = typeof val === 'string' ? val : (val?.en || '');
+        }
+        return out;
+    };
+
+    const extractIssueIds = (item) => {
+        if (typeof item.issue_ids === 'object') {
+            return Object.keys(item.issue_ids).filter(id => mongoose.Types.ObjectId.isValid(id));
+        } else if (Array.isArray(item.linked_issues)) {
+            return item.linked_issues.filter(id => mongoose.Types.ObjectId.isValid(id));
+        }
+        return [];
+    };
+
+    const enAgenda = agendaByLang.en;
+    const newSystemAgendaItems = enAgenda.map((enItem, i) => {
+        const hiItem = agendaByLang.hi[i] || {};
+        const loItem = agendaByLang[lang][i] || {};
+
+        return {
+            _id: new mongoose.Types.ObjectId(),
+            title: flattenLangField({
+                en: enItem.title,
+                hi: hiItem.title,
+                [lang]: loItem.title
+            }),
+            description: flattenLangField({
+                en: enItem.description,
+                hi: hiItem.description,
+                [lang]: loItem.description
+            }),
+            linkedIssues: extractIssueIds(enItem).map(id => new mongoose.Types.ObjectId(id)),
+            estimatedDuration: 15,
+            createdByType: 'SYSTEM'
+        };
+    });
+
+    const existingSummary = await IssueSummary.findOne({ panchayatId: request.panchayatId });
+    const userAgendaItems = existingSummary?.agendaItems?.filter(a => a.createdByType === 'USER') || [];
+
+    const dedupedSystemItems = newSystemAgendaItems.filter(newItem => {
+        return !userAgendaItems.some(userItem =>
+            userItem.title?.en?.trim() === newItem.title?.en?.trim()
+        );
+    });
+
+    const finalAgenda = [...userAgendaItems, ...dedupedSystemItems];
+    const uniqueIssueIds = [
+        ...new Set(finalAgenda.flatMap(item => item.linkedIssues.map(id => id.toString())))
+    ].map(id => new mongoose.Types.ObjectId(id));
+
+    await IssueSummary.findOneAndUpdate(
+        { panchayatId: request.panchayatId },
+        {
+        $set: {
+            agendaItems: finalAgenda,
+            issues: uniqueIssueIds
+        }
+        },
+        { upsert: true }
+    );
+
+    await Issue.updateMany({ _id: { $in: uniqueIssueIds } }, { $set: { isSummarized: true } });
+
+    request.status = 'COMPLETED';
+    await request.save();
+
+    return { status: 'completed' };
+};
+
 // Cron job to fetch results of summary generation
 const fetchSummaryResults = cron.schedule(FETCH_SUMMARY_RESULTS_CRON, async () => {
     try {
@@ -108,157 +286,7 @@ const fetchSummaryResults = cron.schedule(FETCH_SUMMARY_RESULTS_CRON, async () =
             // One orphaned/erroring request must never block every request after it in this
             // batch (the same 48h-cleanup 404 that hit transcription checks can hit these too).
             try {
-            const status = await agendaService.checkSummaryStatus(request.requestId);
-
-            if (status.status !== 'completed') {
-                if (status.status === 'failed') {
-                    request.status = 'FAILED';
-                    request.error = status.error || 'Unknown error from LLM';
-                    await request.save();
-                }
-                continue;
-            }
-
-            const result = await agendaService.getSummaryResult(request.result_url);
-            if (!result || result.llm_status !== 'success') {
-                request.status = 'FAILED';
-                request.error = `LLM failed with status: ${result?.llm_status || 'N/A'}`;
-                await request.save();
-                continue;
-            }
-
-            // Normalize and parse agenda result
-            const safeParseJSON = (input) => {
-                try { return typeof input === 'string' ? JSON.parse(input) : input; }
-                catch { return []; }
-            };
-
-            const lang = (result.primary_language || 'en').toLowerCase();
-            const langs = ['english', 'hindi', lang];
-
-            langs.forEach(key => {
-                result[`${key}_agenda`] = safeParseJSON(result[`${key}_agenda`]);
-            });
-
-            const agendaByLang = {
-                en: result.english_agenda || [],
-                hi: result.hindi_agenda || [],
-                [lang]: result[`${lang}_agenda`] || []
-            };
-
-            const issueDescriptions = {};
-
-            const extractDescriptions = (agenda, langKey) => {
-                agenda.forEach(item => {
-                const agendaDescription = typeof item.description === 'object' ? item.description.en || '' : item.description;
-                if (item.issue_ids && typeof item.issue_ids === 'object') {
-                    for (const [issueId, shortLabel] of Object.entries(item.issue_ids)) {
-                        if (!mongoose.Types.ObjectId.isValid(issueId)) continue;
-                            issueDescriptions[issueId] = issueDescriptions[issueId] || {};
-                            issueDescriptions[issueId][langKey] = shortLabel;
-                        }
-                } else if (Array.isArray(item.linked_issues)) {
-                    // Fallback: use full description
-                    item.linked_issues.forEach(issueId => {
-                        if (!mongoose.Types.ObjectId.isValid(issueId)) return;
-                            issueDescriptions[issueId] = issueDescriptions[issueId] || {};
-                            issueDescriptions[issueId][langKey] = agendaDescription;
-                        });
-                    }
-                });
-            };
-
-            extractDescriptions(agendaByLang.en, 'en');
-            extractDescriptions(agendaByLang.hi, 'hi');
-            if (!['en', 'hi'].includes(lang)) extractDescriptions(agendaByLang[lang], lang);
-
-            const descriptionOps = Object.entries(issueDescriptions).map(([issueId, langs]) => {
-                const $set = {};
-                for (const l in langs) {
-                    $set[`transcription.description.${l}`] = langs[l];
-                }
-                return {
-                    updateOne: {
-                        filter: { _id: issueId },
-                        update: { $set }
-                    }
-                };
-            });
-
-            if (descriptionOps.length > 0) {
-                await Issue.bulkWrite(descriptionOps);
-            }
-
-            const flattenLangField = (obj) => {
-                const out = {};
-                for (const l in obj) {
-                    const val = obj[l];
-                    out[l] = typeof val === 'string' ? val : (val?.en || '');
-                }
-                return out;
-            };
-
-            const extractIssueIds = (item) => {
-                if (typeof item.issue_ids === 'object') {
-                    return Object.keys(item.issue_ids).filter(id => mongoose.Types.ObjectId.isValid(id));
-                } else if (Array.isArray(item.linked_issues)) {
-                    return item.linked_issues.filter(id => mongoose.Types.ObjectId.isValid(id));
-                }
-                return [];
-            };
-
-            const enAgenda = agendaByLang.en;
-            const newSystemAgendaItems = enAgenda.map((enItem, i) => {
-                const hiItem = agendaByLang.hi[i] || {};
-                const loItem = agendaByLang[lang][i] || {};
-
-                return {
-                    _id: new mongoose.Types.ObjectId(),
-                    title: flattenLangField({
-                        en: enItem.title,
-                        hi: hiItem.title,
-                        [lang]: loItem.title
-                    }),
-                    description: flattenLangField({
-                        en: enItem.description,
-                        hi: hiItem.description,
-                        [lang]: loItem.description
-                    }),
-                    linkedIssues: extractIssueIds(enItem).map(id => new mongoose.Types.ObjectId(id)),
-                    estimatedDuration: 15,
-                    createdByType: 'SYSTEM'
-                };
-            });
-
-            const existingSummary = await IssueSummary.findOne({ panchayatId: request.panchayatId });
-            const userAgendaItems = existingSummary?.agendaItems?.filter(a => a.createdByType === 'USER') || [];
-
-            const dedupedSystemItems = newSystemAgendaItems.filter(newItem => {
-                return !userAgendaItems.some(userItem =>
-                    userItem.title?.en?.trim() === newItem.title?.en?.trim()
-                );
-            });
-
-            const finalAgenda = [...userAgendaItems, ...dedupedSystemItems];
-            const uniqueIssueIds = [
-                ...new Set(finalAgenda.flatMap(item => item.linkedIssues.map(id => id.toString())))
-            ].map(id => new mongoose.Types.ObjectId(id));
-
-            await IssueSummary.findOneAndUpdate(
-                { panchayatId: request.panchayatId },
-                {
-                $set: {
-                    agendaItems: finalAgenda,
-                    issues: uniqueIssueIds
-                }
-                },
-                { upsert: true }
-            );
-
-            await Issue.updateMany({ _id: { $in: uniqueIssueIds } }, { $set: { isSummarized: true } });
-
-            request.status = 'COMPLETED';
-            await request.save();
+                await fetchSummaryResultForRequest(request);
             } catch (requestError) {
                 console.error(`[CronJobs] Error in fetchSummaryResults for request:`, {
                     requestId: request.requestId,
@@ -386,5 +414,7 @@ const retryFailedSummaryRequests = cron.schedule(RETRY_FAILED_SUMMARY_CRON, asyn
 module.exports = {
   initiateSummaryGeneration,
   fetchSummaryResults,
-  retryFailedSummaryRequests
+  retryFailedSummaryRequests,
+  initiateSummaryForPanchayat,
+  fetchSummaryResultForRequest
 };

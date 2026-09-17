@@ -33,7 +33,8 @@ import {
     useMediaQuery,
     FormControl,
     Select,
-    MenuItem
+    MenuItem,
+    Collapse
 } from '@mui/material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -44,6 +45,10 @@ import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import FolderIcon from '@mui/icons-material/Folder';
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import FactCheckIcon from '@mui/icons-material/FactCheck';
 import PersonIcon from '@mui/icons-material/Person';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import NoteIcon from '@mui/icons-material/Note';
@@ -56,7 +61,7 @@ import CategorySubcategorySelector from '../components/IssueCategorySubcategoryS
 import { getCategoryIcon } from '../utils/issues';
 import { getLabelKeyFromValue } from '../utils/categoryUtils';
 import { fetchAllIssues, getTranscriptionStatus, retryTranscription, refreshPendingTranscriptions } from '../api/issues';
-import { fetchIssueSummary } from '../api/summary';
+import { fetchIssueSummary, generateAgendaNow, fetchAgendaResult } from '../api/summary';
 import tokenManager from '../utils/tokenManager';
 import formatDate from '../utils/formatDate';
 import STATUS_KEY_VALUE_MAP from "../constants/issueStatus";
@@ -94,6 +99,11 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
     const [summaryError, setSummaryError] = useState('');
     const [refreshingTranscriptions, setRefreshingTranscriptions] = useState(false);
     const [refreshMessage, setRefreshMessage] = useState('');
+    const [manualActionsOpen, setManualActionsOpen] = useState(false);
+    const [generatingAgenda, setGeneratingAgenda] = useState(false);
+    const [generateMessage, setGenerateMessage] = useState('');
+    const [fetchingAgendaResult, setFetchingAgendaResult] = useState(false);
+    const [fetchResultMessage, setFetchResultMessage] = useState('');
     const [creatorId, setCreatedById] = useState('');
     const [createdForId, setCreatedForId] = useState('');
     const [users, setUsers] = useState([]);
@@ -233,6 +243,53 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
         } finally {
             setRefreshingTranscriptions(false);
             setTimeout(() => setRefreshMessage(''), 5000);
+        }
+    };
+
+    // Manually starts agenda generation instead of waiting for the hourly cron.
+    // Only kicks off the LLM request — use "Check Agenda Status" afterwards to pick up the result.
+    const handleGenerateAgenda = async () => {
+        setGeneratingAgenda(true);
+        setGenerateMessage('');
+        try {
+            const result = await generateAgendaNow(user.panchayatId);
+            if (result.reason === 'ALREADY_PROCESSING') {
+                setGenerateMessage(strings.agendaAlreadyProcessing || 'Agenda generation is already in progress.');
+            } else if (result.reason === 'NO_ELIGIBLE_ISSUES') {
+                setGenerateMessage(strings.noEligibleIssuesForAgenda || 'No completed voice notes are ready to be added to the agenda yet.');
+            } else {
+                setGenerateMessage(strings.agendaGenerationStarted || 'Agenda generation started. Use "Check Agenda Status" in a minute or two.');
+            }
+        } catch (error) {
+            setGenerateMessage(error.message || 'Failed to start agenda generation');
+        } finally {
+            setGeneratingAgenda(false);
+            setTimeout(() => setGenerateMessage(''), 8000);
+        }
+    };
+
+    // Manually checks whether the in-flight agenda generation request has finished,
+    // instead of waiting for the 5-minute cron, then re-fetches the summary if so.
+    const handleFetchAgendaResult = async () => {
+        setFetchingAgendaResult(true);
+        setFetchResultMessage('');
+        try {
+            const result = await fetchAgendaResult(user.panchayatId);
+            if (result.status === 'NONE_PENDING') {
+                setFetchResultMessage(strings.noAgendaGenerationPending || 'No agenda generation is currently in progress.');
+            } else if (result.status === 'PROCESSING') {
+                setFetchResultMessage(strings.agendaStillProcessing || 'Still processing — try again in a minute.');
+            } else if (result.status === 'FAILED') {
+                setFetchResultMessage(strings.agendaGenerationFailed || 'Agenda generation failed. It will be retried automatically.');
+            } else if (result.status === 'COMPLETED') {
+                setFetchResultMessage(strings.agendaReady || 'Agenda is ready.');
+                await fetchSummary();
+            }
+        } catch (error) {
+            setFetchResultMessage(error.message || 'Failed to check agenda status');
+        } finally {
+            setFetchingAgendaResult(false);
+            setTimeout(() => setFetchResultMessage(''), 8000);
         }
     };
 
@@ -908,7 +965,7 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                     <>
                     {user.role && ['SECRETARY', 'PRESIDENT', 'WARD_MEMBER', 'COMMITTEE_SECRETARY'].includes(user.role) && (
                     <Box sx={{ px: 3, mt: 4, mb: 4 }}>
-                        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
                         {!showAddForm && (
                         <Button
                             variant="contained"
@@ -919,17 +976,59 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
                         </Button>
                         )}
                         <Button
-                            variant="outlined"
-                            startIcon={refreshingTranscriptions ? <CircularProgress size={16} /> : <RefreshIcon />}
-                            onClick={handleRefreshTranscriptions}
-                            disabled={refreshingTranscriptions}
+                            size="small"
+                            color="inherit"
+                            onClick={() => setManualActionsOpen(!manualActionsOpen)}
+                            endIcon={manualActionsOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                            sx={{ color: 'text.secondary' }}
                         >
-                            {strings.refreshPendingVoiceNotes || 'Check Pending Voice Notes'}
+                            {strings.manualActions || 'Manual Actions'}
                         </Button>
-                        {refreshMessage && (
-                            <Typography variant="body2" color="text.secondary">{refreshMessage}</Typography>
-                        )}
                         </Stack>
+
+                        <Collapse in={manualActionsOpen}>
+                        <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+                            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
+                            <Button
+                                variant="outlined"
+                                startIcon={refreshingTranscriptions ? <CircularProgress size={16} /> : <RefreshIcon />}
+                                onClick={handleRefreshTranscriptions}
+                                disabled={refreshingTranscriptions}
+                            >
+                                {strings.refreshPendingVoiceNotes || 'Check Pending Voice Notes'}
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                startIcon={generatingAgenda ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+                                onClick={handleGenerateAgenda}
+                                disabled={generatingAgenda}
+                            >
+                                {strings.generateAgendaNow || 'Generate Agenda Now'}
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                startIcon={fetchingAgendaResult ? <CircularProgress size={16} /> : <FactCheckIcon />}
+                                onClick={handleFetchAgendaResult}
+                                disabled={fetchingAgendaResult}
+                            >
+                                {strings.checkAgendaStatus || 'Check Agenda Status'}
+                            </Button>
+                            </Stack>
+                            {(refreshMessage || generateMessage || fetchResultMessage) && (
+                                <Stack sx={{ mt: 1.5 }} spacing={0.5}>
+                                    {refreshMessage && (
+                                        <Typography variant="body2" color="text.secondary">{refreshMessage}</Typography>
+                                    )}
+                                    {generateMessage && (
+                                        <Typography variant="body2" color="text.secondary">{generateMessage}</Typography>
+                                    )}
+                                    {fetchResultMessage && (
+                                        <Typography variant="body2" color="text.secondary">{fetchResultMessage}</Typography>
+                                    )}
+                                </Stack>
+                            )}
+                        </Paper>
+                        </Collapse>
 
                         {showAddForm && (
                         <Paper elevation={3} sx={{ mb: 3, p: 2 }}>

@@ -2,7 +2,10 @@ const express = require('express');
 const router = express.Router();
 const IssueSummary = require('../models/IssueSummary');
 const Issue = require('../models/Issue');
-const { anyAuthenticated } = require('../middleware/auth');
+const Panchayat = require('../models/Panchayat');
+const SummaryRequest = require('../models/SummaryRequest');
+const { anyAuthenticated, isOfficial } = require('../middleware/auth');
+const { initiateSummaryForPanchayat, fetchSummaryResultForRequest } = require('../utils/summaryCronJobs');
 const mongoose = require('mongoose');
 
 // Get issue summary for a panchayat
@@ -143,4 +146,64 @@ router.patch('/panchayat/:panchayatId/agenda', anyAuthenticated, async (req, res
   }
 });
 
-module.exports = router; 
+// Manually kick off agenda generation for a panchayat right now, instead of
+// waiting for the hourly cron. Only starts the LLM request — the result still
+// needs to be fetched (see /fetch-result below), same as the cron does 5 min later.
+router.post('/panchayat/:panchayatId/generate', isOfficial, async (req, res) => {
+    const { panchayatId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(panchayatId)) {
+        return res.status(400).json({ success: false, message: 'Invalid panchayatId' });
+    }
+
+    try {
+        const panchayat = await Panchayat.findById(panchayatId);
+        if (!panchayat) {
+            return res.status(404).json({ success: false, message: 'Panchayat not found' });
+        }
+
+        const result = await initiateSummaryForPanchayat(panchayat);
+        res.json({ success: true, ...result });
+    } catch (error) {
+        console.error(`[IssueSummaryRoutes] Error generating agenda for panchayat:`, {
+            panchayatId,
+            error: error.message,
+            stack: error.stack
+        });
+        res.status(500).json({ success: false, message: 'Error starting agenda generation: ' + error.message });
+    }
+});
+
+// Manually fetch the result of this panchayat's in-flight agenda generation
+// request, instead of waiting for the 5-minute cron.
+router.post('/panchayat/:panchayatId/fetch-result', isOfficial, async (req, res) => {
+    const { panchayatId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(panchayatId)) {
+        return res.status(400).json({ success: false, message: 'Invalid panchayatId' });
+    }
+
+    try {
+        const pendingRequests = await SummaryRequest.find({ panchayatId, status: 'PROCESSING' });
+
+        if (pendingRequests.length === 0) {
+            return res.json({ success: true, status: 'NONE_PENDING' });
+        }
+
+        let outcome = { status: 'processing' };
+        for (const request of pendingRequests) {
+            outcome = await fetchSummaryResultForRequest(request);
+        }
+
+        res.json({ success: true, status: outcome.status.toUpperCase() });
+    } catch (error) {
+        console.error(`[IssueSummaryRoutes] Error fetching agenda result for panchayat:`, {
+            panchayatId,
+            error: error.message,
+            stack: error.stack
+        });
+        res.status(500).json({ success: false, message: 'Error fetching agenda result: ' + error.message });
+    }
+});
+
+module.exports = router;

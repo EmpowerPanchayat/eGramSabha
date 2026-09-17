@@ -20,3 +20,25 @@ export const updateAgendaSummary = async (panchayatId, agendaItems) => {
         throw error.response ? error.response.data : new Error('Network error');
     }
 };
+
+// Manually starts agenda generation for a panchayat instead of waiting for the hourly cron.
+// Only kicks off the LLM request — call fetchAgendaResult afterwards to pick up the result.
+export const generateAgendaNow = async (panchayatId) => {
+    try {
+        const response = await api.post(`/summaries/panchayat/${panchayatId}/generate`);
+        return response.data;
+    } catch (error) {
+        throw error.response ? error.response.data : new Error('Network error');
+    }
+};
+
+// Manually checks for the result of an in-flight agenda generation request,
+// instead of waiting for the 5-minute cron.
+export const fetchAgendaResult = async (panchayatId) => {
+    try {
+        const response = await api.post(`/summaries/panchayat/${panchayatId}/fetch-result`);
+        return response.data;
+    } catch (error) {
+        throw error.response ? error.response.data : new Error('Network error');
+    }
+};
