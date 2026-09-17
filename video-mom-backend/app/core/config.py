@@ -9,11 +9,19 @@ class Settings(BaseSettings):
     # Jio STT Service (required only when STT_PROVIDER=jio)
     JIO_API_KEY: Optional[str] = None
 
-    # Hugging Face Services
-    HF_TOKEN: str
-    STT_MODEL_ENDPOINT: str
-    HUGGING_FACE_LLM_ENDPOINT: str
-    HF_LLM: str
+    # Hugging Face Services (legacy — superseded by Vertex AI below, kept
+    # optional so a missing/removed key doesn't crash startup)
+    HF_TOKEN: Optional[str] = None
+    STT_MODEL_ENDPOINT: Optional[str] = None
+    HUGGING_FACE_LLM_ENDPOINT: Optional[str] = None
+    HF_LLM: Optional[str] = None
+
+    # Vertex AI (LLM: agenda generation, MOM generation, translation).
+    # Auth is via Workload Identity (vertex-ai-llm-service, bound to the
+    # video-mom-ksa Kubernetes ServiceAccount) — no key file involved.
+    GCP_PROJECT_ID: Optional[str] = None
+    GCP_LOCATION: str = "asia-south1"
+    VERTEX_AI_MODEL: str = "gemini-2.5-flash"
 
     # --- Database ---
     MONGODB_URL: str

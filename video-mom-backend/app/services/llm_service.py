@@ -6,93 +6,56 @@ import re
 from typing import Dict, Any, Optional
 from app.core.config import settings # Make sure settings is imported
 
+import google.auth.compute_engine
+import google.auth.transport.requests
+
 logger = logging.getLogger(__name__)
 
 class LLMService:
     def __init__(self):
-        self.api_key = settings.HF_TOKEN
-        self.hugging_face_api_url = settings.HUGGING_FACE_LLM_ENDPOINT
-        self.model_name = settings.HF_LLM
-        
-        # Validation
-        if not self.hugging_face_api_url:
-            logger.error("HUGGING_FACE_LLM_ENDPOINT not configured in environment variables")
-        if not self.model_name:
-            logger.error("HF_LLM not configured in environment variables")
-        
-        logger.info(f"LLM Service initialized with Hugging Face API: {self.hugging_face_api_url}")
-        logger.info(f"Using model: {self.model_name}")
-        logger.info(f"API key configured: {bool(self.api_key)}")
-        
-    def _get_headers(self):
+        self.gcp_project_id = settings.GCP_PROJECT_ID
+        self.gcp_location = settings.GCP_LOCATION
+        self.model_name = settings.VERTEX_AI_MODEL
+        self.vertex_ai_url = (
+            f"https://{self.gcp_location}-aiplatform.googleapis.com/v1/projects/"
+            f"{self.gcp_project_id}/locations/{self.gcp_location}/publishers/google/"
+            f"models/{self.model_name}:generateContent"
+        )
+        # Explicitly request GCE/GKE metadata-server credentials rather than
+        # google.auth.default(), which would honor GOOGLE_APPLICATION_CREDENTIALS
+        # first and pick up the unrelated STT service account (chirp3-stt-service,
+        # which only has roles/speech.client). This pod runs as the video-mom-ksa
+        # Kubernetes ServiceAccount, Workload-Identity-bound to
+        # vertex-ai-llm-service (roles/aiplatform.user) — no key file involved.
+        self._credentials = google.auth.compute_engine.Credentials()
+
+        if not self.gcp_project_id:
+            logger.error(
+                "=" * 70 + "\n"
+                "GCP_PROJECT_ID IS NOT SET — agenda generation, MOM generation, and\n"
+                "translation will fail on every request. Transcription (Google STT)\n"
+                "is unaffected.\n" + "=" * 70
+            )
+
+        logger.info(f"LLM Service initialized with Vertex AI: {self.vertex_ai_url}")
+        logger.info(f"GCP project configured: {bool(self.gcp_project_id)}")
+
+    def _get_access_token(self) -> Optional[str]:
+        """Mint (and cache/refresh) a short-lived access token via Workload Identity."""
+        try:
+            if not self._credentials.valid:
+                self._credentials.refresh(google.auth.transport.requests.Request())
+            return self._credentials.token
+        except Exception as e:
+            logger.error(f"Failed to obtain Workload Identity access token: {e}")
+            return None
+
+    def _get_headers(self, token: str):
         return {
-            "Authorization": f"Bearer {self.api_key}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-    
-    def _make_chat_request(self, messages: list, max_tokens: int = 8000) -> Optional[Dict]:
-        """Make request to Hugging Face chat completions API with proper token validation"""
-        if not self.api_key:
-            logger.error("HF_TOKEN not configured - cannot make API requests")
-            return None
-        
-        # Validate and cap max_tokens for Cohere model
-        model_max_tokens = 8192  # Cohere command-a-03-2025 limit
-        if max_tokens > model_max_tokens:
-            logger.warning(f"Requested {max_tokens} tokens exceeds model limit {model_max_tokens}, capping to safe limit")
-            max_tokens = min(4000, model_max_tokens - 500)  # Leave buffer for input tokens
-            
-        try:
-            logger.info(f"Making chat request to Hugging Face API with {len(messages)} messages")
-            logger.debug(f"Request payload: model={self.model_name}, max_tokens={max_tokens}")
-            
-            payload = {
-                "model": self.model_name,
-                "messages": messages,
-                "max_tokens": max_tokens,
-                "temperature": 0.3,
-                "top_p": 0.9
-            }
-            
-            response = requests.post(
-                self.hugging_face_api_url,
-                headers=self._get_headers(), 
-                json=payload, 
-                timeout=600
-            )
-            
-            logger.info(f"Hugging Face API response status: {response.status_code}")
-            
-            if response.status_code == 200:
-                result = response.json()
-                logger.info("Hugging Face API request successful")
-                logger.debug(f"Response keys: {list(result.keys()) if isinstance(result, dict) else 'Not a dict'}")
-                return result
-            elif response.status_code == 400:
-                # Handle token limit errors specifically
-                error_text = response.text
-                if "too many tokens" in error_text:
-                    logger.error(f"Token limit error: {error_text}")
-                logger.error(f"Bad request: {error_text}")
-                return None
-            elif response.status_code == 503:
-                logger.warning(f"Model {self.model_name} is loading - service unavailable")
-                return None
-            else:
-                logger.error(f"Hugging Face API error: {response.status_code}")
-                logger.error(f"Response text: {response.text}")
-                return None
-                
-        except requests.exceptions.Timeout as e:
-            logger.error(f"Timeout error for Hugging Face API: {e}")
-            return None
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Network error for Hugging Face API: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"Unexpected error for Hugging Face API: {e}")
-            return None
-    
+
     def correct_transcription(self, transcription: str) -> Dict[str, str]:
         """
         Correct and enhance transcription using Hugging Face chat API.
@@ -487,7 +450,7 @@ class LLMService:
         
         try:
             # Use conservative token limit to avoid truncation
-            result = self._make_chat_request(messages, max_tokens=8000)
+            result = self._make_chat_request(messages, max_tokens=16000)
                    
             if result and "choices" in result and len(result["choices"]) > 0:
                 choice = result["choices"][0]
@@ -529,67 +492,122 @@ class LLMService:
                 "error": f"Processing exception: {str(e)}"
             }
 
-    def _make_chat_request(self, messages: list, max_tokens: int = 8000) -> Optional[Dict]:
-        """Make request to Hugging Face chat completions API with proper token validation"""
-        if not self.api_key:
-            logger.error("HF_TOKEN not configured - cannot make API requests")
-            return None
-        
-        # Validate and cap max_tokens for Cohere model
-        model_max_tokens = 8192  # Cohere command-a-03-2025 limit
-        if max_tokens > model_max_tokens:
-            logger.warning(f"Requested {max_tokens} tokens exceeds model limit {model_max_tokens}, capping to safe limit")
-            max_tokens = min(4000, model_max_tokens - 500)  # Leave buffer for input tokens
-            
-        try:
-            logger.info(f"Making chat request to Hugging Face API with {len(messages)} messages")
-            logger.debug(f"Request payload: model={self.model_name}, max_tokens={max_tokens}")
-            
-            payload = {
-                "model": self.model_name,
-                "messages": messages,
-                "max_tokens": max_tokens,
+    @staticmethod
+    def _messages_to_vertex_payload(messages: list, max_tokens: int) -> Dict[str, Any]:
+        """Translate OpenAI-style {role, content} messages into Vertex AI's
+        systemInstruction + contents shape. Callers only ever send one system
+        message and one user message, but this handles the general case."""
+        system_parts = [m["content"] for m in messages if m.get("role") == "system"]
+        contents = [
+            {"role": "user" if m.get("role") != "assistant" else "model", "parts": [{"text": m["content"]}]}
+            for m in messages if m.get("role") != "system"
+        ]
+
+        payload = {
+            "contents": contents,
+            "generationConfig": {
                 "temperature": 0.3,
-                "top_p": 0.9
+                "topP": 0.9,
+                "maxOutputTokens": max_tokens,
+                # Constrains decoding to valid JSON at the API level, rather than
+                # hoping free-text output happens to parse — directly targets the
+                # failed_parsing / failed_llm_structure failure modes this prompt
+                # style is prone to with plain text generation.
+                "responseMimeType": "application/json",
+                # These are structured-extraction tasks (cluster/format into a
+                # fixed JSON shape), not open-ended reasoning — thinking tokens
+                # would compete with maxOutputTokens for no clear quality gain,
+                # and risk MAX_TOKENS truncation on larger batches.
+                "thinkingConfig": {"thinkingBudget": 0}
             }
-            
+        }
+        if system_parts:
+            payload["systemInstruction"] = {"parts": [{"text": "\n\n".join(system_parts)}]}
+        return payload
+
+    @staticmethod
+    def _vertex_response_to_openai_shape(result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Translate a Vertex AI generateContent response into the {choices: [...]}
+        shape the rest of this file (and every caller of _make_chat_request) already
+        expects, so nothing downstream needs to change for the provider swap."""
+        candidates = result.get("candidates") or []
+        if not candidates:
+            return None
+
+        candidate = candidates[0]
+        parts = candidate.get("content", {}).get("parts", [])
+        content = "".join(p.get("text", "") for p in parts)
+        if not content:
+            return None
+
+        finish_reason_map = {"MAX_TOKENS": "length", "STOP": "stop"}
+        finish_reason = finish_reason_map.get(candidate.get("finishReason"), candidate.get("finishReason", "unknown"))
+
+        return {
+            "choices": [{
+                "message": {"content": content},
+                "finish_reason": finish_reason
+            }]
+        }
+
+    def _make_chat_request(self, messages: list, max_tokens: int = 8000) -> Optional[Dict]:
+        """Make a request to Vertex AI (Gemini). Returns the same {choices: [...]}
+        shape the Hugging Face path used to, so callers are unaffected by the
+        provider swap. See _messages_to_vertex_payload / _vertex_response_to_openai_shape."""
+        if not self.gcp_project_id:
+            logger.error("GCP_PROJECT_ID not configured - cannot make Vertex AI requests")
+            # Distinguishable from every other failure mode below (timeout, 4xx, 5xx, bad
+            # JSON) so callers can report "not configured" instead of a generic LLM failure.
+            return {"_missing_credentials": True}
+
+        token = self._get_access_token()
+        if not token:
+            logger.error("Could not obtain Workload Identity access token - cannot make Vertex AI requests")
+            return {"_missing_credentials": True}
+
+        try:
+            logger.info(f"Making chat request to Vertex AI ({self.model_name}) with {len(messages)} messages")
+            payload = self._messages_to_vertex_payload(messages, max_tokens)
+            logger.debug(f"Request payload: model={self.model_name}, max_tokens={max_tokens}")
+
             response = requests.post(
-                self.hugging_face_api_url,
-                headers=self._get_headers(), 
-                json=payload, 
+                self.vertex_ai_url,
+                headers=self._get_headers(token),
+                json=payload,
                 timeout=600
             )
-            
-            logger.info(f"Hugging Face API response status: {response.status_code}")
-            
+
+            logger.info(f"Vertex AI response status: {response.status_code}")
+
             if response.status_code == 200:
                 result = response.json()
-                logger.info("Hugging Face API request successful")
-                logger.debug(f"Response keys: {list(result.keys()) if isinstance(result, dict) else 'Not a dict'}")
-                return result
+                logger.info("Vertex AI request successful")
+                translated = self._vertex_response_to_openai_shape(result)
+                if translated is None:
+                    logger.error(f"Vertex AI returned no usable candidates: {result}")
+                return translated
             elif response.status_code == 400:
-                # Handle token limit errors specifically
-                error_text = response.text
-                if "too many tokens" in error_text:
-                    logger.error(f"Token limit error: {error_text}")
-                logger.error(f"Bad request: {error_text}")
+                logger.error(f"Bad request: {response.text}")
                 return None
-            elif response.status_code == 503:
-                logger.warning(f"Model {self.model_name} is loading - service unavailable")
+            elif response.status_code in (401, 403):
+                logger.error(f"Vertex AI auth/permission error ({response.status_code}): {response.text}")
+                return None
+            elif response.status_code == 429:
+                logger.warning(f"Vertex AI rate/quota limit hit: {response.text}")
                 return None
             else:
-                logger.error(f"Hugging Face API error: {response.status_code}")
+                logger.error(f"Vertex AI API error: {response.status_code}")
                 logger.error(f"Response text: {response.text}")
                 return None
-                
+
         except requests.exceptions.Timeout as e:
-            logger.error(f"Timeout error for Hugging Face API: {e}")
+            logger.error(f"Timeout error for Vertex AI API: {e}")
             return None
         except requests.exceptions.RequestException as e:
-            logger.error(f"Network error for Hugging Face API: {e}")
+            logger.error(f"Network error for Vertex AI API: {e}")
             return None
         except Exception as e:
-            logger.error(f"Unexpected error for Hugging Face API: {e}")
+            logger.error(f"Unexpected error for Vertex AI API: {e}")
             return None
     
     def generate_multilingual_mom(self, transcription: str, primary_language: str = "en") -> Dict[str, str]:
@@ -654,7 +672,7 @@ class LLMService:
         ]
 
         try:
-            result = self._make_chat_request(messages, max_tokens=8000)
+            result = self._make_chat_request(messages, max_tokens=16000)
             
             if not result:
                 error_msg = "MOM generation failed: LLM API returned no result."
@@ -664,7 +682,16 @@ class LLMService:
                     "hindi_mom": error_msg,
                     "status": "failed_llm_no_result"
                 }
-            
+
+            if result.get("_missing_credentials"):
+                error_msg = "MOM generation failed: HF_TOKEN is not configured."
+                return {
+                    f"{primary_language}_mom": error_msg,
+                    "english_mom": error_msg,
+                    "hindi_mom": error_msg,
+                    "status": "failed_missing_credentials"
+                }
+
             if "choices" in result and len(result["choices"]) > 0:
                 content = result["choices"][0]["message"]["content"].strip()
                 parsed = self._parse_multilingual_response(content, primary_language, "mom")
@@ -734,7 +761,7 @@ class LLMService:
         ]
 
         try:
-            result = self._make_chat_request(messages, max_tokens=8000)
+            result = self._make_chat_request(messages, max_tokens=16000)
             
             # DEBUG: Save LLM result to file for synthesis step too
             self._save_llm_debug_result(result, combined_summary, primary_language, "mom_synthesis")
@@ -857,8 +884,17 @@ class LLMService:
         ]
 
         try:
-            result = self._make_chat_request(messages, max_tokens=8000)
-            
+            result = self._make_chat_request(messages, max_tokens=16000)
+
+            if result and result.get("_missing_credentials"):
+                error_msg = "Agenda generation failed: HF_TOKEN is not configured."
+                return {
+                    f"{primary_language}_agenda": error_msg,
+                    "english_agenda": error_msg,
+                    "hindi_agenda": error_msg,
+                    "status": "failed_missing_credentials"
+                }
+
             if result and "choices" in result and len(result["choices"]) > 0:
                 choice = result["choices"][0]
                 content = choice["message"]["content"].strip()
@@ -869,7 +905,7 @@ class LLMService:
                     logger.warning("⚠️ LLM response was likely cut off due to token limit")
 
                 parsed = self._parse_multilingual_response(content, primary_language, "agenda")
-                
+
                 if parsed:
                     parsed["status"] = "success"
                     return parsed
@@ -992,12 +1028,21 @@ class LLMService:
         ]
 
         try:
-            result = self._make_chat_request(messages, max_tokens=8000)
-            
+            result = self._make_chat_request(messages, max_tokens=16000)
+
+            if result and result.get("_missing_credentials"):
+                error_msg = "Agenda update failed: HF_TOKEN is not configured."
+                return {
+                    f"{primary_language}_agenda": error_msg,
+                    "english_agenda": error_msg,
+                    "hindi_agenda": error_msg,
+                    "status": "failed_missing_credentials"
+                }
+
             if result and "choices" in result and len(result["choices"]) > 0:
                 content = result["choices"][0]["message"]["content"].strip()
                 parsed = self._parse_multilingual_response(content, primary_language, "agenda")
-                
+
                 if parsed:
                     parsed["status"] = "success"
                     return parsed
@@ -1114,7 +1159,7 @@ Description: {issue.get('description', issue.get('transcription', 'No descriptio
         ]
 
         try:
-            result = self._make_chat_request(messages, max_tokens=8000)
+            result = self._make_chat_request(messages, max_tokens=16000)
             
             if result and "choices" in result and len(result["choices"]) > 0:
                 content = result["choices"][0]["message"]["content"].strip()

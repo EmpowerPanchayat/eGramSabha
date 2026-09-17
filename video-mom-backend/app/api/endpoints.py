@@ -689,8 +689,8 @@ async def health_check_services():
                 "mode": "factory"
             },
             "llm_service": {
-                "provider": "HuggingFace",
-                "status": "configured" if llm_service.api_key else "not_configured"
+                "provider": "Vertex AI",
+                "status": "configured" if llm_service.gcp_project_id else "not_configured"
             }
         },
         "available_endpoints": {
@@ -716,7 +716,7 @@ async def test_transcription_correction(text: str = Body(..., embed=True)):
             "status": "success",
             "input_text_length": len(text),
             "correction_result": result,
-            "api_key_configured": bool(llm_service.api_key),
+            "vertex_ai_configured": bool(llm_service.gcp_project_id),
             "message": "This is a synchronous debug endpoint - no status/result URLs needed"
         }
     except Exception as e:
@@ -724,5 +724,5 @@ async def test_transcription_correction(text: str = Body(..., embed=True)):
             "status": "error",
             "error": str(e),
             "input_text_length": len(text),
-            "api_key_configured": bool(llm_service.api_key)
+            "vertex_ai_configured": bool(llm_service.gcp_project_id)
         }
