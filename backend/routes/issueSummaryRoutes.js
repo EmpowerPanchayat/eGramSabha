@@ -195,7 +195,7 @@ router.post('/panchayat/:panchayatId/fetch-result', isOfficial, async (req, res)
             outcome = await fetchSummaryResultForRequest(request);
         }
 
-        res.json({ success: true, status: outcome.status.toUpperCase() });
+        res.json({ success: true, status: outcome.status.toUpperCase(), error: outcome.error || null });
     } catch (error) {
         console.error(`[IssueSummaryRoutes] Error fetching agenda result for panchayat:`, {
             panchayatId,

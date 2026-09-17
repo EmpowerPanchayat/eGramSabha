@@ -280,7 +280,8 @@ const IssueListView = ({ user, onBack, onViewIssue }) => {
             } else if (result.status === 'PROCESSING') {
                 setFetchResultMessage(strings.agendaStillProcessing || 'Still processing — try again in a minute.');
             } else if (result.status === 'FAILED') {
-                setFetchResultMessage(strings.agendaGenerationFailed || 'Agenda generation failed. It will be retried automatically.');
+                const base = strings.agendaGenerationFailed || 'Agenda generation failed. It will be retried automatically.';
+                setFetchResultMessage(result.error ? `${base} (${result.error})` : base);
             } else if (result.status === 'COMPLETED') {
                 setFetchResultMessage(strings.agendaReady || 'Agenda is ready.');
                 await fetchSummary();

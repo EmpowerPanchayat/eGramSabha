@@ -128,7 +128,7 @@ const fetchSummaryResultForRequest = async (request) => {
             request.status = 'FAILED';
             request.error = status.error || 'Unknown error from LLM';
             await request.save();
-            return { status: 'failed' };
+            return { status: 'failed', error: request.error };
         }
         return { status: 'processing' };
     }
@@ -138,7 +138,13 @@ const fetchSummaryResultForRequest = async (request) => {
         request.status = 'FAILED';
         request.error = `LLM failed with status: ${result?.llm_status || 'N/A'}`;
         await request.save();
-        return { status: 'failed' };
+        console.error(`[CronJobs] Agenda generation LLM failure:`, {
+            requestId: request.requestId,
+            panchayatId: request.panchayatId,
+            llmStatus: result?.llm_status,
+            resultKeys: result ? Object.keys(result) : null
+        });
+        return { status: 'failed', error: request.error };
     }
 
     // Normalize and parse agenda result
