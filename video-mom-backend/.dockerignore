@@ -45,5 +45,7 @@ README.md
 tests/
 .pytest_cache/
 
-# Environment variables (will be handled separately)
+# Environment variables — config comes from Kubernetes envFrom at runtime,
+# never from a file baked into the image (see Dockerfile for why)
+.env
 .env.example

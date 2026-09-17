@@ -43,9 +43,11 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 # Set working directory
 WORKDIR /app
 
-# Copy application code
+# Copy application code. Deliberately NOT copying .env — config comes from
+# Kubernetes envFrom (ConfigMap/Secret) at runtime; baking .env into the image
+# means whatever secret values happen to be in the local file at build time
+# end up sitting in a pulled/cached image layer indefinitely.
 COPY --chown=appuser:appuser app/ ./app/
-COPY --chown=appuser:appuser .env ./
 
 # Create required directories with proper permissions
 RUN mkdir -p temp_storage && \
