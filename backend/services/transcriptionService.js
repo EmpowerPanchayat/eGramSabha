@@ -135,10 +135,24 @@ class TranscriptionService {
             const responseText = await response.text();
 
             if (!response.ok) {
+                // The tracker record is gone (video-mom-backend purges request records after
+                // 48h, regardless of status) — this request can never complete, so treat it as
+                // a definitive failure rather than a transient error. That lets the existing
+                // retryFailedTranscriptions cron pick it up and re-initiate from scratch, instead
+                // of leaving the issue stuck at PROCESSING forever.
+                if (response.status === 404) {
+                    return {
+                        status: 'failed',
+                        transcription: null,
+                        error: 'Transcription request not found (expired or already cleaned up)',
+                        message: null
+                    };
+                }
+
                 // Try to parse the error response as JSON to extract failure details
                 try {
                     const errorData = JSON.parse(responseText);
-                    
+
                     // Check if the error response contains failure information
                     if (errorData.detail && errorData.detail.status === 'failed') {
                         return {
@@ -150,7 +164,7 @@ class TranscriptionService {
                     }
                 } catch (parseError) {
                 }
-                
+
                 // If we can't parse the error or it's not a failure status, throw the error
                 throw new Error(`Status check API error: ${response.status} - ${responseText}`);
             }
