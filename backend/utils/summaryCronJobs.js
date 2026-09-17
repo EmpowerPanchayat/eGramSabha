@@ -18,66 +18,77 @@ const initiateSummaryGeneration = cron.schedule(INITIATE_SUMMARY_CRON, async () 
     try {
         const panchayats = await Panchayat.find({});
         for (const panchayat of panchayats) {
-            // Check if a summary request is already being processed for this panchayat
-            const existingRequest = await SummaryRequest.findOne({
-                panchayatId: panchayat._id,
-                status: 'PROCESSING'
-            });
-
-            if (existingRequest) {
-                continue;
-            }
-
-            const unsummarizedIssues = await Issue.find({
-                panchayatId: panchayat._id,
-                isSummarized: { $ne: true },
-                'transcription.status': 'COMPLETED'
-            });
-
-            if (unsummarizedIssues.length === 0) {
-                continue;
-            }
-
-            const existingSummary = await IssueSummary.findOne({ panchayatId: panchayat._id });
-            let response;
-            let requestType;
-
-            // Filter out only system-created agenda items
-            const systemAgendaItems = existingSummary?.agendaItems?.filter(item => item.createdByType !== 'USER') || [];
-
-            if (systemAgendaItems.length > 0) {
-                requestType = 'UPDATE';
-
-                const currentAgenda = systemAgendaItems.map(item => {
-                    const title = item.title instanceof Map ? item.title.get('en') : item.title?.en || '';
-                    const description = item.description instanceof Map ? item.description.get('en') : item.description?.en || '';
-                    return {
-                        title,
-                        description,
-                        linked_issues: Array.isArray(item.linkedIssues)
-                            ? item.linkedIssues.map(id => id.toString())
-                            : []
-                    };
+            // One panchayat's failure must never block every panchayat after it in this list —
+            // each iteration gets its own try/catch (see fetchSummaryResults for the same fix).
+            try {
+                // Check if a summary request is already being processed for this panchayat
+                const existingRequest = await SummaryRequest.findOne({
+                    panchayatId: panchayat._id,
+                    status: 'PROCESSING'
                 });
 
-                response = await agendaService.initiateUpdateSummary(
-                    currentAgenda,
-                    unsummarizedIssues,
-                    panchayat?.language.toLowerCase()
-                );
-            } else {
-                requestType = 'CREATE';
-                response = await agendaService.initiateNewSummary(unsummarizedIssues, panchayat?.language.toLowerCase());
-            }
+                if (existingRequest) {
+                    continue;
+                }
 
-            await new SummaryRequest({
-                requestId: response.request_id,
-                panchayatId: panchayat._id,
-                requestType: requestType,
-                status: 'PROCESSING',
-                status_url: response.status_url,
-                result_url: response.result_url
-            }).save();
+                const unsummarizedIssues = await Issue.find({
+                    panchayatId: panchayat._id,
+                    isSummarized: { $ne: true },
+                    'transcription.status': 'COMPLETED'
+                });
+
+                if (unsummarizedIssues.length === 0) {
+                    continue;
+                }
+
+                const existingSummary = await IssueSummary.findOne({ panchayatId: panchayat._id });
+                let response;
+                let requestType;
+                const language = (panchayat?.language || 'Hindi').toLowerCase();
+
+                // Filter out only system-created agenda items
+                const systemAgendaItems = existingSummary?.agendaItems?.filter(item => item.createdByType !== 'USER') || [];
+
+                if (systemAgendaItems.length > 0) {
+                    requestType = 'UPDATE';
+
+                    const currentAgenda = systemAgendaItems.map(item => {
+                        const title = item.title instanceof Map ? item.title.get('en') : item.title?.en || '';
+                        const description = item.description instanceof Map ? item.description.get('en') : item.description?.en || '';
+                        return {
+                            title,
+                            description,
+                            linked_issues: Array.isArray(item.linkedIssues)
+                                ? item.linkedIssues.map(id => id.toString())
+                                : []
+                        };
+                    });
+
+                    response = await agendaService.initiateUpdateSummary(
+                        currentAgenda,
+                        unsummarizedIssues,
+                        language
+                    );
+                } else {
+                    requestType = 'CREATE';
+                    response = await agendaService.initiateNewSummary(unsummarizedIssues, language);
+                }
+
+                await new SummaryRequest({
+                    requestId: response.request_id,
+                    panchayatId: panchayat._id,
+                    requestType: requestType,
+                    status: 'PROCESSING',
+                    status_url: response.status_url,
+                    result_url: response.result_url
+                }).save();
+            } catch (panchayatError) {
+                console.error(`[CronJobs] Error in initiateSummaryGeneration for panchayat:`, {
+                    panchayatId: panchayat._id,
+                    error: panchayatError.message,
+                    stack: panchayatError.stack
+                });
+            }
         }
     } catch (error) {
         console.error(`[CronJobs] Error in initiateSummaryGeneration:`, {
@@ -94,6 +105,9 @@ const fetchSummaryResults = cron.schedule(FETCH_SUMMARY_RESULTS_CRON, async () =
         const pendingRequests = await SummaryRequest.find({ status: 'PROCESSING' });
 
         for (const request of pendingRequests) {
+            // One orphaned/erroring request must never block every request after it in this
+            // batch (the same 48h-cleanup 404 that hit transcription checks can hit these too).
+            try {
             const status = await agendaService.checkSummaryStatus(request.requestId);
 
             if (status.status !== 'completed') {
@@ -245,6 +259,14 @@ const fetchSummaryResults = cron.schedule(FETCH_SUMMARY_RESULTS_CRON, async () =
 
             request.status = 'COMPLETED';
             await request.save();
+            } catch (requestError) {
+                console.error(`[CronJobs] Error in fetchSummaryResults for request:`, {
+                    requestId: request.requestId,
+                    panchayatId: request.panchayatId,
+                    error: requestError.message,
+                    stack: requestError.stack
+                });
+            }
         }
     } catch (err) {
         console.error(`[CronJobs] Error in fetchSummaryResults:`, {
@@ -263,6 +285,9 @@ const retryFailedSummaryRequests = cron.schedule(RETRY_FAILED_SUMMARY_CRON, asyn
         });
 
         for (const request of failedRequests) {
+            // Same reasoning as the other two cron loops: one request's failure must not
+            // block every request after it in this batch.
+            try {
             const panchayat = await Panchayat.findById(request.panchayatId);
             if (!panchayat) {
                 console.error(`[CronJobs] Panchayat ${request.panchayatId} not found for failed request. Skipping retry.`);
@@ -284,6 +309,7 @@ const retryFailedSummaryRequests = cron.schedule(RETRY_FAILED_SUMMARY_CRON, asyn
             }
 
             let response;
+            const language = (panchayat?.language || 'Hindi').toLowerCase();
             if (request.requestType === 'UPDATE') {
                 const existingSummary = await IssueSummary.findOne({ panchayatId: request.panchayatId });
                 const currentAgenda = existingSummary?.agendaItems
@@ -315,12 +341,12 @@ const retryFailedSummaryRequests = cron.schedule(RETRY_FAILED_SUMMARY_CRON, asyn
                 response = await agendaService.initiateUpdateSummary(
                 currentAgenda,
                 unsummarizedIssues,
-                panchayat?.language.toLowerCase()
+                language
                 );
             } else if (request.requestType === 'CREATE') {
                 response = await agendaService.initiateNewSummary(
                 unsummarizedIssues,
-                panchayat?.language.toLowerCase()
+                language
                 );
             } else {
                 request.status = 'FAILED';
@@ -339,6 +365,14 @@ const retryFailedSummaryRequests = cron.schedule(RETRY_FAILED_SUMMARY_CRON, asyn
 
             // Optional: small delay between retries to avoid rapid-fire API hits
             await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay
+            } catch (requestError) {
+                console.error(`[CronJobs] Error in retryFailedSummaryRequests for request:`, {
+                    requestId: request.requestId,
+                    panchayatId: request.panchayatId,
+                    error: requestError.message,
+                    stack: requestError.stack
+                });
+            }
         }
 
     } catch (error) {
