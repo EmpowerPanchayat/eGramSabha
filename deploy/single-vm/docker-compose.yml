@@ -1,0 +1,76 @@
+# eGramSabha — lightweight single-VM stack (replaces the GKE cluster).
+# Lives at /opt/egs on the VM. Data lives on the attached disk at /data/egs.
+# Service aliases match the old Kubernetes Service names so the existing
+# secrets/config (mongodb-service, video-mom-service, backend) work unchanged.
+
+services:
+  mongodb:
+    image: mongo:6.0
+    command: ["--wiredTigerCacheSizeGB", "0.5"]
+    env_file: env/mongodb.env
+    volumes:
+      - /data/egs/mongodb:/data/db
+    networks:
+      egs:
+        aliases: [mongodb-service]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  backend:
+    image: asia-south1-docker.pkg.dev/digital-gram-sabha/mumbai-docker-repo/backend:${BACKEND_TAG:-v1.1.6}
+    env_file: env/backend.env
+    volumes:
+      - /data/egs/uploads:/app/uploads
+      - ./secrets/service-account.json:/app/secrets/service-account.json:ro
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      egs:
+        aliases: [backend]
+    restart: unless-stopped
+
+  video-mom:
+    image: asia-south1-docker.pkg.dev/digital-gram-sabha/mumbai-docker-repo/video-mom-backend:${VIDEO_MOM_TAG:-v1.2.1}
+    env_file: env/video-mom.env
+    volumes:
+      - /data/egs/video-mom:/app/temp_storage
+      - ./secrets/service-account.json:/app/secrets/service-account.json:ro
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      egs:
+        aliases: [video-mom-service]
+    restart: unless-stopped
+
+  frontend:
+    image: asia-south1-docker.pkg.dev/digital-gram-sabha/mumbai-docker-repo/frontend:${FRONTEND_TAG:-v1.0.7}
+    depends_on: [backend]
+    networks:
+      egs:
+        aliases: [frontend]
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.8
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [frontend]
+    networks: [egs]
+    restart: unless-stopped
+
+networks:
+  egs:
+
+volumes:
+  caddy_data:

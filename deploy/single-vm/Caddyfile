@@ -1,0 +1,32 @@
+# Cloudflare proxies egramsabha.empowerpanchayat.org to this VM and does not
+# validate the origin certificate, so a self-signed (internal) cert on :443 is
+# enough. No HTTP->HTTPS redirect here: Cloudflare already enforces HTTPS, and
+# a redirect would loop if Cloudflare is ever set to "Flexible" SSL.
+{
+	auto_https disable_redirects
+	on_demand_tls {
+		ask http://127.0.0.1:5555/ok
+	}
+}
+
+# Tiny local endpoint that approves on-demand internal certs.
+http://127.0.0.1:5555 {
+	respond /ok 200
+}
+
+:443 {
+	tls internal {
+		on_demand
+	}
+	request_body {
+		max_size 500MB
+	}
+	reverse_proxy frontend:80
+}
+
+:80 {
+	request_body {
+		max_size 500MB
+	}
+	reverse_proxy frontend:80
+}
